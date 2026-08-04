@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="claude-models">
+  <Description>Anthropic Models API Proxy Endpoint</Description>
+  <FaultRules/>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Condition>!(request.header.Authorization Matches "Bearer *")</Condition>
+        <Name>VA-ApiKey</Name>
+      </Step>
+      <Step>
+        <Name>AM-NormalizePathSuffix</Name>
+      </Step>
+    </Request>
+    <Response/>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response/>
+  </PostFlow>
+  <Flows>
+    <Flow name="listModels">
+      <Description>List available models</Description>
+      <Condition>(request.verb = "GET") AND ((proxy.pathsuffix MatchesPath "") OR (proxy.pathsuffix MatchesPath "/"))</Condition>
+      <Request/>
+      <Response>
+        <Step>
+          <Name>JS-models-endpoint</Name>
+        </Step>
+      </Response>
+    </Flow>
+    <Flow name="retrieveModel">
+      <Description>Retrieve model details</Description>
+      <Condition>(request.verb = "GET") AND (proxy.pathsuffix MatchesPath "/*")</Condition>
+      <Request/>
+      <Response>
+        <Step>
+          <Name>JS-models-endpoint</Name>
+        </Step>
+      </Response>
+    </Flow>
+  </Flows>
+  <HTTPProxyConnection>
+    <BasePath>/v1/models</BasePath>
+  </HTTPProxyConnection>
+  <RouteRule name="no-target"/>
+</ProxyEndpoint>

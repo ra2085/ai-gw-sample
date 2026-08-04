@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<LLMTokenQuota continueOnError="false" enabled="true" name="LTQ-CountOnly" type="rollingwindow">
+  <DisplayName>LTQ-CountOnly</DisplayName>
+  <SharedName>llm-token-counter</SharedName>
+  <CountOnly>true</CountOnly>
+  <UseQuotaConfigInAPIProduct stepName="VA-ApiKey" />
+  <Distributed>true</Distributed>
+  <LLMTokenUsageSource>{usage_total_tokens}</LLMTokenUsageSource>
+  <LLMModelSource>{model}</LLMModelSource>
+</LLMTokenQuota>

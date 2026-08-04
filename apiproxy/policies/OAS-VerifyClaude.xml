@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OASValidation continueOnError="false" enabled="true" name="OAS-VerifyClaude">
+  <DisplayName>OAS-VerifyClaude</DisplayName>
+  <OASResource>oas://claude.yaml</OASResource>
+  <Options>
+    <AllowUnspecifiedParameters>false</AllowUnspecifiedParameters>
+  </Options>
+  <Source>request</Source>
+</OASValidation>

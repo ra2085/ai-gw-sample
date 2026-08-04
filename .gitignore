@@ -1,0 +1,14 @@
+config
+.envrc
+to_delete
+*.code-workspace
+dev
+target
+.venv
+schema
+__pycache__
+.DS_Store
+.adk
+build_image.sh
+images
+set_vars.sh

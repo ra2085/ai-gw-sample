@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ExtractVariables continueOnError="false" enabled="true" name="EV-Model">
+  <DisplayName>EV-Model</DisplayName>
+  <Properties/>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <JSONPayload>
+    <Variable name="model" type="string">
+      <JSONPath>$.model</JSONPath>
+    </Variable>
+    <Variable name="stream" type="boolean">
+      <JSONPath>$.stream</JSONPath>
+    </Variable>
+    <Variable name="prompt" type="string">
+      <JSONPath>{propertyset.extract_expressions.prompt_exp}</JSONPath>
+    </Variable>
+  </JSONPayload>
+  <Source clearPayload="false">request</Source>
+</ExtractVariables>

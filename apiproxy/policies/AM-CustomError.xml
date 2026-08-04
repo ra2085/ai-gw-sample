@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage continueOnError="false" enabled="true" name="AM-CustomError">
+  <DisplayName>AM-CustomError</DisplayName>
+  <Properties/>
+  <Set>
+    <StatusCode>403</StatusCode>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="response">error</AssignTo>
+</AssignMessage>

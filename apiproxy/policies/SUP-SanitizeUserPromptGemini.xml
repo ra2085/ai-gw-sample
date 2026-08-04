@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SanitizeUserPrompt async="false" continueOnError="false" enabled="true" name="SUP-SanitizeUserPromptGemini">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <DisplayName>SUP-SanitizeUserPromptGemini</DisplayName>
+  <ModelArmor>
+    <TemplateName>projects/your-project-id/locations/us-central1/templates/gap_template</TemplateName>
+  </ModelArmor>
+  <UserPromptSource>{gemini_text_prompt}</UserPromptSource>
+</SanitizeUserPrompt>

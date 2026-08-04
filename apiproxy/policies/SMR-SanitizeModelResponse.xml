@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<SanitizeModelResponse async="false" continueOnError="false" enabled="true" name="SMR-SanitizeModelResponse">
+  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+  <DisplayName>SMR-SanitizeModelResponse</DisplayName>
+  <ModelArmor>
+    <TemplateName>projects/your-project-id/locations/us-central1/templates/gap_template</TemplateName>
+  </ModelArmor>
+  <LLMResponseSource>{response_partial}</LLMResponseSource>
+</SanitizeModelResponse>

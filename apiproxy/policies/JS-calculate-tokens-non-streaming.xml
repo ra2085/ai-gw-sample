@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-calculate-tokens-non-streaming">
+  <DisplayName>JS-calculate-tokens-non-streaming</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://calculate_tokens_non_streaming.js</ResourceURL>
+</Javascript>

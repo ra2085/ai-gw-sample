@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage continueOnError="false" enabled="true" name="AM-NormalizePathSuffix">
+  <DisplayName>AM-NormalizePathSuffix</DisplayName>
+  <AssignVariable>
+    <Name>proxy.pathsuffix</Name>
+    <Value>/</Value>
+  </AssignVariable>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+</AssignMessage>

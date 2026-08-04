@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-resolve-model-location">
+  <DisplayName>JS-resolve-model-location</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://resolve_model_location.js</ResourceURL>
+</Javascript>

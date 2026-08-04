@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-inject-deidentified-finding">
+  <DisplayName>JS-inject-deidentified-finding</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://inject_deidentified_finding.js</ResourceURL>
+</Javascript>

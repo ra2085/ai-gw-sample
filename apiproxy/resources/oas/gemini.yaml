@@ -1,0 +1,492 @@
+openapi: 3.0.3
+info:
+  title: AI Gateway - Native Gemini & Vertex Anthropic API
+  description: Native Gemini and Vertex AI Anthropic Claude API format endpoints for AI Gateway.
+  version: 1.0.0
+servers:
+  - url: https://workshop.iloveapi.management
+security:
+  - ApiKeyAuth: []
+paths:
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Generate content (Non-Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a single complete response.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Generate content (Non-Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a single complete response.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:streamGenerateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Stream generate content (Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a real-time Server-Sent Events stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:streamGenerateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Stream generate content (Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a real-time Server-Sent Events stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:rawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Predict Claude (Non-Streaming)
+      description: Sends a prompt in Claude format to the Vertex AI Anthropic Claude models.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:rawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Predict Claude (Non-Streaming)
+      description: Sends a prompt in Claude format to the Vertex AI Anthropic Claude models.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:streamRawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Stream Predict Claude (Streaming)
+      description: Sends a prompt in Claude format to the Vertex AI Anthropic Claude models and receives a real-time event stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:streamRawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Stream Predict Claude (Streaming)
+      description: Sends a prompt in Claude format to the Vertex AI Anthropic Claude models and receives a real-time event stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-apikey
+  schemas:
+    GeminiRequest:
+      type: object
+      required:
+        - contents
+      properties:
+        contents:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - parts
+            properties:
+              role:
+                type: string
+                enum: [user, model]
+                example: user
+              parts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    text:
+                      type: string
+                      example: Describe gravity in one sentence.
+    GeminiResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    example: model
+                  parts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+              finishReason:
+                type: string
+                example: STOP
+        usageMetadata:
+          type: object
+          properties:
+            promptTokenCount:
+              type: integer
+            candidatesTokenCount:
+              type: integer
+            totalTokenCount:
+              type: integer
+    ClaudeRequest:
+      type: object
+      required:
+        - model
+        - max_tokens
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier.
+          example: claude-haiku-4-5
+        max_tokens:
+          type: integer
+          description: Maximum tokens to generate.
+          example: 100
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+                example: user
+              content:
+                type: string
+                example: Explain gravity in one sentence.
+    ClaudeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          example: message
+        role:
+          type: string
+          example: assistant
+        model:
+          type: string
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: text
+              text:
+                type: string
+        stop_reason:
+          type: string
+          example: end_turn
+        usage:
+          type: object
+          properties:
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        fault:
+          type: object
+          properties:
+            faultstring:
+              type: string
+            detail:
+              type: object
+              properties:
+                errorcode:
+                  type: string
+                  example: steps.sanitize.user.prompt.FilterMatched

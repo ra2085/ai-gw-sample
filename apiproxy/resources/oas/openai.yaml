@@ -1,0 +1,134 @@
+openapi: 3.0.3
+info:
+  title: AI Gateway - OpenAI Completions API
+  description: OpenAI Completions API format endpoint for AI Gateway.
+  version: 1.0.0
+servers:
+  - url: https://workshop.iloveapi.management
+security:
+  - ApiKeyAuth: []
+paths:
+  /:
+    post:
+      tags:
+        - OpenAI Completions Format
+      summary: Send a chat completion request (OpenAI format)
+      description: Sends a chat completion prompt to the Gemini model using standard OpenAI payload formats. Supports both streaming (SSE) and non-streaming responses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAIRequest'
+      responses:
+        '200':
+          description: Successful response. Returns chat completion JSON (non-streaming) or Event Stream (streaming).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIResponse'
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests. Rate limit or token quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-apikey
+  schemas:
+    OpenAIRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier.
+          example: gemini-3.1-flash-lite
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum: [user, assistant, system]
+                example: user
+              content:
+                type: string
+                example: Explain gravity in one sentence.
+    OpenAIResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          example: chat.completion
+        created:
+          type: integer
+          example: 1783446781
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    example: assistant
+                  content:
+                    type: string
+              finish_reason:
+                type: string
+                example: stop
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        fault:
+          type: object
+          properties:
+            faultstring:
+              type: string
+            detail:
+              type: object
+              properties:
+                errorcode:
+                  type: string
+                  example: steps.sanitize.user.prompt.FilterMatched

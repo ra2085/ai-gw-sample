@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-extract-vars-openai">
+  <DisplayName>JS-extract-vars-openai</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://extract_vars_openai.js</ResourceURL>
+</Javascript>

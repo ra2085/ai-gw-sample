@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<DataCapture name="DC-CaptureTokenCountsNonStreaming" continueOnError="false" enabled="true">
+  <DisplayName>DC-CaptureTokenCountsNonStreaming</DisplayName>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <ThrowExceptionOnLimit>false</ThrowExceptionOnLimit>
+  <Capture>
+    <Collect ref="prompt_tokens" default="0"/>
+    <DataCollector>dc_prompt_token_count</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="completion_tokens" default="0"/>
+    <DataCollector>dc_completion_token_count</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="usage_total_tokens" default="0"/>
+    <DataCollector>dc_total_token_count</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="model" default="unknown"/>
+    <DataCollector>dc_model</DataCollector>
+  </Capture>
+</DataCapture>

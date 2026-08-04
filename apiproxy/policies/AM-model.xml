@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage continueOnError="false" enabled="true" name="AM-model">
+  <DisplayName>AM-model</DisplayName>
+  <Properties/>
+  <AssignVariable>
+    <Name>gemm</Name>
+    <Value>google/gemini-3.1-flash-lite-preview</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>gepp</Name>
+    <Value>gpt-4o</Value>
+  </AssignVariable>
+  <AssignVariable>
+    <Name>request.content</Name>
+    <Template>{replaceAll(request.content,gepp,gemm)}</Template>
+  </AssignVariable>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="request"/>
+</AssignMessage>

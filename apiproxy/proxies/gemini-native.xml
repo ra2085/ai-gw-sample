@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ProxyEndpoint name="gemini-native">
+  <Description>Native Gemini API Proxy Endpoint compatible with ADK</Description>
+  <FaultRules>
+    <FaultRule name="sanitize">
+      <Step>
+        <Name>JS-inject-deidentified-finding</Name>
+      </Step>
+      <Step>
+        <Name>AM-CustomError</Name>
+      </Step>
+      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
+    </FaultRule>
+  </FaultRules>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Condition>!(request.header.Authorization Matches "Bearer *")</Condition>
+        <Name>VA-ApiKey</Name>
+      </Step>
+      <Step>
+        <Name>OAS-VerifyGemini</Name>
+      </Step>
+      <Step>
+        <Name>JS-extract-vars-gemini</Name>
+      </Step>
+      <Step>
+        <Name>JS-resolve-model-location</Name>
+      </Step>
+      <Step>
+        <Condition>apiproduct.name != null</Condition>
+        <Name>LTQ-EnforceOnly</Name>
+      </Step>
+      <Step>
+        <Condition>request_format = "gemini" and gemini_text_prompt != null and gemini_text_prompt != ""</Condition>
+        <Name>SUP-SanitizeUserPromptGemini</Name>
+      </Step>
+      <Step>
+        <Condition>request_format = "claude" and extracted_prompt != null and extracted_prompt != ""</Condition>
+        <Name>SUP-SanitizeUserPrompt</Name>
+      </Step>
+    </Request>
+    <Response/>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <Condition>!(stream = true) and request_format = "gemini"</Condition>
+        <Name>EV-ExtractMetadataNonStreamingGemini</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true) and request_format = "claude"</Condition>
+        <Name>EV-ExtractMetadataNonStreaming</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true)</Condition>
+        <Name>JS-calculate-tokens-non-streaming</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true)</Condition>
+        <Name>DC-CaptureTokenCountsNonStreaming</Name>
+      </Step>
+      <Step>
+        <Condition>(!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)</Condition>
+        <Name>LTQ-CountOnly</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true)</Condition>
+        <Name>AM-SetQuotaHeaders</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <Flows/>
+  <HTTPProxyConnection>
+    <BasePath>/ai-gateway</BasePath>
+    <Properties>
+      <Property name="response.streaming.enabled">true</Property>
+      <Property name="api.timeout">300000</Property>
+    </Properties>
+  </HTTPProxyConnection>
+  <RouteRule name="claude">
+    <Condition>model JavaRegex "claude.*" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"</Condition>
+    <TargetEndpoint>claude</TargetEndpoint>
+  </RouteRule>
+  <RouteRule name="gemini-native-target">
+    <TargetEndpoint>gemini-native-target</TargetEndpoint>
+  </RouteRule>
+</ProxyEndpoint>

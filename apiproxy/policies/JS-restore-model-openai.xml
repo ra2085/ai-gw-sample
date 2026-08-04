@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-restore-model-openai">
+  <DisplayName>JS-restore-model-openai</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://restore_model_openai.js</ResourceURL>
+</Javascript>

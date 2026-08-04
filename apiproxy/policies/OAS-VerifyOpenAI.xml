@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OASValidation continueOnError="false" enabled="true" name="OAS-VerifyOpenAI">
+  <DisplayName>OAS-VerifyOpenAI</DisplayName>
+  <OASResource>oas://openai.yaml</OASResource>
+  <Options>
+    <AllowUnspecifiedParameters>false</AllowUnspecifiedParameters>
+  </Options>
+  <Source>request</Source>
+</OASValidation>

@@ -1,0 +1,689 @@
+openapi: 3.0.3
+info:
+  title: AI Gateway API
+  description: |
+    Unified Gateway API for accessing Anthropic Claude and Google Gemini models.
+    Supports both Anthropic Claude Messages API format and native Google Gemini Vertex AI format, supporting standard and streaming traffic.
+  version: 1.0.0
+servers:
+  - url: https://workshop.iloveapi.management
+    description: Production environment
+security:
+  - ApiKeyAuth: []
+paths:
+  /v1/messages:
+    post:
+      tags:
+        - Claude Messages Format
+      summary: Send a message to Claude
+      description: Sends a prompt to the assistant and receives a response in Claude's messages format.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+            examples:
+              safe_request:
+                summary: Standard non-streaming prompt
+                value:
+                  model: claude-haiku-4-5
+                  max_tokens: 100
+                  messages:
+                    - role: user
+                      content: Explain gravity in one sentence.
+              streaming_request:
+                summary: Streaming prompt
+                value:
+                  model: claude-haiku-4-5
+                  max_tokens: 100
+                  stream: true
+                  messages:
+                    - role: user
+                      content: Respond with 'Bonjour'.
+      responses:
+        '200':
+          description: Successful response. Returns message JSON (non-streaming) or Event Stream (streaming).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+              examples:
+                non_streaming_response:
+                  summary: Non-streaming response
+                  value:
+                    id: msg_12345
+                    type: message
+                    role: assistant
+                    model: claude-haiku-4-5-20251001
+                    content:
+                      - type: text
+                        text: Gravity is the force that pulls objects toward each other due to their mass.
+                    stop_reason: end_turn
+                    usage:
+                      input_tokens: 10
+                      output_tokens: 15
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests. Rate limit or token quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/chat/completions:
+    post:
+      tags:
+        - OpenAI Completions Format
+      summary: Send a chat completion request (OpenAI format)
+      description: Sends a chat completion prompt to the Gemini model using standard OpenAI payload formats. Supports both streaming (SSE) and non-streaming responses.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAIRequest'
+            examples:
+              safe_request:
+                summary: Standard non-streaming prompt
+                value:
+                  model: gemini-3.1-flash-lite
+                  messages:
+                    - role: user
+                      content: Explain gravity in one sentence.
+              streaming_request:
+                summary: Streaming prompt
+                value:
+                  model: gemini-3.1-flash-lite
+                  stream: true
+                  messages:
+                    - role: user
+                      content: Respond with 'Bonjour'.
+      responses:
+        '200':
+          description: Successful response. Returns chat completion JSON (non-streaming) or Event Stream (streaming).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenAIResponse'
+              example:
+                id: chatcmpl-12345
+                object: chat.completion
+                created: 1783446781
+                model: google/gemini-3.1-flash-lite
+                choices:
+                  - index: 0
+                    message:
+                      role: assistant
+                      content: Gravity is the force of attraction that pulls objects with mass toward each other.
+                    finish_reason: stop
+                usage:
+                  prompt_tokens: 8
+                  completion_tokens: 14
+                  total_tokens: 22
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests. Rate limit or token quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Generate content (Non-Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a single complete response.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Google Cloud project ID.
+          schema:
+            type: string
+            example: your-project-id
+        - name: locationId
+          in: path
+          required: true
+          description: Vertex AI region location.
+          schema:
+            type: string
+            example: us-central1
+        - name: modelId
+          in: path
+          required: true
+          description: Model ID (e.g., gemini-3.5-flash, gemini-3.1-flash-lite).
+          schema:
+            type: string
+            example: gemini-3.5-flash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+            example:
+              contents:
+                - role: user
+                  parts:
+                    - text: Describe gravity in one sentence.
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiResponse'
+              example:
+                candidates:
+                  - content:
+                      role: model
+                      parts:
+                        - text: Gravity is the force of attraction that pulls objects with mass toward each other.
+                    finishReason: STOP
+                usageMetadata:
+                  promptTokenCount: 8
+                  candidatesTokenCount: 14
+                  totalTokenCount: 22
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Generate content (Non-Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a single complete response.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Google Cloud project ID.
+          schema:
+            type: string
+            example: your-project-id
+        - name: locationId
+          in: path
+          required: true
+          description: Vertex AI region location.
+          schema:
+            type: string
+            example: us-central1
+        - name: modelId
+          in: path
+          required: true
+          description: Model ID (e.g., gemini-3.5-flash, gemini-3.1-flash-lite).
+          schema:
+            type: string
+            example: gemini-3.5-flash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+            example:
+              contents:
+                - role: user
+                  parts:
+                    - text: Describe gravity in one sentence.
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeminiResponse'
+              example:
+                candidates:
+                  - content:
+                      role: model
+                      parts:
+                        - text: Gravity is the force of attraction that pulls objects with mass toward each other.
+                    finishReason: STOP
+                usageMetadata:
+                  promptTokenCount: 8
+                  candidatesTokenCount: 14
+                  totalTokenCount: 22
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:streamGenerateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Stream generate content (Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a real-time Server-Sent Events stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Google Cloud project ID.
+          schema:
+            type: string
+            example: your-project-id
+        - name: locationId
+          in: path
+          required: true
+          description: Vertex AI region location.
+          schema:
+            type: string
+            example: us-central1
+        - name: modelId
+          in: path
+          required: true
+          description: Model ID (e.g., gemini-3.5-flash, gemini-3.1-flash-lite).
+          schema:
+            type: string
+            example: gemini-3.5-flash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+            example:
+              contents:
+                - role: user
+                  parts:
+                    - text: Describe gravity in one sentence.
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:streamGenerateContent:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Stream generate content (Streaming)
+      description: Sends a prompt to the specified Gemini model and receives a real-time Server-Sent Events stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: Google Cloud project ID.
+          schema:
+            type: string
+            example: your-project-id
+        - name: locationId
+          in: path
+          required: true
+          description: Vertex AI region location.
+          schema:
+            type: string
+            example: us-central1
+        - name: modelId
+          in: path
+          required: true
+          description: Model ID (e.g., gemini-3.5-flash, gemini-3.1-flash-lite).
+          schema:
+            type: string
+            example: gemini-3.5-flash
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiRequest'
+            example:
+              contents:
+                - role: user
+                  parts:
+                    - text: Describe gravity in one sentence.
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/models:
+    get:
+      tags:
+        - Claude Models API
+      summary: List available models
+      description: Returns a list of Claude models available in the API Gateway.
+      responses:
+        '200':
+          description: Successful response. Returns a list of models.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelListResponse'
+        '401':
+          description: Unauthorized. Missing or invalid API key.
+        '500':
+          description: Internal gateway error.
+
+  /v1/models/{modelId}:
+    get:
+      tags:
+        - Claude Models API
+      summary: Retrieve model details
+      description: Returns details of a specific Claude model.
+      parameters:
+        - name: modelId
+          in: path
+          required: true
+          description: The ID of the model to retrieve.
+          schema:
+            type: string
+            example: claude-3-5-sonnet
+      responses:
+        '200':
+          description: Successful response. Returns the model details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '401':
+          description: Unauthorized. Missing or invalid API key.
+        '404':
+          description: Model not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-apikey
+  schemas:
+    ClaudeRequest:
+      type: object
+      required:
+        - model
+        - max_tokens
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier.
+          example: claude-haiku-4-5
+        max_tokens:
+          type: integer
+          description: Maximum tokens to generate.
+          example: 100
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+                example: user
+              content:
+                type: string
+                example: Explain gravity in one sentence.
+    ClaudeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          example: message
+        role:
+          type: string
+          example: assistant
+        model:
+          type: string
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: text
+              text:
+                type: string
+        stop_reason:
+          type: string
+          example: end_turn
+        usage:
+          type: object
+          properties:
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+    GeminiRequest:
+      type: object
+      required:
+        - contents
+      properties:
+        contents:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - parts
+            properties:
+              role:
+                type: string
+                enum: [user, model]
+                example: user
+              parts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    text:
+                      type: string
+                      example: Describe gravity in one sentence.
+    GeminiResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    example: model
+                  parts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        text:
+                          type: string
+              finishReason:
+                type: string
+                example: STOP
+        usageMetadata:
+          type: object
+          properties:
+            promptTokenCount:
+              type: integer
+            candidatesTokenCount:
+              type: integer
+            totalTokenCount:
+              type: integer
+    OpenAIRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier.
+          example: gemini-3.1-flash-lite
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum: [user, assistant, system]
+                example: user
+              content:
+                type: string
+                example: Explain gravity in one sentence.
+    OpenAIResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          example: chat.completion
+        created:
+          type: integer
+          example: 1783446781
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                type: object
+                properties:
+                  role:
+                    type: string
+                    example: assistant
+                  content:
+                    type: string
+              finish_reason:
+                type: string
+                example: stop
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        fault:
+          type: object
+          properties:
+            faultstring:
+              type: string
+            detail:
+              type: object
+              properties:
+                errorcode:
+                  type: string
+                  example: steps.sanitize.user.prompt.FilterMatched
+    Model:
+      type: object
+      properties:
+        type:
+          type: string
+          example: model
+        id:
+          type: string
+          example: claude-3-5-sonnet
+        display_name:
+          type: string
+          example: Claude 3.5 Sonnet
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-06-20T00:00:00Z
+    ModelListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Model'
+        has_more:
+          type: boolean
+          example: false
+        first_id:
+          type: string
+          example: claude-haiku-4-5
+        last_id:
+          type: string
+          example: claude-3-5-haiku
+    ModelErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+              example: not_found_error
+            message:
+              type: string
+              example: Model not found
+

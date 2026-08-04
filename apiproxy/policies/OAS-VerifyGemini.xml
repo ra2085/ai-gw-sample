@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OASValidation continueOnError="false" enabled="true" name="OAS-VerifyGemini">
+  <DisplayName>OAS-VerifyGemini</DisplayName>
+  <OASResource>oas://gemini.yaml</OASResource>
+  <Options>
+    <AllowUnspecifiedParameters>false</AllowUnspecifiedParameters>
+  </Options>
+  <Source>request</Source>
+</OASValidation>
