@@ -12,3 +12,4 @@ __pycache__
 build_image.sh
 images
 set_vars.sh
+open_router_poc
