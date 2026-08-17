@@ -3,7 +3,7 @@
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
   <DisplayName>SUP-SanitizeUserPromptGemini</DisplayName>
   <ModelArmor>
-    <TemplateName>projects/your-project-id/locations/us-central1/templates/gap_template</TemplateName>
+    <TemplateName>projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}</TemplateName>
   </ModelArmor>
   <UserPromptSource>{gemini_text_prompt}</UserPromptSource>
 </SanitizeUserPrompt>

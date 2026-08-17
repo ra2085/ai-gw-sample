@@ -16,7 +16,8 @@ try {
         }
 
         // Detect if request is routing to anthropic/claude target
-        if (path.indexOf("/publishers/anthropic/") !== -1 || modelName.indexOf("claude") !== -1) {
+        var pub = context.getVariable("propertyset.model_locations." + modelName + ".publisher");
+        if (path.indexOf("/publishers/anthropic/") !== -1 || pub === "anthropic" || modelName.indexOf("claude") !== -1) {
             requestFormat = "claude";
         }
 
@@ -87,6 +88,14 @@ try {
                     }
                 }
             }
+        }
+
+        // Clean any gateway plugins before sending to Vertex AI
+        if (body.plugins || body.models || body.provider) {
+            delete body.plugins;
+            delete body.models;
+            delete body.provider;
+            context.setVariable("request.content", JSON.stringify(body));
         }
     }
 } catch (e) {

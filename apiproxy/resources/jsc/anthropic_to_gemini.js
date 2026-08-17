@@ -4,68 +4,120 @@ try {
         var body = JSON.parse(contentStr);
         var geminiContents = [];
         
-        // 1. System instruction mapping
+        // ---------------------------------------------------------------------
+        // 1. System Instruction Mapping
+        // ---------------------------------------------------------------------
         var systemInstruction = null;
         if (body.system) {
-            var systemContent = "";
+            var systemParts = [];
             if (typeof body.system === "string") {
-                systemContent = body.system;
+                systemParts.push({ "text": body.system });
             } else if (Array.isArray(body.system)) {
                 for (var i = 0; i < body.system.length; i++) {
-                    if (body.system[i].text) {
-                        systemContent += body.system[i].text + "\n";
+                    var sBlock = body.system[i];
+                    if (typeof sBlock === "string") {
+                        systemParts.push({ "text": sBlock });
+                    } else if (sBlock && sBlock.text) {
+                        systemParts.push({ "text": sBlock.text });
                     }
                 }
-                systemContent = systemContent.trim();
             }
-            if (systemContent) {
-                systemInstruction = {
-                    "parts": [
-                        { "text": systemContent }
-                    ]
-                };
+            if (systemParts.length > 0) {
+                systemInstruction = { "parts": systemParts };
             }
         }
         
-        // 2. Contents mapping (messages)
+        // ---------------------------------------------------------------------
+        // 2. Messages & Content Blocks (Text, Multimodal Images, Tool Invocations)
+        // ---------------------------------------------------------------------
+        // Map to keep track of tool_use callId -> tool name for functionResponse
+        var toolCallNames = {};
+
         if (body.messages && Array.isArray(body.messages)) {
             for (var j = 0; j < body.messages.length; j++) {
                 var msg = body.messages[j];
-                var contentText = "";
+                var parts = [];
+                var role = msg.role === "assistant" ? "model" : msg.role;
                 
                 if (typeof msg.content === "string") {
-                    contentText = msg.content;
+                    parts.push({ "text": msg.content });
                 } else if (Array.isArray(msg.content)) {
                     for (var k = 0; k < msg.content.length; k++) {
                         var block = msg.content[k];
+                        if (!block) continue;
+                        
                         if (block.type === "text" && block.text) {
-                            contentText += block.text;
+                            parts.push({ "text": block.text });
+                        } else if (block.type === "image" && block.source) {
+                            // Multimodal Image (base64)
+                            if (block.source.type === "base64" && block.source.data) {
+                                parts.push({
+                                    "inlineData": {
+                                        "mimeType": block.source.media_type || "image/jpeg",
+                                        "data": block.source.data
+                                    }
+                                });
+                            }
+                        } else if (block.type === "tool_use") {
+                            // Assistant tool invocation -> Gemini functionCall
+                            toolCallNames[block.id] = block.name;
+                            parts.push({
+                                "functionCall": {
+                                    "name": block.name,
+                                    "args": block.input || {}
+                                }
+                            });
+                        } else if (block.type === "tool_result") {
+                            // User tool response -> Gemini functionResponse
+                            var funcName = toolCallNames[block.tool_use_id] || block.tool_use_id;
+                            var toolOutput = typeof block.content === "string" ? block.content : JSON.stringify(block.content || {});
+                            role = "function";
+                            parts.push({
+                                "functionResponse": {
+                                    "name": funcName,
+                                    "response": {
+                                        "name": funcName,
+                                        "content": toolOutput
+                                    }
+                                }
+                            });
                         }
                     }
                 }
                 
-                // Map role 'assistant' to 'model'
-                var role = msg.role === "assistant" ? "model" : msg.role;
-                
-                geminiContents.push({
-                    "role": role,
-                    "parts": [
-                        { "text": contentText }
-                    ]
-                });
+                if (parts.length > 0) {
+                    geminiContents.push({
+                        "role": role,
+                        "parts": parts
+                    });
+                }
             }
         }
         
-        // 3. Create Gemini Request Payload
-        var geminiBody = {
-            "contents": geminiContents
-        };
-        
-        if (systemInstruction) {
-            geminiBody.systemInstruction = systemInstruction;
+        // ---------------------------------------------------------------------
+        // 3. Tool Declarations (Anthropic tools -> Gemini functionDeclarations)
+        // ---------------------------------------------------------------------
+        var geminiTools = null;
+        if (body.tools && Array.isArray(body.tools) && body.tools.length > 0) {
+            var funcDeclarations = [];
+            for (var t = 0; t < body.tools.length; t++) {
+                var tool = body.tools[t];
+                funcDeclarations.push({
+                    "name": tool.name,
+                    "description": tool.description || "",
+                    "parameters": tool.input_schema || {}
+                });
+            }
+            if (funcDeclarations.length > 0) {
+                geminiTools = [{
+                    "functionDeclarations": funcDeclarations
+                }];
+            }
         }
         
-        // 4. Generation Config
+        // ---------------------------------------------------------------------
+        // 4. Generation Config & Safety Settings
+        // ---------------------------------------------------------------------
         var genConfig = {};
         if (body.max_tokens !== undefined) {
             genConfig.maxOutputTokens = body.max_tokens;
@@ -73,27 +125,56 @@ try {
         if (body.temperature !== undefined) {
             genConfig.temperature = body.temperature;
         }
+        if (body.top_p !== undefined) {
+            genConfig.topP = body.top_p;
+        }
+        if (body.top_k !== undefined) {
+            genConfig.topK = body.top_k;
+        }
+        if (body.stop_sequences && Array.isArray(body.stop_sequences)) {
+            genConfig.stopSequences = body.stop_sequences;
+        }
+        
+        // ---------------------------------------------------------------------
+        // 5. Construct Gemini Request Payload
+        // ---------------------------------------------------------------------
+        var geminiBody = {
+            "contents": geminiContents
+        };
+        
+        if (systemInstruction) {
+            geminiBody.systemInstruction = systemInstruction;
+        }
+        if (geminiTools) {
+            geminiBody.tools = geminiTools;
+        }
         if (Object.keys(genConfig).length > 0) {
             geminiBody.generationConfig = genConfig;
         }
         
         context.setVariable("request.content", JSON.stringify(geminiBody));
         
-        // 5. Dynamic URL generation based on model and stream preference
-        var model = body.model || "gemini-1.5-flash";
-        // Convert Anthropic model mapping to Gemini model if needed
-        if (model.indexOf("gemini") === -1) {
-            model = "gemini-1.5-flash";
+        // ---------------------------------------------------------------------
+        // 6. Dynamic Target URL Generation
+        // ---------------------------------------------------------------------
+        var defaultModel = context.getVariable("propertyset.model_locations.default.model") || "gemini-3.5-flash";
+        var model = context.getVariable("primary_model") || 
+                    context.getVariable("model") || 
+                    defaultModel;
+        
+        if (model.indexOf("auto") === 0 || model.indexOf("gateway") === 0) {
+            model = defaultModel;
         }
         
         var stream = body.stream === true || body.stream === "true";
         var action = stream ? "streamGenerateContent" : "generateContent";
         
-        var project = context.getVariable("propertyset.config.project_id") || "your-project-id";
-        var endpointHost = context.getVariable("endpoint_host") || "us-central1-aiplatform.googleapis.com";
-        var modelLocation = context.getVariable("model_location") || "us-central1";
-        var url = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action;
-        context.setVariable("target.url", url);
+        var project = context.getVariable("propertyset.config.project_id");
+        var endpointHost = context.getVariable("endpoint_host") || "aiplatform.googleapis.com";
+        var modelLocation = context.getVariable("model_location") || "global";
+        
+        var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action;
+        context.setVariable("target.url", targetUrl);
     }
 } catch (e) {
     print("Error translating Anthropic to Gemini request: " + e);

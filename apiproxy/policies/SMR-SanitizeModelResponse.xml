@@ -3,7 +3,7 @@
   <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
   <DisplayName>SMR-SanitizeModelResponse</DisplayName>
   <ModelArmor>
-    <TemplateName>projects/your-project-id/locations/us-central1/templates/gap_template</TemplateName>
+    <TemplateName>projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}</TemplateName>
   </ModelArmor>
   <LLMResponseSource>{response_partial}</LLMResponseSource>
 </SanitizeModelResponse>

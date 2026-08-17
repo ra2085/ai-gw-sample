@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-prepare-judge-request">
+  <DisplayName>JS-prepare-judge-request</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://prepare_judge_request.js</ResourceURL>
+</Javascript>

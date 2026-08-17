@@ -1,72 +1,80 @@
 try {
-    var pathSuffix = context.getVariable("proxy.pathsuffix");
-    var models = [
-        {
-            "type": "model",
-            "id": "claude-haiku-4-5",
-            "display_name": "Claude 4.5 Haiku",
-            "created_at": "2025-10-01T00:00:00Z"
-        },
-        {
-            "type": "model",
-            "id": "claude-3-5-sonnet",
-            "display_name": "Claude 3.5 Sonnet",
-            "created_at": "2024-06-20T00:00:00Z"
-        },
-        {
-            "type": "model",
-            "id": "claude-3-5-haiku",
-            "display_name": "Claude 3.5 Haiku",
-            "created_at": "2024-10-22T00:00:00Z"
+    var pathSuffix = context.getVariable("proxy.pathsuffix") || "";
+    
+    // 1. Dynamically load model catalog from propertyset
+    var catalogStr = context.getVariable("propertyset.model_locations.models.catalog") || "";
+    var catalogIds = catalogStr ? catalogStr.split(",") : [];
+    
+    // Optional filtering by API product entitlements
+    var allowedByProduct = context.getVariable("apiproduct.allowed_models") || 
+                           context.getVariable("apiproduct.allowed-models") ||
+                           context.getVariable("apiproduct.custom.allowed_models");
+    if (allowedByProduct) {
+        var allowedList = allowedByProduct.split(",").map(function(s) { return s.trim(); });
+        catalogIds = catalogIds.filter(function(id) {
+            return allowedList.indexOf(id.trim()) !== -1;
+        });
+    }
+
+    // Build model list dynamically from propertyset definitions
+    var models = [];
+    for (var i = 0; i < catalogIds.length; i++) {
+        var modelId = catalogIds[i].trim();
+        if (modelId) {
+            var displayName = context.getVariable("propertyset.model_locations." + modelId + ".display_name") || modelId;
+            var createdAt = context.getVariable("propertyset.model_locations." + modelId + ".created_at") || "2025-01-01T00:00:00Z";
+            var publisher = context.getVariable("propertyset.model_locations." + modelId + ".publisher") || "google";
+            
+            models.push({
+                "type": "model",
+                "id": modelId,
+                "display_name": displayName,
+                "created_at": createdAt,
+                "owned_by": publisher
+            });
         }
-    ];
+    }
 
     if (pathSuffix === "" || pathSuffix === "/") {
         // List Models
         var responsePayload = {
+            "object": "list",
             "data": models,
             "has_more": false,
-            "first_id": models[0].id,
-            "last_id": models[models.length - 1].id
+            "first_id": models.length > 0 ? models[0].id : null,
+            "last_id": models.length > 0 ? models[models.length - 1].id : null
         };
         
-        var productVars = [
-            "apiproduct.name",
-            "apiproduct.display_name",
-            "apiproduct.access",
-            "apiproduct.allowed-models",
-            "apiproduct.allowed_models",
-            "apiproduct.custom.access",
-            "apiproduct.custom.allowed-models",
-            "apiproduct.custom.allowed_models",
-            "apiproduct.attributes.access",
-            "apiproduct.attributes.allowed-models",
-            "apiproduct.attributes.allowed_models"
-        ];
-        var result = {};
-        for (var i = 0; i < productVars.length; i++) {
-            var v = productVars[i];
-            var val = context.getVariable(v);
-            result[v] = val === undefined ? "undefined" : (val === null ? "null" : val);
-        }
-        context.setVariable("response.header.X-Product-Variables-New", JSON.stringify(result));
-
         context.setVariable("response.content", JSON.stringify(responsePayload));
         context.setVariable("response.header.Content-Type", "application/json");
         context.setVariable("response.status.code", 200);
     } else {
-        // Retrieve Model
-        // Extract model ID from pathSuffix (e.g. "/claude-3-5-sonnet" -> "claude-3-5-sonnet")
-        var requestedId = pathSuffix.substring(1);
+        // Retrieve Single Model Details
+        var requestedId = pathSuffix.substring(1).replace(/^\/+|\/+$/g, "").trim();
         
-        // Strip any leading/trailing slashes or carriage returns to sanitize input path variable
-        requestedId = requestedId.replace(/^\/+|\/+$/g, "").trim();
+        // Check for alias (e.g. gemini-1.5-flash -> gemini-3.5-flash)
+        var aliasTarget = context.getVariable("propertyset.model_locations.alias." + requestedId);
+        var effectiveId = aliasTarget || requestedId;
 
         var foundModel = null;
-        for (var i = 0; i < models.length; i++) {
-            if (models[i].id === requestedId) {
-                foundModel = models[i];
+        for (var j = 0; j < models.length; j++) {
+            if (models[j].id === effectiveId) {
+                foundModel = models[j];
                 break;
+            }
+        }
+
+        // If not found in catalog list, check direct propertyset definition
+        if (!foundModel) {
+            var dispName = context.getVariable("propertyset.model_locations." + effectiveId + ".display_name");
+            if (dispName) {
+                foundModel = {
+                    "type": "model",
+                    "id": effectiveId,
+                    "display_name": dispName,
+                    "created_at": context.getVariable("propertyset.model_locations." + effectiveId + ".created_at") || "2025-01-01T00:00:00Z",
+                    "owned_by": context.getVariable("propertyset.model_locations." + effectiveId + ".publisher") || "google"
+                };
             }
         }
 
@@ -75,7 +83,6 @@ try {
             context.setVariable("response.header.Content-Type", "application/json");
             context.setVariable("response.status.code", 200);
         } else {
-            // Not Found
             var errorPayload = {
                 "error": {
                     "type": "not_found_error",
@@ -88,13 +95,13 @@ try {
         }
     }
 } catch (e) {
-    var errorPayload = {
+    var errPayload = {
         "error": {
             "type": "api_error",
             "message": "Internal gateway error processing models request: " + e.toString()
         }
     };
-    context.setVariable("response.content", JSON.stringify(errorPayload));
+    context.setVariable("response.content", JSON.stringify(errPayload));
     context.setVariable("response.header.Content-Type", "application/json");
     context.setVariable("response.status.code", 500);
 }

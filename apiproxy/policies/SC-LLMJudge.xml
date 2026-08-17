@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ServiceCallout continueOnError="true" enabled="true" name="SC-LLMJudge">
+  <DisplayName>SC-LLMJudge</DisplayName>
+  <Properties/>
+  <Request clearPayload="true" variable="llmJudgeRequest">
+    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+    <Set>
+      <Headers>
+        <Header name="Content-Type">application/json</Header>
+      </Headers>
+      <Verb>POST</Verb>
+      <Payload contentType="application/json">{judge_request_payload}</Payload>
+    </Set>
+  </Request>
+  <Response>llmJudgeResponse</Response>
+  <HTTPTargetConnection>
+    <Authentication>
+      <GoogleAccessToken>
+        <Scopes>
+          <Scope>https://www.googleapis.com/auth/cloud-platform</Scope>
+        </Scopes>
+      </GoogleAccessToken>
+    </Authentication>
+    <Properties>
+      <Property name="io.timeout.millis">5000</Property>
+    </Properties>
+    <URL>https://aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/global/publishers/google/models/{propertyset.model_locations.task.classifier_model}:generateContent</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

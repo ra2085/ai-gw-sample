@@ -8,6 +8,13 @@
       <Header name="x-quota-available">{ratelimit.LTQ-CountOnly.available.count}</Header>
       <Header name="x-quota-ip-used">{ratelimit.LTQ-CountOnly-IP.used.count}</Header>
       <Header name="x-quota-ip-available">{ratelimit.LTQ-CountOnly-IP.available.count}</Header>
+      <Header name="X-Gateway-Requested-Model">{requested_model}</Header>
+      <Header name="X-Gateway-Routed-Model">{primary_model}</Header>
+      <Header name="X-Gateway-Cost-Tier">{cost_tier}</Header>
+      <Header name="X-Gateway-Fallback-Model">{fallback_model}</Header>
+      <Header name="X-Gateway-Judge-Task">{judge_task}</Header>
+      <Header name="X-Gateway-Judge-Complexity">{judge_complexity}</Header>
+      <Header name="X-Gateway-Judge-Tier">{judge_tier}</Header>
     </Headers>
   </Set>
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>

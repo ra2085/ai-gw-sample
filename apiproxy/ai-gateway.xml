@@ -41,6 +41,9 @@
     <Policy>OAS-VerifyOpenAI</Policy>
     <Policy>OAS-VerifyGemini</Policy>
     <Policy>JS-models-endpoint</Policy>
+    <Policy>JS-prepare-judge-request</Policy>
+    <Policy>SC-LLMJudge</Policy>
+    <Policy>JS-process-judge-response</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>claude-messages</ProxyEndpoint>
@@ -61,6 +64,8 @@
     <Resource>jsc://restore_model_openai.js</Resource>
     <Resource>jsc://resolve_model_location.js</Resource>
     <Resource>jsc://models_endpoint.js</Resource>
+    <Resource>jsc://prepare_judge_request.js</Resource>
+    <Resource>jsc://process_judge_response.js</Resource>
     <Resource>properties://extract_expressions.properties</Resource>
     <Resource>properties://config.properties</Resource>
     <Resource>properties://model_locations.properties</Resource>

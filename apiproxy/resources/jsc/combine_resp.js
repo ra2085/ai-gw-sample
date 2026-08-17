@@ -179,7 +179,7 @@ if (rawContent && dataIdx !== -1) {
                         };
                         outputChunks.push("event: message_start\ndata: " + JSON.stringify(msgStart));
                         
-                        // 2. content_block_start
+                        // 2. content_block_start for initial text block
                         var blockStart = {
                             "type": "content_block_start",
                             "index": 0,
@@ -191,7 +191,7 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(blockStart));
                     }
                     
-                    // 3. content_block_delta
+                    // 3. content_block_delta for text
                     if (eventText) {
                         var blockDelta = {
                             "type": "content_block_delta",
@@ -203,8 +203,40 @@ if (rawContent && dataIdx !== -1) {
                         };
                         outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(blockDelta));
                     }
+
+                    // 4. Handle streaming functionCall from Gemini
+                    var streamFuncCall = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) 
+                                         ? candidate.content.parts[0].functionCall 
+                                         : null;
+                    if (streamFuncCall) {
+                        var toolCallId = "call_" + Math.random().toString(36).substring(2, 12);
+                        var toolBlockStart = {
+                            "type": "content_block_start",
+                            "index": 1,
+                            "content_block": {
+                                "type": "tool_use",
+                                "id": toolCallId,
+                                "name": streamFuncCall.name,
+                                "input": {}
+                            }
+                        };
+                        outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(toolBlockStart));
+
+                        var toolBlockDelta = {
+                            "type": "content_block_delta",
+                            "index": 1,
+                            "delta": {
+                                "type": "input_json_delta",
+                                "partial_json": JSON.stringify(streamFuncCall.args || {})
+                            }
+                        };
+                        outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(toolBlockDelta));
+
+                        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 1 }));
+                        finishReason = "tool_use";
+                    }
                     
-                    // 4. content_block_stop & message_delta & message_stop (if finished)
+                    // 5. content_block_stop & message_delta & message_stop (if finished)
                     if (isFinished) {
                         var blockStop = {
                             "type": "content_block_stop",
@@ -212,10 +244,19 @@ if (rawContent && dataIdx !== -1) {
                         };
                         outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify(blockStop));
                         
+                        var stopReasonMapped = "end_turn";
+                        if (finishReason === "tool_use" || streamFuncCall) {
+                            stopReasonMapped = "tool_use";
+                        } else if (finishReason === "MAX_TOKENS") {
+                            stopReasonMapped = "max_tokens";
+                        } else if (finishReason === "STOP" || finishReason === "stop") {
+                            stopReasonMapped = "end_turn";
+                        }
+                        
                         var msgDelta = {
                             "type": "message_delta",
                             "delta": {
-                                "stop_reason": finishReason === "STOP" || finishReason === "stop" ? "end_turn" : finishReason,
+                                "stop_reason": stopReasonMapped,
                                 "stop_sequence": null
                             },
                             "usage": {

@@ -1,10 +1,19 @@
-var content = context.getVariable("request.content");
-if (content) {
-    var contentStr = content.toString();
+try {
+    var content = context.getVariable("request.content");
+    if (content) {
+        var body = JSON.parse(content);
 
-    // 1. Remove the "model" field (Vertex AI Anthropic endpoint does not permit it in the request body)
-    var cleaned = contentStr.replace(/"model"\s*:\s*"[^"]*"\s*,?/, "");
+        // Remove gateway/non-standard top-level fields not accepted by Anthropic
+        delete body.model;
+        delete body.models;
+        delete body.plugins;
+        delete body.provider;
 
-    // 2. Inject the required "anthropic_version" attribute at the opening brace
-    context.setVariable("request.content", cleaned.replace("{", '{"anthropic_version":"vertex-2023-10-16",'));
+        // Ensure required anthropic_version is present
+        body.anthropic_version = "vertex-2023-10-16";
+
+        context.setVariable("request.content", JSON.stringify(body));
+    }
+} catch (e) {
+    print("Error in inject_anthropic_version: " + e);
 }

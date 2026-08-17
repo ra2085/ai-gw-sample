@@ -25,6 +25,18 @@
         <Name>JS-extract-vars-gemini</Name>
       </Step>
       <Step>
+        <Condition>(request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")</Condition>
+        <Name>JS-prepare-judge-request</Name>
+      </Step>
+      <Step>
+        <Condition>trigger_judge = "true"</Condition>
+        <Name>SC-LLMJudge</Name>
+      </Step>
+      <Step>
+        <Condition>trigger_judge = "true"</Condition>
+        <Name>JS-process-judge-response</Name>
+      </Step>
+      <Step>
         <Name>JS-resolve-model-location</Name>
       </Step>
       <Step>
@@ -80,7 +92,7 @@
     </Properties>
   </HTTPProxyConnection>
   <RouteRule name="claude">
-    <Condition>model JavaRegex "claude.*" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"</Condition>
+    <Condition>route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"</Condition>
     <TargetEndpoint>claude</TargetEndpoint>
   </RouteRule>
   <RouteRule name="gemini-native-target">

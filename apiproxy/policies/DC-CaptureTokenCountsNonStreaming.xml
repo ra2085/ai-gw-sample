@@ -19,4 +19,8 @@
     <Collect ref="model" default="unknown"/>
     <DataCollector>dc_model</DataCollector>
   </Capture>
+  <Capture>
+    <Collect ref="requested_model" default="direct"/>
+    <DataCollector>dc_requested_model</DataCollector>
+  </Capture>
 </DataCapture>

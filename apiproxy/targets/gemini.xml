@@ -17,9 +17,6 @@
       <Step>
         <Name>AM-DisablePathSuffixCopy</Name>
       </Step>
-      <Step>
-        <Name>AM-model</Name>
-      </Step>
     </Request>
     <Response/>
   </PreFlow>
@@ -66,7 +63,7 @@
         </Scopes>
       </GoogleAccessToken>
     </Authentication>
-    <!-- Note: Target URL is dynamically overridden by JS-anthropic-to-gemini in the PreFlow Javascript resource -->
-    <URL>https://us-central1-aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/us-central1/publishers/google/models/gemini-1.5-flash:generateContent</URL>
+    <!-- Note: Target URL is dynamically overridden by JS-anthropic-to-gemini in the PostFlow Javascript resource -->
+    <URL>https://aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/global/publishers/google/models/{model}:generateContent</URL>
   </HTTPTargetConnection>
 </TargetEndpoint>
