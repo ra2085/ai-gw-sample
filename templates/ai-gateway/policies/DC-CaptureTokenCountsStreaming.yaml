@@ -1,0 +1,59 @@
+DataCapture:
+  .name: DC-CaptureTokenCountsStreaming
+  .continueOnError: false
+  .enabled: true
+  -Data:
+    - DisplayName: DC-CaptureTokenCountsStreaming
+    - IgnoreUnresolvedVariables: true
+    - ThrowExceptionOnLimit: false
+    - Capture:
+        Collect:
+          .ref: usage_prompt_tokens
+          .default: 0
+        DataCollector: dc_prompt_token_count
+    - Capture:
+        Collect:
+          .ref: usage_completion_tokens
+          .default: 0
+        DataCollector: dc_completion_token_count
+    - Capture:
+        Collect:
+          .ref: usage_total_tokens
+          .default: 0
+        DataCollector: dc_total_token_count
+    - Capture:
+        Collect:
+          .ref: model
+          .default: unknown
+        DataCollector: dc_model
+    - Capture:
+        Collect:
+          .ref: requested_model
+          .default: direct
+        DataCollector: dc_requested_model
+    - Capture:
+        Collect:
+          .ref: tx_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_cost_usd
+    - Capture:
+        Collect:
+          .ref: perUnitPriceMultiplier
+          .default: 1.0
+        DataCollector:
+          .scope: monetization
+          -Data: perUnitPriceMultiplier
+    - Capture:
+        Collect:
+          .ref: currency
+          .default: USD
+        DataCollector:
+          .scope: monetization
+          -Data: currency
+    - Capture:
+        Collect:
+          .ref: transactionSuccess
+          .default: true
+        DataCollector:
+          .scope: monetization
+          -Data: transactionSuccess

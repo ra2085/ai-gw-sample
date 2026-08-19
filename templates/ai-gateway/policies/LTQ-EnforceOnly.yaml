@@ -1,0 +1,12 @@
+LLMTokenQuota:
+  .continueOnError: false
+  .enabled: true
+  .name: LTQ-EnforceOnly
+  .type: rollingwindow
+  DisplayName: LTQ-EnforceOnly
+  SharedName: llm-token-counter
+  EnforceOnly: true
+  UseQuotaConfigInAPIProduct:
+    .stepName: VA-ApiKey
+  Distributed: true
+  LLMModelSource: '{model}'

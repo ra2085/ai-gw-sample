@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-extract-vars-openai
+  DisplayName: JS-extract-vars-openai
+  Properties: {}
+  ResourceURL: jsc://extract_vars_openai.js

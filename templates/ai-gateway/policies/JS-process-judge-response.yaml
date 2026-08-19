@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-process-judge-response
+  DisplayName: JS-process-judge-response
+  Properties: {}
+  ResourceURL: jsc://process_judge_response.js

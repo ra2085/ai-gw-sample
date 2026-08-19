@@ -1,0 +1,38 @@
+# ==============================================================================
+# ⚡ Apigee AI Gateway - Minimal Quickstart Configuration
+# ==============================================================================
+
+gateway:
+  name: "ai-gateway-quickstart"
+  project_id: "your-gcp-project-id"
+
+# ------------------------------------------------------------------------------
+# 🎯 Models You Want to Enable (with optional custom URLs & pricing)
+# ------------------------------------------------------------------------------
+models:
+  - name: "gemini-2.5-flash"
+    displayName: "Gemini 2.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    is_default: true
+    pricing:
+      input_rate: 0.100
+      output_rate: 0.400
+
+  - name: "claude-haiku-4-5"
+    displayName: "Claude 4.5 Haiku"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "us-east5"
+    pricing:
+      input_rate: 1.000
+      output_rate: 5.000
+
+  # Bonus: Custom Self-Hosted Model in 4 lines!
+  - name: "my-vllm-model"
+    displayName: "Llama 3 (Self-Hosted)"
+    format: "openai"
+    custom_url: "https://vllm.internal.corp/v1/chat/completions"

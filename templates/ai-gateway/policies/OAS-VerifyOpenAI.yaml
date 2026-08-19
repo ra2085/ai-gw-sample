@@ -1,0 +1,9 @@
+OASValidation:
+  .continueOnError: false
+  .enabled: true
+  .name: OAS-VerifyOpenAI
+  DisplayName: OAS-VerifyOpenAI
+  OASResource: oas://openai.yaml
+  Options:
+    AllowUnspecifiedParameters: false
+  Source: request

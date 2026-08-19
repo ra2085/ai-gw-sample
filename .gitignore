@@ -17,3 +17,6 @@ set_vars_apigee_ng_3_monetized.sh
 set_vars_apigee_ng_3_non_monetized.sh
 open_router_poc
 sample-adk
+apigeegg
+out
+site

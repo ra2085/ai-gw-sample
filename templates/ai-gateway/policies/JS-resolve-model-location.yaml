@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-resolve-model-location
+  DisplayName: JS-resolve-model-location
+  Properties: {}
+  ResourceURL: jsc://resolve_model_location.js

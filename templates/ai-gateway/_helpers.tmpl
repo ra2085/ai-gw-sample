@@ -1,0 +1,122 @@
+{{/*
+  Helper: generate_model_locations_properties
+  Dynamically builds the model_locations.properties contents from values.yaml
+*/}}
+{{- define "generate_model_locations_properties" -}}
+# ==============================================================================
+# SECTION 1: DYNAMIC CATALOG & DEFAULT ROUTING
+# ==============================================================================
+# Master list consumed dynamically by /v1/models endpoint
+{{- $modelNames := list -}}
+{{- range $.Values.models -}}
+  {{- $modelNames = append $modelNames .name -}}
+{{- end }}
+models.catalog={{ $modelNames | join "," }}
+
+# Global defaults
+default.model={{ $.Values.defaults.model | default "gemini-3.5-flash" }}
+default.fallback={{ $.Values.defaults.fallback | default "gemini-3.1-flash-lite" }}
+default.target={{ $.Values.defaults.target | default "gemini" }}
+default.publisher={{ $.Values.defaults.publisher | default "google" }}
+default.format={{ $.Values.defaults.format | default "gemini" }}
+
+# ==============================================================================
+# SECTION 2: SMART ROUTER TIERS & TASK MAPPINGS
+# ==============================================================================
+tier.low={{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}
+tier.medium={{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}
+tier.high={{ $.Values.routing.tiers.high | default "gemini-2.5-pro" }}
+tier.max={{ $.Values.routing.tiers.max | default "claude-haiku-4-5" }}
+
+task.coding={{ $.Values.routing.tasks.coding | default "gemini-2.5-pro" }}
+task.reasoning={{ $.Values.routing.tasks.reasoning | default "gemini-2.5-pro" }}
+task.summarization={{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}
+task.simple_chat={{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}
+task.classifier_model={{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}
+
+# ==============================================================================
+# SECTION 3: BACKWARD COMPATIBILITY ALIASES & REWRITES
+# ==============================================================================
+{{- range $alias, $target := $.Values.routing.aliases }}
+alias.{{ $alias }}={{ $target }}
+{{- end }}
+
+# ==============================================================================
+# SECTION 4: ACTIVE MODEL DEFINITIONS (METADATA, REGIONS & CUSTOM URLS)
+# ==============================================================================
+{{- range $.Values.models }}
+# --- {{ .displayName | default .name }} ---
+{{ .name }}.publisher={{ .publisher | default "google" }}
+{{ .name }}.target={{ .target | default "gemini" }}
+{{ .name }}.endpoint={{ .region | default "global" }}
+{{ .name }}.model={{ .region | default "global" }}
+{{ .name }}.format={{ .format | default "gemini" }}
+{{ .name }}.display_name={{ .displayName | default .name }}
+{{- if .created_at }}
+{{ .name }}.created_at={{ .created_at }}
+{{- end }}
+{{- if .custom_url }}
+{{ .name }}.url={{ .custom_url }}
+{{- end }}
+{{- if .auth }}
+{{- if .auth.type }}
+{{ .name }}.auth_type={{ .auth.type }}
+{{- end }}
+{{- if .auth.header_name }}
+{{ .name }}.auth_header={{ .auth.header_name }}
+{{- end }}
+{{- if .auth.token_ref }}
+{{ .name }}.auth_token_ref={{ .auth.token_ref }}
+{{- end }}
+{{- end }}
+
+{{ end }}
+# --- Fallback Defaults ---
+default_gemini.endpoint=global
+default_gemini.model=global
+default_claude.endpoint=us-east5
+default_claude.model=us-east5
+default_openai.endpoint=global
+default_openai.model=us
+{{- end -}}
+
+{{/*
+  Helper: generate_monetization_rates_properties
+  Dynamically builds monetization_rates.properties from models pricing
+*/}}
+{{- define "generate_monetization_rates_properties" -}}
+# Default fallback pricing parameters
+default.currency={{ $.Values.features.monetization.default_currency | default "USD" }}
+default.markup={{ $.Values.features.monetization.default_markup | default 1.0 }}
+
+# Per-model token pricing (USD per 1,000,000 tokens)
+{{- range $.Values.models }}
+{{- if .pricing }}
+{{ .name }}.input_rate={{ .pricing.input_rate }}
+{{ .name }}.output_rate={{ .pricing.output_rate }}
+{{- if .pricing.markup }}
+{{ .name }}.markup={{ .pricing.markup }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/*
+  Helper: generate_config_properties
+  Dynamically builds config.properties
+*/}}
+{{- define "generate_config_properties" -}}
+project_id={{ $.Values.gateway.project_id | default "{propertyset.config.project_id}" }}
+model_armor_template={{ $.Values.features.model_armor.template_id | default "projects/your-gcp-project-id/locations/global/templates/ai-gateway-filter" }}
+{{- end -}}
+
+{{/*
+  Helper: generate_extract_expressions_properties
+*/}}
+{{- define "generate_extract_expressions_properties" -}}
+prompt_tokens_path=$.usage.prompt_tokens
+completion_tokens_path=$.usage.completion_tokens
+total_tokens_path=$.usage.total_tokens
+{{- end -}}
+
+{{- define "blank" -}}{{- end -}}

@@ -1,0 +1,9 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-NormalizePathSuffix
+  DisplayName: AM-NormalizePathSuffix
+  AssignVariable:
+    Name: proxy.pathsuffix
+    Value: /
+  IgnoreUnresolvedVariables: true

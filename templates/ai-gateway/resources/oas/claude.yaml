@@ -1,0 +1,132 @@
+openapi: 3.0.3
+info:
+  title: AI Gateway - Claude Messages API
+  description: Claude Messages API format endpoint for AI Gateway.
+  version: 1.0.0
+servers:
+  - url: https://workshop.iloveapi.management
+security:
+  - ApiKeyAuth: []
+paths:
+  /:
+    post:
+      tags:
+        - Claude Messages Format
+      summary: Send a message to Claude
+      description: Sends a prompt to the assistant and receives a response in Claude's messages format.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeRequest'
+      responses:
+        '200':
+          description: Successful response. Returns message JSON (non-streaming) or Event Stream (streaming).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too Many Requests. Rate limit or token quota exceeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-apikey
+  schemas:
+    ClaudeRequest:
+      type: object
+      required:
+        - model
+        - max_tokens
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier.
+          example: claude-haiku-4-5
+        max_tokens:
+          type: integer
+          description: Maximum tokens to generate.
+          example: 100
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        messages:
+          type: array
+          items:
+            type: object
+            required:
+              - role
+              - content
+            properties:
+              role:
+                type: string
+                enum: [user, assistant]
+                example: user
+              content:
+                type: string
+                example: Explain gravity in one sentence.
+    ClaudeResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          example: message
+        role:
+          type: string
+          example: assistant
+        model:
+          type: string
+        content:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                example: text
+              text:
+                type: string
+        stop_reason:
+          type: string
+          example: end_turn
+        usage:
+          type: object
+          properties:
+            input_tokens:
+              type: integer
+            output_tokens:
+              type: integer
+    ErrorResponse:
+      type: object
+      properties:
+        fault:
+          type: object
+          properties:
+            faultstring:
+              type: string
+            detail:
+              type: object
+              properties:
+                errorcode:
+                  type: string
+                  example: steps.sanitize.user.prompt.FilterMatched

@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-models-endpoint
+  DisplayName: JS-models-endpoint
+  Properties: {}
+  ResourceURL: jsc://models_endpoint.js

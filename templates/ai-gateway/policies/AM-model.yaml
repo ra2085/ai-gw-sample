@@ -1,0 +1,21 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-model
+  -Data:
+    - DisplayName: AM-model
+    - Properties: {}
+    - AssignVariable:
+        Name: gemm
+        Value: google/gemini-3.1-flash-lite-preview
+    - AssignVariable:
+        Name: gepp
+        Value: gpt-4o
+    - AssignVariable:
+        Name: request.content
+        Template: '{replaceAll(request.content,gepp,gemm)}'
+    - IgnoreUnresolvedVariables: true
+    - AssignTo:
+        .createNew: false
+        .transport: http
+        .type: request

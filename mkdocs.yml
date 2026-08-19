@@ -1,0 +1,96 @@
+site_name: Apigee AI Gateway
+site_url: https://ra2085.github.io/ai-gw-sample/
+site_description: Enterprise AI Gateway with Smart Routing, LLM Judge, Model Armor Security, and Token Monetization on Google Cloud Apigee.
+site_author: Apigee AI Team
+repo_name: ra2085/ai-gw-sample
+repo_url: https://github.com/ra2085/ai-gw-sample
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - navigation.tracking
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+markdown_extensions:
+  - admonition
+  - abbr
+  - attr_list
+  - def_list
+  - tables
+  - footnotes
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - ⚡ 30-Second Quickstart Template: getting-started/quickstart-template.md
+      - Choose Your Workflow: getting-started/choose-workflow.md
+      - Installation & Prerequisites: getting-started/installation.md
+      - Full Quickstart Guide: getting-started/quickstart.md
+
+  - Declarative Template Guide:
+      - values.yaml Reference: template-guide/configuration.md
+      - Custom URLs & API Formats: template-guide/custom-urls.md
+      - Feature Toggles: template-guide/feature-flags.md
+  - Native Proxy Deep Dive:
+      - Bundle & PropertySets Structure: proxy-deep-dive/bundle-structure.md
+      - XML Policies Catalog: proxy-deep-dive/policies-reference.md
+      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
+      - Targets & Google Cloud Auth: proxy-deep-dive/targets-and-routing.md
+  - Architecture & Capabilities:
+      - Universal Protocol Normalization: architecture/protocols.md
+      - Smart Routing & LLM Judge: architecture/routing.md
+      - Enterprise Security (Model Armor): architecture/security.md
+      - Monetization & Micro-Transactions: architecture/monetization.md
+  - Operations & Testing:
+      - Deployment Guide: operations/deployment.md
+      - Automated Test Suites: operations/testing.md
+      - Telemetry & Data Collectors: operations/telemetry.md
+

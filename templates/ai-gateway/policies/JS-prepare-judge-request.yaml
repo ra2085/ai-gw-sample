@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-prepare-judge-request
+  DisplayName: JS-prepare-judge-request
+  Properties: {}
+  ResourceURL: jsc://prepare_judge_request.js

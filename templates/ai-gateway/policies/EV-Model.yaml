@@ -1,0 +1,23 @@
+ExtractVariables:
+  .continueOnError: false
+  .enabled: true
+  .name: EV-Model
+  DisplayName: EV-Model
+  Properties: {}
+  IgnoreUnresolvedVariables: true
+  JSONPayload:
+    - Variable:
+        .name: model
+        .type: string
+        JSONPath: $.model
+    - Variable:
+        .name: stream
+        .type: boolean
+        JSONPath: $.stream
+    - Variable:
+        .name: prompt
+        .type: string
+        JSONPath: '{propertyset.extract_expressions.prompt_exp}'
+  Source:
+    .clearPayload: false
+    -Data: request

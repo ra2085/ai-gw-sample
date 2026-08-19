@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-inject-anthropic-version
+  DisplayName: JS-inject-anthropic-version
+  Properties: {}
+  ResourceURL: jsc://inject_anthropic_version.js

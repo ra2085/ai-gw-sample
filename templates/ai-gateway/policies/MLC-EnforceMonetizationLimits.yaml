@@ -1,0 +1,6 @@
+MonetizationLimitsCheck:
+  .continueOnError: false
+  .enabled: true
+  .name: MLC-EnforceMonetizationLimits
+  DisplayName: MLC-EnforceMonetizationLimits
+  IgnoreUnresolvedVariables: true

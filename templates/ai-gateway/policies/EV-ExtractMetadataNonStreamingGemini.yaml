@@ -1,0 +1,18 @@
+ExtractVariables:
+  .continueOnError: false
+  .enabled: true
+  .name: EV-ExtractMetadataNonStreamingGemini
+  DisplayName: EV-ExtractMetadataNonStreamingGemini
+  IgnoreUnresolvedVariables: true
+  JSONPayload:
+    - Variable:
+        .name: prompt_tokens
+        .type: integer
+        JSONPath: $.usageMetadata.promptTokenCount
+    - Variable:
+        .name: completion_tokens
+        .type: integer
+        JSONPath: $.usageMetadata.candidatesTokenCount
+  Source:
+    .clearPayload: false
+    -Data: response

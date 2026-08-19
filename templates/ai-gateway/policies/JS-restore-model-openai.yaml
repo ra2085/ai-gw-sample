@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-restore-model-openai
+  DisplayName: JS-restore-model-openai
+  Properties: {}
+  ResourceURL: jsc://restore_model_openai.js

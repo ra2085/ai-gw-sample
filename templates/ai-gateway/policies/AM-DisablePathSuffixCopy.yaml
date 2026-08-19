@@ -1,0 +1,14 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-DisablePathSuffixCopy
+  DisplayName: AM-DisablePathSuffixCopy
+  Properties: {}
+  AssignVariable:
+    Name: target.copy.pathsuffix
+    Value: false
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: request

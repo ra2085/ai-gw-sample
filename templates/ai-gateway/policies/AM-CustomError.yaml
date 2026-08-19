@@ -1,0 +1,14 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-CustomError
+  DisplayName: AM-CustomError
+  Properties: {}
+  Set:
+    StatusCode: 403
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: response
+    -Data: error

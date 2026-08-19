@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-anthropic-to-gemini
+  DisplayName: JS-anthropic-to-gemini
+  Properties: {}
+  ResourceURL: jsc://anthropic_to_gemini.js

@@ -1,0 +1,19 @@
+ExtractVariables:
+  .continueOnError: false
+  .enabled: true
+  .name: EV-ExtractMetadataNonStreaming
+  DisplayName: EV-ExtractMetadataNonStreaming
+  Properties: {}
+  IgnoreUnresolvedVariables: true
+  JSONPayload:
+    - Variable:
+        .name: prompt_tokens
+        .type: integer
+        JSONPath: $.usage.input_tokens
+    - Variable:
+        .name: completion_tokens
+        .type: integer
+        JSONPath: $.usage.output_tokens
+  Source:
+    .clearPayload: false
+    -Data: response

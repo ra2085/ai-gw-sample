@@ -1,0 +1,33 @@
+AssignMessage:
+  .continueOnError: true
+  .enabled: true
+  .name: AM-SetMonetizationHeaders
+  DisplayName: AM-SetMonetizationHeaders
+  Set:
+    Headers:
+      - Header:
+          .name: X-Gateway-Prompt-Tokens
+          -Data: '{prompt_tokens}'
+      - Header:
+          .name: X-Gateway-Completion-Tokens
+          -Data: '{completion_tokens}'
+      - Header:
+          .name: X-Gateway-Total-Tokens
+          -Data: '{usage_total_tokens}'
+      - Header:
+          .name: X-Gateway-Prompt-Cost-USD
+          -Data: '{tx_prompt_cost_usd}'
+      - Header:
+          .name: X-Gateway-Completion-Cost-USD
+          -Data: '{tx_completion_cost_usd}'
+      - Header:
+          .name: X-Gateway-Total-Cost-USD
+          -Data: '{tx_cost_usd}'
+      - Header:
+          .name: X-Gateway-Cost-Currency
+          -Data: '{tx_currency}'
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: response

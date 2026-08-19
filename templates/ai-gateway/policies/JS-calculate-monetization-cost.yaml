@@ -1,0 +1,7 @@
+Javascript:
+  .continueOnError: true
+  .enabled: true
+  .name: JS-calculate-monetization-cost
+  DisplayName: JS-calculate-monetization-cost
+  Properties: {}
+  ResourceURL: jsc://calculate_monetization_cost.js

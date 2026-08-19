@@ -1,0 +1,10 @@
+SanitizeUserPrompt:
+  .async: false
+  .continueOnError: false
+  .enabled: true
+  .name: SUP-SanitizeUserPrompt
+  IgnoreUnresolvedVariables: true
+  DisplayName: SUP-SanitizeUserPrompt
+  ModelArmor:
+    TemplateName: projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}
+  UserPromptSource: '{extracted_prompt}'

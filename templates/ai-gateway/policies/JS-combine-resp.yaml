@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-combine-resp
+  DisplayName: JS-combine-events
+  Properties: {}
+  ResourceURL: jsc://combine_resp.js

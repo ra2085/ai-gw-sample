@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-inject-deidentified-finding
+  DisplayName: JS-inject-deidentified-finding
+  Properties: {}
+  ResourceURL: jsc://inject_deidentified_finding.js

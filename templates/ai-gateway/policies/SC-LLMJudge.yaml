@@ -1,0 +1,30 @@
+ServiceCallout:
+  .continueOnError: true
+  .enabled: true
+  .name: SC-LLMJudge
+  DisplayName: SC-LLMJudge
+  Properties: {}
+  Request:
+    .clearPayload: true
+    .variable: llmJudgeRequest
+    IgnoreUnresolvedVariables: false
+    Set:
+      Headers:
+        Header:
+          .name: Content-Type
+          -Data: application/json
+      Verb: POST
+      Payload:
+        .contentType: application/json
+        -Data: '{judge_request_payload}'
+  Response: llmJudgeResponse
+  HTTPTargetConnection:
+    Authentication:
+      GoogleAccessToken:
+        Scopes:
+          Scope: https://www.googleapis.com/auth/cloud-platform
+    Properties:
+      Property:
+        .name: io.timeout.millis
+        -Data: 5000
+    URL: https://aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/global/publishers/google/models/{propertyset.model_locations.task.classifier_model}:generateContent

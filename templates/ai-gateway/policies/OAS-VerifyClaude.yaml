@@ -1,0 +1,9 @@
+OASValidation:
+  .continueOnError: false
+  .enabled: true
+  .name: OAS-VerifyClaude
+  DisplayName: OAS-VerifyClaude
+  OASResource: oas://claude.yaml
+  Options:
+    AllowUnspecifiedParameters: false
+  Source: request

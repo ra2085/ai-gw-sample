@@ -1,0 +1,8 @@
+VerifyAPIKey:
+  .continueOnError: false
+  .enabled: true
+  .name: VA-ApiKey
+  DisplayName: VA-ApiKey
+  Properties: {}
+  APIKey:
+    .ref: request.header.x-apikey

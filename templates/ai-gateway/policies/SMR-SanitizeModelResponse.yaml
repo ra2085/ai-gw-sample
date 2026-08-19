@@ -1,0 +1,10 @@
+SanitizeModelResponse:
+  .async: false
+  .continueOnError: true
+  .enabled: true
+  .name: SMR-SanitizeModelResponse
+  IgnoreUnresolvedVariables: true
+  DisplayName: SMR-SanitizeModelResponse
+  ModelArmor:
+    TemplateName: projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}
+  LLMResponseSource: '{response_partial}'

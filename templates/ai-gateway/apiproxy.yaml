@@ -1,0 +1,691 @@
+APIProxy:
+  .revision: {{ $.Values.gateway.revision | default 1 }}
+  .name: {{ $.Values.gateway.name | default "ai-gateway" }}
+  DisplayName: {{ $.Values.gateway.displayName | default "Apigee Enterprise AI Gateway" }}
+  Description: |-
+    {{ $.Values.gateway.description | default "Apigee Enterprise AI Gateway" | nindent 4 }}
+
+Policies: {{ include "./policies.yaml" . | nindent 2 }}
+
+ProxyEndpoints:
+  {{- if $.Values.endpoints.claude.enabled }}
+  - ProxyEndpoint:
+      .name: {{ $.Values.endpoints.claude.name | default "claude-messages" }}
+      -Data:
+        - Description: Anthropic Claude Messages Proxy Endpoint
+        - FaultRules:
+            FaultRule:
+              .name: sanitize
+              -Data:
+                - Step:
+                    Name: JS-inject-deidentified-finding
+                - Step:
+                    Name: AM-CustomError
+                - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+        - PreFlow:
+            .name: PreFlow
+            Request:
+              {{- if $.Values.features.auth.enabled }}
+              - Step:
+                  Condition: '!(request.header.Authorization Matches "Bearer *")'
+                  Name: VA-ApiKey
+              {{- end }}
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Name: MLC-EnforceMonetizationLimits
+              {{- end }}
+              - Step:
+                  Name: AM-NormalizePathSuffix
+              - Step:
+                  Name: OAS-VerifyClaude
+              - Step:
+                  Name: EV-Model
+              {{- if $.Values.features.llm_judge.enabled }}
+              - Step:
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+                  Name: JS-prepare-judge-request
+              - Step:
+                  Condition: trigger_judge = "true"
+                  Name: SC-LLMJudge
+              - Step:
+                  Condition: trigger_judge = "true"
+                  Name: JS-process-judge-response
+              {{- end }}
+              - Step:
+                  Name: JS-resolve-model-location
+              {{- if $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-EnforceOnly
+              {{- end }}
+              - Step:
+                  Name: JS-extract-prompt
+              {{- if $.Values.features.model_armor.enabled }}
+              - Step:
+                  Name: SUP-SanitizeUserPrompt
+              {{- end }}
+            Response: {}
+        - PostFlow:
+            .name: PostFlow
+            Request: {}
+            Response:
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: EV-ExtractMetadataNonStreaming
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-tokens-non-streaming
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-monetization-cost
+              {{- end }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: DC-CaptureTokenCountsNonStreaming
+              {{- if $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-CountOnly
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetQuotaHeaders
+              {{- end }}
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetMonetizationHeaders
+              {{- end }}
+        - Flows: {}
+        - HTTPProxyConnection:
+            BasePath: {{ $.Values.endpoints.claude.base_path | default "/v1/messages" }}
+            Properties:
+              - Property:
+                  .name: response.streaming.enabled
+                  -Data: true
+              - Property:
+                  .name: api.timeout
+                  -Data: 300000
+        - RouteRule:
+            .name: claude
+            Condition: route_target = "claude"
+            TargetEndpoint: claude
+        - RouteRule:
+            .name: gemini
+            TargetEndpoint: gemini
+  {{- end }}
+
+  {{- if $.Values.endpoints.gemini_native.enabled }}
+  - ProxyEndpoint:
+      .name: {{ $.Values.endpoints.gemini_native.name | default "gemini-native" }}
+      -Data:
+        - Description: Native Gemini API Proxy Endpoint compatible with ADK
+        - FaultRules:
+            FaultRule:
+              .name: sanitize
+              -Data:
+                - Step:
+                    Name: JS-inject-deidentified-finding
+                - Step:
+                    Name: AM-CustomError
+                - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+        - PreFlow:
+            .name: PreFlow
+            Request:
+              {{- if $.Values.features.auth.enabled }}
+              - Step:
+                  Condition: '!(request.header.Authorization Matches "Bearer *")'
+                  Name: VA-ApiKey
+              {{- end }}
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Name: MLC-EnforceMonetizationLimits
+              {{- end }}
+              - Step:
+                  Name: OAS-VerifyGemini
+              - Step:
+                  Name: JS-extract-vars-gemini
+              {{- if $.Values.features.llm_judge.enabled }}
+              - Step:
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+                  Name: JS-prepare-judge-request
+              - Step:
+                  Condition: trigger_judge = "true"
+                  Name: SC-LLMJudge
+              - Step:
+                  Condition: trigger_judge = "true"
+                  Name: JS-process-judge-response
+              {{- end }}
+              - Step:
+                  Name: JS-resolve-model-location
+              {{- if $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-EnforceOnly
+              {{- end }}
+              {{- if $.Values.features.model_armor.enabled }}
+              - Step:
+                  Condition: request_format = "gemini" and gemini_text_prompt != null and gemini_text_prompt != ""
+                  Name: SUP-SanitizeUserPromptGemini
+              - Step:
+                  Condition: request_format = "claude" and extracted_prompt != null and extracted_prompt != ""
+                  Name: SUP-SanitizeUserPrompt
+              {{- end }}
+            Response: {}
+        - PostFlow:
+            .name: PostFlow
+            Request: {}
+            Response:
+              - Step:
+                  Condition: '!(stream = true) and request_format = "gemini"'
+                  Name: EV-ExtractMetadataNonStreamingGemini
+              - Step:
+                  Condition: '!(stream = true) and request_format = "claude"'
+                  Name: EV-ExtractMetadataNonStreaming
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-tokens-non-streaming
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-monetization-cost
+              {{- end }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: DC-CaptureTokenCountsNonStreaming
+              {{- if $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-CountOnly
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetQuotaHeaders
+              {{- end }}
+              {{- if $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetMonetizationHeaders
+              {{- end }}
+        - Flows: {}
+        - HTTPProxyConnection:
+            BasePath: {{ $.Values.endpoints.gemini_native.base_path | default "/ai-gateway" }}
+            Properties:
+              - Property:
+                  .name: response.streaming.enabled
+                  -Data: true
+              - Property:
+                  .name: api.timeout
+                  -Data: 300000
+        - RouteRule:
+            .name: claude
+            Condition: route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"
+            TargetEndpoint: claude
+        - RouteRule:
+            .name: gemini-native-target
+            TargetEndpoint: gemini-native-target
+  {{- end }}
+
+  {{- if $.Values.endpoints.openai_compat.enabled }}
+  - ProxyEndpoint:
+      .name: {{ $.Values.endpoints.openai_compat.name | default "openai-compat" }}
+      Description: OpenAI Compatibility API Proxy Endpoint for Gemini
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      PreFlow:
+        .name: PreFlow
+        Request:
+          {{- if $.Values.features.auth.enabled }}
+          - Step:
+              Condition: '!(request.header.Authorization Matches "Bearer *")'
+              Name: VA-ApiKey
+          {{- end }}
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Name: MLC-EnforceMonetizationLimits
+          {{- end }}
+          - Step:
+              Name: AM-NormalizePathSuffix
+          - Step:
+              Name: OAS-VerifyOpenAI
+          - Step:
+              Name: JS-extract-vars-openai
+          {{- if $.Values.features.llm_judge.enabled }}
+          - Step:
+              Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+              Name: JS-prepare-judge-request
+          - Step:
+              Condition: trigger_judge = "true"
+              Name: SC-LLMJudge
+          - Step:
+              Condition: trigger_judge = "true"
+              Name: JS-process-judge-response
+          {{- end }}
+          - Step:
+              Name: JS-resolve-model-location
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: apiproduct.name != null
+              Name: LTQ-EnforceOnly
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: extracted_prompt != null and extracted_prompt != ""
+              Name: SUP-SanitizeUserPrompt
+          {{- end }}
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response:
+          - Step:
+              Condition: '!(stream = true)'
+              Name: EV-ExtractMetadataNonStreamingOpenAI
+          - Step:
+              Condition: '!(stream = true)'
+              Name: JS-calculate-tokens-non-streaming
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: '!(stream = true)'
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: '!(stream = true)'
+              Name: DC-CaptureTokenCountsNonStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+              Name: LTQ-CountOnly
+          - Step:
+              Condition: '!(stream = true)'
+              Name: AM-SetQuotaHeaders
+          {{- end }}
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: '!(stream = true)'
+              Name: AM-SetMonetizationHeaders
+          {{- end }}
+      Flows: {}
+      HTTPProxyConnection:
+        BasePath: {{ $.Values.endpoints.openai_compat.base_path | default "/v1/chat/completions" }}
+        Properties:
+          - Property:
+              .name: response.streaming.enabled
+              -Data: true
+          - Property:
+              .name: api.timeout
+              -Data: 300000
+      RouteRule:
+        .name: gemini-openai-compat
+        TargetEndpoint: gemini-openai-compat
+  {{- end }}
+
+  {{- if $.Values.endpoints.models_catalog.enabled }}
+  - ProxyEndpoint:
+      .name: {{ $.Values.endpoints.models_catalog.name | default "claude-models" }}
+      Description: Anthropic & OpenAI Models API Catalog Proxy Endpoint
+      FaultRules: {}
+      PreFlow:
+        .name: PreFlow
+        Request:
+          {{- if $.Values.features.auth.enabled }}
+          - Step:
+              Condition: '!(request.header.Authorization Matches "Bearer *")'
+              Name: VA-ApiKey
+          {{- end }}
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Name: MLC-EnforceMonetizationLimits
+          {{- end }}
+          - Step:
+              Name: AM-NormalizePathSuffix
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response: {}
+      Flows:
+        - Flow:
+            .name: listModels
+            Description: List available models
+            Condition: (request.verb = "GET") AND ((proxy.pathsuffix MatchesPath "") OR (proxy.pathsuffix MatchesPath "/"))
+            Request: {}
+            Response:
+              Step:
+                Name: JS-models-endpoint
+        - Flow:
+            .name: retrieveModel
+            Description: Retrieve model details
+            Condition: (request.verb = "GET") AND (proxy.pathsuffix MatchesPath "/*")
+            Request: {}
+            Response:
+              Step:
+                Name: JS-models-endpoint
+      HTTPProxyConnection:
+        BasePath: {{ $.Values.endpoints.models_catalog.base_path | default "/v1/models" }}
+      RouteRule:
+        .name: no-target
+  {{- end }}
+
+TargetEndpoints:
+  - TargetEndpoint:
+      .name: claude
+      Description: Target Endpoint for Vertex Claude models
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      PreFlow:
+        .name: PreFlow
+        Request:
+          - Step:
+              Name: AM-DisablePathSuffixCopy
+          - Step:
+              Name: JS-inject-anthropic-version
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response: {}
+      Flows: {}
+      EventFlow:
+        .name: EventFlow
+        .content-type: text/event-stream
+        Response:
+          - Step:
+              Name: JS-combine-resp
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: DC-CaptureTokenCountsStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-CountOnly
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Name: SMR-SanitizeModelResponse
+          {{- end }}
+      HTTPTargetConnection:
+        Properties:
+          Property:
+            .name: io.timeout.millis
+            -Data: 300000
+        Authentication:
+          GoogleAccessToken:
+            Scopes:
+              Scope: https://www.googleapis.com/auth/cloud-platform
+        URL: https://{endpoint_host}/v1/projects/{propertyset.config.project_id}/locations/{model_location}/publishers/anthropic/models/{model}:streamRawPredict
+
+  - TargetEndpoint:
+      .name: gemini-native-target
+      Description: Target Endpoint for native Gemini requests
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      PreFlow:
+        .name: PreFlow
+        Request: {}
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response: {}
+      Flows: {}
+      EventFlow:
+        .name: EventFlow
+        .content-type: text/event-stream
+        Response:
+          - Step:
+              Name: JS-combine-resp
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: DC-CaptureTokenCountsStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-CountOnly
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Name: SMR-SanitizeModelResponse
+          {{- end }}
+      HTTPTargetConnection:
+        Properties:
+          Property:
+            .name: io.timeout.millis
+            -Data: 300000
+        Authentication:
+          GoogleAccessToken:
+            Scopes:
+              Scope: https://www.googleapis.com/auth/cloud-platform
+        URL: https://aiplatform.googleapis.com
+
+  - TargetEndpoint:
+      .name: gemini-openai-compat
+      Description: Target Endpoint for OpenAI-compatible Gemini requests
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      PreFlow:
+        .name: PreFlow
+        Request:
+          - Step:
+              Name: AM-DisablePathSuffixCopy
+          - Step:
+              Name: JS-restore-model-openai
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response: {}
+      Flows: {}
+      EventFlow:
+        .name: EventFlow
+        .content-type: text/event-stream
+        Response:
+          - Step:
+              Name: JS-combine-resp
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: DC-CaptureTokenCountsStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-CountOnly
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Name: SMR-SanitizeModelResponse
+          {{- end }}
+      HTTPTargetConnection:
+        Properties:
+          Property:
+            .name: io.timeout.millis
+            -Data: 300000
+        Authentication:
+          GoogleAccessToken:
+            Scopes:
+              Scope: https://www.googleapis.com/auth/cloud-platform
+        URL: https://{endpoint_host}/v1/projects/{propertyset.config.project_id}/locations/{model_location}/endpoints/openapi/chat/completions
+
+  - TargetEndpoint:
+      .name: gemini
+      Description: Target Endpoint for translated Gemini requests
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      PreFlow:
+        .name: PreFlow
+        Request:
+          Step:
+            Name: AM-DisablePathSuffixCopy
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request:
+          Step:
+            Name: JS-anthropic-to-gemini
+        Response:
+          Step:
+            Condition: '!(stream = true)'
+            Name: JS-gemini-to-anthropic-resp
+      Flows: {}
+      EventFlow:
+        .name: EventFlow
+        .content-type: text/event-stream
+        Response:
+          - Step:
+              Name: JS-combine-resp
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: DC-CaptureTokenCountsStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-CountOnly
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Name: SMR-SanitizeModelResponse
+          {{- end }}
+      HTTPTargetConnection:
+        Properties:
+          Property:
+            .name: io.timeout.millis
+            -Data: 300000
+        Authentication:
+          GoogleAccessToken:
+            Scopes:
+              Scope: https://www.googleapis.com/auth/cloud-platform
+        URL: https://aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/global/publishers/google/models/{model}:generateContent
+
+Resources:
+  # Dynamic PropertySets Generated from values.yaml
+  {{- os_writefile "./resources/properties/model_locations.properties" (include "generate_model_locations_properties" .) | blank }}
+  - Resource:
+      Type: properties
+      Path: ./resources/properties/model_locations.properties
+  {{- os_writefile "./resources/properties/monetization_rates.properties" (include "generate_monetization_rates_properties" .) | blank }}
+  - Resource:
+      Type: properties
+      Path: ./resources/properties/monetization_rates.properties
+  {{- os_writefile "./resources/properties/config.properties" (include "generate_config_properties" .) | blank }}
+  - Resource:
+      Type: properties
+      Path: ./resources/properties/config.properties
+  {{- os_writefile "./resources/properties/extract_expressions.properties" (include "generate_extract_expressions_properties" .) | blank }}
+  - Resource:
+      Type: properties
+      Path: ./resources/properties/extract_expressions.properties
+
+  # JavaScript Resources
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/anthropic_to_gemini.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/calculate_monetization_cost.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/calculate_tokens_non_streaming.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/combine_resp.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/extract_prompt.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/extract_vars_gemini.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/extract_vars_openai.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/gemini_to_anthropic_resp.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/inject_anthropic_version.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/inject_deidentified_finding.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/models_endpoint.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/prepare_judge_request.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/process_judge_response.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/resolve_model_location.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/restore_model_openai.js
+
+  # OpenAPI Specs
+  - Resource:
+      Type: oas
+      Path: ./resources/oas/claude.yaml
+  - Resource:
+      Type: oas
+      Path: ./resources/oas/gemini.yaml
+  - Resource:
+      Type: oas
+      Path: ./resources/oas/openai.yaml

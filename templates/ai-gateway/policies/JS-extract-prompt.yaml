@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-extract-prompt
+  DisplayName: JS-extract-prompt
+  Properties: {}
+  ResourceURL: jsc://extract_prompt.js

@@ -1,0 +1,13 @@
+LLMTokenQuota:
+  .continueOnError: false
+  .enabled: true
+  .name: LTQ-CountOnly
+  .type: rollingwindow
+  DisplayName: LTQ-CountOnly
+  SharedName: llm-token-counter
+  CountOnly: true
+  UseQuotaConfigInAPIProduct:
+    .stepName: VA-ApiKey
+  Distributed: true
+  LLMTokenUsageSource: '{usage_total_tokens}'
+  LLMModelSource: '{model}'

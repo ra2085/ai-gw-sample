@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-extract-vars-gemini
+  DisplayName: JS-extract-vars-gemini
+  Properties: {}
+  ResourceURL: jsc://extract_vars_gemini.js

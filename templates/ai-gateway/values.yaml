@@ -1,0 +1,185 @@
+# ==============================================================================
+# Apigee AI Gateway - Declarative Values Configuration
+# ==============================================================================
+
+gateway:
+  name: "ai-gateway"
+  displayName: "Apigee Enterprise AI Gateway"
+  description: "Enterprise AI Gateway with Smart Routing, LLM Judge, Model Armor Security, and Token Monetization"
+  revision: 1
+  project_id: "{propertyset.config.project_id}"
+
+# ------------------------------------------------------------------------------
+# Feature Toggles
+# ------------------------------------------------------------------------------
+features:
+  monetization:
+    enabled: true
+    default_currency: "USD"
+    default_markup: 1.0
+  model_armor:
+    enabled: true
+    template_id: "projects/your-gcp-project-id/locations/global/templates/ai-gateway-filter"
+  llm_judge:
+    enabled: true
+    classifier_model: "gemini-3.1-flash-lite"
+  quotas:
+    enabled: true
+  cors:
+    enabled: true
+  auth:
+    enabled: true
+    type: "apikey" # apikey | none
+
+# ------------------------------------------------------------------------------
+# Proxy Endpoints / Supported Protocols
+# ------------------------------------------------------------------------------
+endpoints:
+  claude:
+    enabled: true
+    name: "claude-messages"
+    base_path: "/v1/messages"
+  gemini_native:
+    enabled: true
+    name: "gemini-native"
+    base_path: "/ai-gateway"
+  openai_compat:
+    enabled: true
+    name: "openai-compat"
+    base_path: "/v1/chat/completions"
+  models_catalog:
+    enabled: true
+    name: "claude-models"
+    base_path: "/v1/models"
+
+# ------------------------------------------------------------------------------
+# Global Defaults
+# ------------------------------------------------------------------------------
+defaults:
+  model: "gemini-3.5-flash"
+  fallback: "gemini-3.1-flash-lite"
+  target: "gemini"
+  publisher: "google"
+  format: "gemini"
+  region: "global"
+
+# ------------------------------------------------------------------------------
+# Smart Routing Tiers & Task Mappings
+# ------------------------------------------------------------------------------
+routing:
+  tiers:
+    low: "gemini-3.1-flash-lite"
+    medium: "gemini-3.5-flash"
+    high: "gemini-2.5-pro"
+    max: "claude-haiku-4-5"
+  tasks:
+    coding: "gemini-2.5-pro"
+    reasoning: "gemini-2.5-pro"
+    summarization: "gemini-3.1-flash-lite"
+    simple_chat: "gemini-3.5-flash"
+    classifier_model: "gemini-3.1-flash-lite"
+  aliases:
+    # Legacy Gemini Aliases
+    "gemini-1.5-flash": "gemini-3.5-flash"
+    "gemini-1.5-flash-001": "gemini-3.5-flash"
+    "gemini-1.5-pro": "gemini-2.5-pro"
+    "gemini-1.5-pro-001": "gemini-2.5-pro"
+    "gemini-3.1-pro": "gemini-2.5-pro"
+    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
+    # Claude Aliases
+    "claude-3-5-sonnet": "claude-haiku-4-5"
+    "claude-3-5-haiku": "claude-haiku-4-5"
+    # OpenAI & Auto Aliases
+    "gpt-4o": "gemini-2.5-pro"
+    "gpt-4o-mini": "gemini-3.1-flash-lite"
+    "auto": "gemini-3.5-flash"
+    "gateway/auto": "gemini-3.5-flash"
+    "auto:judge": "gemini-3.5-flash"
+    "gateway/judge": "gemini-3.5-flash"
+
+# ------------------------------------------------------------------------------
+# Model Catalog Definitions & Pricing Matrix
+# ------------------------------------------------------------------------------
+models:
+  # --- Gemini 3.x Series ---
+  - name: "gemini-3.7-flash"
+    displayName: "Gemini 3.7 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2025-02-15T00:00:00Z"
+    pricing:
+      input_rate: 0.150
+      output_rate: 0.600
+
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2025-01-10T00:00:00Z"
+    pricing:
+      input_rate: 0.100
+      output_rate: 0.400
+
+  - name: "gemini-3.1-flash-lite"
+    displayName: "Gemini 3.1 Flash-Lite"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-05-07T00:00:00Z"
+    pricing:
+      input_rate: 0.075
+      output_rate: 0.300
+
+  # --- Gemini 2.5 Series ---
+  - name: "gemini-2.5-pro"
+    displayName: "Gemini 2.5 Pro"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2024-11-01T00:00:00Z"
+    pricing:
+      input_rate: 1.250
+      output_rate: 5.000
+
+  - name: "gemini-2.5-flash"
+    displayName: "Gemini 2.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2024-11-01T00:00:00Z"
+    pricing:
+      input_rate: 0.100
+      output_rate: 0.400
+
+  # --- Anthropic Claude Models ---
+  - name: "claude-haiku-4-5"
+    displayName: "Claude 4.5 Haiku"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "us-east5"
+    created_at: "2025-10-01T00:00:00Z"
+    pricing:
+      input_rate: 1.000
+      output_rate: 5.000
+
+  # --- Example Custom Model with Custom Target URL & Format ---
+  # - name: "custom-llama-3"
+  #   displayName: "Llama 3 70B (vLLM)"
+  #   publisher: "custom"
+  #   target: "gemini-openai-compat"
+  #   format: "openai"
+  #   custom_url: "https://vllm.internal.corp/v1/chat/completions"
+  #   auth:
+  #     type: "bearer"
+  #     token_ref: "propertyset.config.vllm_api_key"
+  #   pricing:
+  #     input_rate: 0.050
+  #     output_rate: 0.150

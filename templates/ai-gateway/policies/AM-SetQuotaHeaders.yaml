@@ -1,0 +1,48 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-SetQuotaHeaders
+  DisplayName: AM-SetQuotaHeaders
+  Set:
+    Headers:
+      - Header:
+          .name: x-quota-allowed
+          -Data: '{ratelimit.LTQ-CountOnly.allowed.count}'
+      - Header:
+          .name: x-quota-used
+          -Data: '{ratelimit.LTQ-CountOnly.used.count}'
+      - Header:
+          .name: x-quota-available
+          -Data: '{ratelimit.LTQ-CountOnly.available.count}'
+      - Header:
+          .name: x-quota-ip-used
+          -Data: '{ratelimit.LTQ-CountOnly-IP.used.count}'
+      - Header:
+          .name: x-quota-ip-available
+          -Data: '{ratelimit.LTQ-CountOnly-IP.available.count}'
+      - Header:
+          .name: X-Gateway-Requested-Model
+          -Data: '{requested_model}'
+      - Header:
+          .name: X-Gateway-Routed-Model
+          -Data: '{primary_model}'
+      - Header:
+          .name: X-Gateway-Cost-Tier
+          -Data: '{cost_tier}'
+      - Header:
+          .name: X-Gateway-Fallback-Model
+          -Data: '{fallback_model}'
+      - Header:
+          .name: X-Gateway-Judge-Task
+          -Data: '{judge_task}'
+      - Header:
+          .name: X-Gateway-Judge-Complexity
+          -Data: '{judge_complexity}'
+      - Header:
+          .name: X-Gateway-Judge-Tier
+          -Data: '{judge_tier}'
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: response

@@ -1,0 +1,55 @@
+# Core Routing & Error Policies
+- {{ include "./policies/AM-CustomError.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-DisablePathSuffixCopy.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-NormalizePathSuffix.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-model.yaml" . | indent 2 | trim }}
+- {{ include "./policies/EV-Model.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-resolve-model-location.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-extract-prompt.yaml" . | indent 2 | trim }}
+
+# Authentication Policy
+- {{ include "./policies/VA-ApiKey.yaml" . | indent 2 | trim }}
+
+# Translation & Variable Extractors
+- {{ include "./policies/JS-anthropic-to-gemini.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-gemini-to-anthropic-resp.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-inject-anthropic-version.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-restore-model-openai.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-extract-vars-gemini.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-extract-vars-openai.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-combine-resp.yaml" . | indent 2 | trim }}
+
+# Dynamic Models Catalog Endpoint
+- {{ include "./policies/JS-models-endpoint.yaml" . | indent 2 | trim }}
+
+# LLM as a Judge Policies
+- {{ include "./policies/JS-prepare-judge-request.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SC-LLMJudge.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-process-judge-response.yaml" . | indent 2 | trim }}
+
+# Enterprise Security (Model Armor) Policies
+- {{ include "./policies/SUP-SanitizeUserPrompt.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SUP-SanitizeUserPromptGemini.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SMR-SanitizeModelResponse.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-inject-deidentified-finding.yaml" . | indent 2 | trim }}
+
+# Monetization & Quota Policies
+- {{ include "./policies/MLC-EnforceMonetizationLimits.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-calculate-monetization-cost.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-SetMonetizationHeaders.yaml" . | indent 2 | trim }}
+- {{ include "./policies/LTQ-EnforceOnly.yaml" . | indent 2 | trim }}
+- {{ include "./policies/LTQ-CountOnly.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-SetQuotaHeaders.yaml" . | indent 2 | trim }}
+
+# Telemetry & Token Data Collectors
+- {{ include "./policies/DC-CaptureTokenCountsNonStreaming.yaml" . | indent 2 | trim }}
+- {{ include "./policies/DC-CaptureTokenCountsStreaming.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-calculate-tokens-non-streaming.yaml" . | indent 2 | trim }}
+- {{ include "./policies/EV-ExtractMetadataNonStreaming.yaml" . | indent 2 | trim }}
+- {{ include "./policies/EV-ExtractMetadataNonStreamingGemini.yaml" . | indent 2 | trim }}
+- {{ include "./policies/EV-ExtractMetadataNonStreamingOpenAI.yaml" . | indent 2 | trim }}
+
+# OpenAPI Schema Validation
+- {{ include "./policies/OAS-VerifyClaude.yaml" . | indent 2 | trim }}
+- {{ include "./policies/OAS-VerifyGemini.yaml" . | indent 2 | trim }}
+- {{ include "./policies/OAS-VerifyOpenAI.yaml" . | indent 2 | trim }}
