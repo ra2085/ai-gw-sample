@@ -328,7 +328,7 @@ The catalog dynamically filters available models based on the API Product tier t
 ~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_total_token_count -p INTEGER --default-token
 ~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_model -p STRING --default-token
 ~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_requested_model -p STRING --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_tx_cost_usd -p STRING --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_tx_cost_usd -p FLOAT --default-token
 ```
 
 ### 3. Deploy API Proxy Bundle
