@@ -380,10 +380,3 @@ The repository contains automated test suites to validate routing, security, str
 * **[test-claude.sh](test-claude.sh):** Validates Claude non-streaming route with Model Armor security filters.
 * **[test-gemini-native.sh](test-gemini-native.sh):** Validates native Gemini endpoint (`/ai-gateway`).
 * **[test-openai-compat.sh](test-openai-compat.sh):** Validates OpenAI chat completions endpoint (`/v1/chat/completions`).
-
-```bash
-# Run tests against apigee-ng-3
-source ./set_vars_apigee_ng_3.sh
-./test-claude-models.sh
-./test-smart-routing.sh
-```
