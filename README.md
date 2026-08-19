@@ -147,7 +147,7 @@ The gateway natively integrates with **Apigee Monetization** to track and bill L
 ### 2. Micro-Transaction Cost Calculator (`JS-calculate-monetization-cost`)
 Executed in the **PostFlow Response** to compute exact dollar costs based on model-specific input/output token rates:
 
-$$\text{Total Cost (USD)} = \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \times \text{Markup Multiplier}$$
+$$\text{Total Cost (USD)} = \left[ \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \right] \times \text{Markup Multiplier}$$
 
 * **Propertyset Driven:** Base rates are loaded from [`monetization_rates.properties`](apiproxy/resources/properties/monetization_rates.properties).
 * **Streaming & Non-Streaming:** Inspects both `prompt_tokens` / `completion_tokens` (non-streaming) and `usage_prompt_tokens` / `usage_completion_tokens` (SSE stream trailers).
@@ -172,8 +172,8 @@ Apigee's Monetization rating engine uses dedicated system Data Collectors to rat
 </Capture>
 ```
 
-* **Dynamic Rating Formula:** The Rate Plan defines a base consumption unit rate of **\$1.00 USD**. Apigee Monetization calculates:
-  $$\text{Charged Amount} = \text{Base Rate (\$1.00)} \times \text{perUnitPriceMultiplier} = \text{Calculated Micro-Cost in USD}$$
+* **Dynamic Rating Formula:** The Rate Plan defines a base consumption unit rate of **$1.00 USD**. Apigee Monetization calculates:
+  $$\text{Charged Amount} = \text{Base Unit Rate } (1.00\text{ USD}) \times \text{perUnitPriceMultiplier} = \text{Calculated Micro-Cost (USD)}$$
 * **Prepaid Wallet Deduction:** The resulting charged amount is automatically deducted from the developer's prepaid wallet balance in real time.
 
 ### 4. Model Pricing Matrix (USD per 1,000,000 Tokens)
