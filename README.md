@@ -260,7 +260,7 @@ Features an integrated **LLM as a Judge** service callout ([`SC-LLMJudge.xml`](a
 
 Security filters are applied at request and response boundaries:
 
-* **Prompt Sanitization:** Evaluated via [`SUP-SanitizeUserPrompt.xml`](apiproxy/policies/SUP-SanitizeUserPrompt.xml) and [`SUP-SanitizeUserPromptGemini.xml`](apiproxy/policies/SUP-SanitizeUserPromptGemini.xml) using template `projects/apigee-ng-3/locations/us-central1/templates/ai-gw-template`.
+* **Prompt Sanitization:** Evaluated via [`SUP-SanitizeUserPrompt.xml`](apiproxy/policies/SUP-SanitizeUserPrompt.xml) and [`SUP-SanitizeUserPromptGemini.xml`](apiproxy/policies/SUP-SanitizeUserPromptGemini.xml) using the template configured in [`config.properties`](apiproxy/resources/properties/config.properties).
 * **Response Sanitization:** Model completions are evaluated via [`SMR-SanitizeModelResponse.xml`](apiproxy/policies/SMR-SanitizeModelResponse.xml).
 * **De-identification Findings:** Violations trigger custom error injection via [`JS-inject-deidentified-finding.js`](apiproxy/resources/jsc/inject_deidentified_finding.js).
 
@@ -312,33 +312,28 @@ The catalog dynamically filters available models based on the API Product tier t
 ## 🚀 Deployment & Operational Guide
 
 ### 1. Configure Environment Variables
-* For project **`apigee-ng-3`**:
-  ```bash
-  source ./set_vars_apigee_ng_3.sh
-  ```
-* For project **`cymbal-ai`**:
-  ```bash
-  source ./set_vars.sh
-  ```
+```bash
+source ./set_vars.sh
+```
 
 ### 2. Create Required Data Collectors (Once per Organization)
 ```bash
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_prompt_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_completion_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_total_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_model -p STRING --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_requested_model -p STRING --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o apigee-ng-3 -n dc_tx_cost_usd -p FLOAT --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_prompt_token_count -p INTEGER --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_completion_token_count -p INTEGER --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_total_token_count -p INTEGER --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_model -p STRING --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_requested_model -p STRING --default-token
+~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_tx_cost_usd -p FLOAT --default-token
 ```
 
 ### 3. Deploy API Proxy Bundle
 ```bash
 ~/.apigeecli/bin/apigeecli apis create bundle \
   -n ai-gateway \
-  -o apigee-ng-3 \
-  -e dev \
+  -o $PROJECT_ID \
+  -e $APIGEE_ENV \
   -f ./apiproxy \
-  -s ai-gateway@apigee-ng-3.iam.gserviceaccount.com \
+  -s your-service-account@$PROJECT_ID.iam.gserviceaccount.com \
   --ovr \
   --wait \
   --default-token
@@ -348,7 +343,7 @@ The catalog dynamically filters available models based on the API Product tier t
 
 #### Credit Developer Prepaid Wallet:
 ```bash
-curl -s -X POST "https://apigee.googleapis.com/v1/organizations/apigee-ng-3/developers/gonzalezruben@google.com/balance:credit" \
+curl -s -X POST "https://apigee.googleapis.com/v1/organizations/${PROJECT_ID}/developers/${DEVELOPER_EMAIL}/balance:credit" \
   -H "Authorization: Bearer $(gcloud auth print-access-token)" \
   -H "Content-Type: application/json" \
   -d '{
@@ -363,7 +358,7 @@ curl -s -X POST "https://apigee.googleapis.com/v1/organizations/apigee-ng-3/deve
 
 #### Query Developer Wallet Balance:
 ```bash
-curl -s "https://apigee.googleapis.com/v1/organizations/apigee-ng-3/developers/gonzalezruben@google.com/balance" \
+curl -s "https://apigee.googleapis.com/v1/organizations/${PROJECT_ID}/developers/${DEVELOPER_EMAIL}/balance" \
   -H "Authorization: Bearer $(gcloud auth print-access-token)"
 ```
 
