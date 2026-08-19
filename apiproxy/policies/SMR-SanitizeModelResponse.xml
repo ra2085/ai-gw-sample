@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<SanitizeModelResponse async="false" continueOnError="false" enabled="true" name="SMR-SanitizeModelResponse">
-  <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+<SanitizeModelResponse async="false" continueOnError="true" enabled="true" name="SMR-SanitizeModelResponse">
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
   <DisplayName>SMR-SanitizeModelResponse</DisplayName>
   <ModelArmor>
     <TemplateName>projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}</TemplateName>

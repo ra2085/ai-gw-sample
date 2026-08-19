@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<AssignMessage continueOnError="true" enabled="true" name="AM-SetMonetizationHeaders">
+  <DisplayName>AM-SetMonetizationHeaders</DisplayName>
+  <Set>
+    <Headers>
+      <Header name="X-Gateway-Prompt-Tokens">{prompt_tokens}</Header>
+      <Header name="X-Gateway-Completion-Tokens">{completion_tokens}</Header>
+      <Header name="X-Gateway-Total-Tokens">{usage_total_tokens}</Header>
+      <Header name="X-Gateway-Prompt-Cost-USD">{tx_prompt_cost_usd}</Header>
+      <Header name="X-Gateway-Completion-Cost-USD">{tx_completion_cost_usd}</Header>
+      <Header name="X-Gateway-Total-Cost-USD">{tx_cost_usd}</Header>
+      <Header name="X-Gateway-Cost-Currency">{tx_currency}</Header>
+    </Headers>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="response"/>
+</AssignMessage>

@@ -44,6 +44,9 @@
     <Policy>JS-prepare-judge-request</Policy>
     <Policy>SC-LLMJudge</Policy>
     <Policy>JS-process-judge-response</Policy>
+    <Policy>MLC-EnforceMonetizationLimits</Policy>
+    <Policy>JS-calculate-monetization-cost</Policy>
+    <Policy>AM-SetMonetizationHeaders</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>claude-messages</ProxyEndpoint>
@@ -54,6 +57,7 @@
   <Resources>
     <Resource>jsc://anthropic_to_gemini.js</Resource>
     <Resource>jsc://calculate_tokens_non_streaming.js</Resource>
+    <Resource>jsc://calculate_monetization_cost.js</Resource>
     <Resource>jsc://extract_prompt.js</Resource>
     <Resource>jsc://gemini_to_anthropic_resp.js</Resource>
     <Resource>jsc://inject_anthropic_version.js</Resource>
@@ -69,6 +73,7 @@
     <Resource>properties://extract_expressions.properties</Resource>
     <Resource>properties://config.properties</Resource>
     <Resource>properties://model_locations.properties</Resource>
+    <Resource>properties://monetization_rates.properties</Resource>
     <Resource>oas://claude.yaml</Resource>
     <Resource>oas://openai.yaml</Resource>
     <Resource>oas://gemini.yaml</Resource>

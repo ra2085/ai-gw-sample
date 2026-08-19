@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="true" enabled="true" name="JS-calculate-monetization-cost">
+  <DisplayName>JS-calculate-monetization-cost</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://calculate_monetization_cost.js</ResourceURL>
+</Javascript>

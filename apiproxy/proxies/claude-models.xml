@@ -9,6 +9,9 @@
         <Name>VA-ApiKey</Name>
       </Step>
       <Step>
+        <Name>MLC-EnforceMonetizationLimits</Name>
+      </Step>
+      <Step>
         <Name>AM-NormalizePathSuffix</Name>
       </Step>
     </Request>

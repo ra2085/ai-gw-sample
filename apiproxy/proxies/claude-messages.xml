@@ -19,6 +19,9 @@
         <Name>VA-ApiKey</Name>
       </Step>
       <Step>
+        <Name>MLC-EnforceMonetizationLimits</Name>
+      </Step>
+      <Step>
         <Name>AM-NormalizePathSuffix</Name>
       </Step>
       <Step>
@@ -68,6 +71,10 @@
       </Step>
       <Step>
         <Condition>!(stream = true)</Condition>
+        <Name>JS-calculate-monetization-cost</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true)</Condition>
         <Name>DC-CaptureTokenCountsNonStreaming</Name>
       </Step>
       <Step>
@@ -77,6 +84,10 @@
       <Step>
         <Condition>!(stream = true)</Condition>
         <Name>AM-SetQuotaHeaders</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true)</Condition>
+        <Name>AM-SetMonetizationHeaders</Name>
       </Step>
     </Response>
   </PostFlow>

@@ -173,7 +173,7 @@ try {
         var endpointHost = context.getVariable("endpoint_host") || "aiplatform.googleapis.com";
         var modelLocation = context.getVariable("model_location") || "global";
         
-        var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action;
+        var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action + (stream ? "?alt=sse" : "");
         context.setVariable("target.url", targetUrl);
     }
 } catch (e) {

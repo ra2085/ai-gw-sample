@@ -28,6 +28,7 @@
     </Request>
     <Response>
       <Step>
+        <Condition>!(stream = true)</Condition>
         <Name>JS-gemini-to-anthropic-resp</Name>
       </Step>
     </Response>
@@ -40,6 +41,10 @@
       </Step>
       <Step>
         <Condition>usage_total_tokens != null</Condition>
+        <Name>JS-calculate-monetization-cost</Name>
+      </Step>
+      <Step>
+        <Condition>usage_total_tokens != null</Condition>
         <Name>DC-CaptureTokenCountsStreaming</Name>
       </Step>
       <Step>
@@ -47,7 +52,7 @@
         <Name>LTQ-CountOnly</Name>
       </Step>
       <Step>
-        <Condition>buff_ready = "true"</Condition>
+        <Condition>buff_ready = "true" and response_partial != null and response_partial != ""</Condition>
         <Name>SMR-SanitizeModelResponse</Name>
       </Step>
     </Response>

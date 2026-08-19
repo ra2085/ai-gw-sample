@@ -12,5 +12,8 @@ __pycache__
 build_image.sh
 images
 set_vars.sh
+set_vars_apigee_ng_3.sh
+set_vars_apigee_ng_3_monetized.sh
+set_vars_apigee_ng_3_non_monetized.sh
 open_router_poc
 sample-adk

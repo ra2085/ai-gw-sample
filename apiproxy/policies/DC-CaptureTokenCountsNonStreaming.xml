@@ -23,4 +23,20 @@
     <Collect ref="requested_model" default="direct"/>
     <DataCollector>dc_requested_model</DataCollector>
   </Capture>
+  <Capture>
+    <Collect ref="tx_cost_usd" default="0.000000"/>
+    <DataCollector>dc_tx_cost_usd</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="perUnitPriceMultiplier" default="1.0"/>
+    <DataCollector scope="monetization">perUnitPriceMultiplier</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="currency" default="USD"/>
+    <DataCollector scope="monetization">currency</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="transactionSuccess" default="true"/>
+    <DataCollector scope="monetization">transactionSuccess</DataCollector>
+  </Capture>
 </DataCapture>

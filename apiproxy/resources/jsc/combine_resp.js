@@ -6,12 +6,14 @@ if (!bufferSize) {
     context.setVariable("buffer_size", bufferSize);
 }
 
-// Clear token variables at the start of each event chunk processing to prevent duplicate counts
+// Clear per-chunk export variables at the start of each event chunk processing
 context.removeVariable("usage_prompt_tokens");
 context.removeVariable("usage_completion_tokens");
 context.removeVariable("usage_total_tokens");
-
-
+context.removeVariable("tx_cost_usd");
+context.removeVariable("perUnitPriceMultiplier");
+context.removeVariable("buff_ready");
+context.removeVariable("response_partial");
 
 var dataIdx = rawContent ? rawContent.indexOf("data:") : -1;
 if (rawContent && dataIdx !== -1) {
@@ -20,78 +22,117 @@ if (rawContent && dataIdx !== -1) {
     if (eventStr.indexOf("[DONE]") === -1) {
         try {
             var parsedEvent = JSON.parse(eventStr);
-            
             var requestFormat = context.getVariable("request_format") || "claude";
+            var tokensAlreadyCounted = context.getVariable("stream_tokens_already_counted") === "true";
+            
+            var promptTokens = 0;
+            var completionTokens = 0;
+            var isFinished = false;
+            var finishReason = null;
+            var eventText = "";
+
             if (requestFormat === "gemini") {
+                // -------------------------------------------------------------
+                // Branch 1: Native Gemini Request Format (/ai-gateway)
+                // -------------------------------------------------------------
                 if (parsedEvent.usageMetadata) {
-                    if (parsedEvent.usageMetadata.candidatesTokenCount !== undefined) {
-                        context.setVariable("usage_completion_tokens", parsedEvent.usageMetadata.candidatesTokenCount);
-                    }
-                    if (parsedEvent.usageMetadata.promptTokenCount !== undefined) {
-                        context.setVariable("usage_prompt_tokens", parsedEvent.usageMetadata.promptTokenCount);
-                    }
-                    if (parsedEvent.usageMetadata.candidatesTokenCount !== undefined && parsedEvent.usageMetadata.promptTokenCount !== undefined) {
-                        context.setVariable("usage_total_tokens", (parsedEvent.usageMetadata.candidatesTokenCount + parsedEvent.usageMetadata.promptTokenCount).toFixed(0));
+                    var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+                    var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+                    if (inT > 0 || outT > 0) {
+                        context.setVariable("saved_stream_prompt_tokens", inT);
+                        context.setVariable("saved_stream_completion_tokens", outT);
                     }
                 }
 
                 var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
-                var eventText = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) ? (candidate.content.parts[0].text || "") : "";
-                var finishReason = candidate ? candidate.finishReason : null;
-                
+                eventText = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) ? (candidate.content.parts[0].text || "") : "";
+                finishReason = candidate ? candidate.finishReason : null;
+                if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
+                    isFinished = true;
+                }
+
+                // Buffer management for Model Armor sanitization
                 var idx = context.getVariable("response.event.current.count");
+                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
+                var newBuffer = previousBufferVal + (eventText || "");
                 
-                if (idx % bufferSize === 0 || finishReason === "stop" || finishReason === "STOP") {
-                    var currentBuffer = context.getVariable("tmp_buffer_pre");
-                    context.setVariable("response_partial", currentBuffer);
-                    context.setVariable("buff_ready", true);
+                if ((idx % bufferSize === 0 || isFinished) && newBuffer.length > 0) {
+                    context.setVariable("response_partial", newBuffer);
+                    context.setVariable("buff_ready", "true");
                     context.setVariable("tmp_buffer_pre", "");
                 } else {
-                    context.setVariable("buff_ready", false);
-                    context.setVariable("response_partial", "");
-                    var previousBufferVal = context.getVariable("tmp_buffer_pre");
-                    var newBuffer = (previousBufferVal || "") + (eventText || "");
+                    context.setVariable("buff_ready", "false");
                     context.setVariable("tmp_buffer_pre", newBuffer);
                 }
+
+                // Emit tokens ONCE upon stream completion
+                if (isFinished && !tokensAlreadyCounted) {
+                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.promptTokenCount : 0) || 0, 10);
+                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.candidatesTokenCount : 0) || 0, 10);
+                    var totalT = promptTokens + completionTokens;
+                    if (totalT > 0) {
+                        context.setVariable("usage_prompt_tokens", promptTokens);
+                        context.setVariable("usage_completion_tokens", completionTokens);
+                        context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                        context.setVariable("stream_tokens_already_counted", "true");
+                    }
+                }
+
             } else if (requestFormat === "openai") {
+                // -------------------------------------------------------------
+                // Branch 2: OpenAI Request Format (/v1/chat/completions)
+                // -------------------------------------------------------------
                 if (parsedEvent.usage) {
-                    var outT = parsedEvent.usage.completion_tokens || 0;
                     var inT = parsedEvent.usage.prompt_tokens || 0;
-                    context.setVariable("usage_completion_tokens", outT);
-                    context.setVariable("usage_prompt_tokens", inT);
-                    context.setVariable("usage_total_tokens", (outT + inT).toFixed(0));
+                    var outT = parsedEvent.usage.completion_tokens || 0;
+                    if (inT > 0 || outT > 0) {
+                        context.setVariable("saved_stream_prompt_tokens", inT);
+                        context.setVariable("saved_stream_completion_tokens", outT);
+                    }
                 }
-                
+
                 var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
-                var eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
-                var finishReason = choice ? choice.finish_reason : null;
-                
-                // Buffer management for Model Armor sanitization (shared)
+                eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
+                finishReason = choice ? choice.finish_reason : null;
+                if (finishReason || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) {
+                    isFinished = true;
+                }
+
+                // Buffer management for Model Armor sanitization
                 var idx = context.getVariable("response.event.current.count");
+                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
+                var newBuffer = previousBufferVal + (eventText || "");
                 
-                if (idx % bufferSize === 0 || finishReason === "stop" || finishReason === "STOP") {
-                    var currentBuffer = context.getVariable("tmp_buffer_pre");
-                    context.setVariable("response_partial", currentBuffer);
-                    context.setVariable("buff_ready", true);
+                if ((idx % bufferSize === 0 || isFinished) && newBuffer.length > 0) {
+                    context.setVariable("response_partial", newBuffer);
+                    context.setVariable("buff_ready", "true");
                     context.setVariable("tmp_buffer_pre", "");
                 } else {
-                    context.setVariable("buff_ready", false);
-                    context.setVariable("response_partial", "");
-                    var previousBufferVal = context.getVariable("tmp_buffer_pre");
-                    var newBuffer = (previousBufferVal || "") + (eventText || "");
+                    context.setVariable("buff_ready", "false");
                     context.setVariable("tmp_buffer_pre", newBuffer);
                 }
+
+                // Emit tokens ONCE upon stream completion
+                if (isFinished && !tokensAlreadyCounted) {
+                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.prompt_tokens : 0) || 0, 10);
+                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.completion_tokens : 0) || 0, 10);
+                    var totalT = promptTokens + completionTokens;
+                    if (totalT > 0) {
+                        context.setVariable("usage_prompt_tokens", promptTokens);
+                        context.setVariable("usage_completion_tokens", completionTokens);
+                        context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                        context.setVariable("stream_tokens_already_counted", "true");
+                    }
+                }
+
             } else {
-                var eventText = "";
-                var finishReason = "";
-                
-                var promptTokens = 0;
-                var completionTokens = 0;
+                // -------------------------------------------------------------
+                // Branch 3: Anthropic Claude Request Format (/v1/messages)
+                // -------------------------------------------------------------
                 var modelName = context.getVariable("model") || "unknown";
-                var isFinished = false;
 
                 if (targetName === "claude") {
-                    // Target is Claude: parses Claude SSE events to buffer for Model Armor
+                    // Target is Native Claude:
                     if (parsedEvent.delta && parsedEvent.delta.text !== undefined) {
                         eventText = parsedEvent.delta.text;
                     } else if (parsedEvent.type === "message_delta") {
@@ -99,52 +140,64 @@ if (rawContent && dataIdx !== -1) {
                             finishReason = "stop";
                         }
                     }
-                    
-                    // Extract usage
+
                     if (parsedEvent.usage) {
-                        var outT = 0;
-                        var inT = 0;
-                        if (parsedEvent.usage.output_tokens !== undefined) {
-                            outT = parsedEvent.usage.output_tokens;
-                            context.setVariable("usage_completion_tokens", outT);
+                        var outT = parsedEvent.usage.output_tokens || 0;
+                        var inT = parsedEvent.usage.input_tokens || 0;
+                        if (outT > 0 || inT > 0) {
+                            context.setVariable("saved_stream_prompt_tokens", inT);
+                            context.setVariable("saved_stream_completion_tokens", outT);
                         }
-                        if (parsedEvent.usage.input_tokens !== undefined) {
-                            inT = parsedEvent.usage.input_tokens;
-                            context.setVariable("usage_prompt_tokens", inT);
-                        }
-                        context.setVariable("usage_total_tokens", (outT + inT).toFixed(0));
                     }
+
+                    if (parsedEvent.type === "message_delta" || parsedEvent.type === "message_stop") {
+                        isFinished = true;
+                    }
+
+                    if (isFinished && !tokensAlreadyCounted) {
+                        promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.input_tokens : 0) || 0, 10);
+                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.output_tokens : 0) || 0, 10);
+                        var totalT = promptTokens + completionTokens;
+                        if (totalT > 0) {
+                            context.setVariable("usage_prompt_tokens", promptTokens);
+                            context.setVariable("usage_completion_tokens", completionTokens);
+                            context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                            context.setVariable("stream_tokens_already_counted", "true");
+                        }
+                    }
+
                 } else {
-                    // Non-Claude targets: we need to translate their chunks to Claude SSE
+                    // Non-Claude target (Gemini or OpenAI): Translate chunks to Claude SSE!
                     if (targetName === "gemini") {
-                        // Native Gemini target
                         var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
                         var parts = (candidate && candidate.content) ? candidate.content.parts : null;
                         eventText = (parts && parts[0]) ? (parts[0].text || "") : "";
                         finishReason = candidate ? candidate.finishReason : null;
-                        
+
                         if (parsedEvent.usageMetadata) {
-                            promptTokens = parsedEvent.usageMetadata.promptTokenCount || 0;
-                            completionTokens = parsedEvent.usageMetadata.candidatesTokenCount || 0;
-                            context.setVariable("usage_completion_tokens", completionTokens);
-                            context.setVariable("usage_prompt_tokens", promptTokens);
-                            context.setVariable("usage_total_tokens", (promptTokens + completionTokens).toFixed(0));
+                            var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+                            var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+                            if (inT > 0 || outT > 0) {
+                                context.setVariable("saved_stream_prompt_tokens", inT);
+                                context.setVariable("saved_stream_completion_tokens", outT);
+                            }
                         }
                         if (finishReason) {
                             isFinished = true;
                         }
                     } else {
-                        // OpenAI target (or gemini-compat targets)
+                        // OpenAI target
                         var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
                         eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
                         finishReason = choice ? choice.finish_reason : null;
-                        
+
                         if (parsedEvent.usage) {
-                            promptTokens = parsedEvent.usage.prompt_tokens || 0;
-                            completionTokens = parsedEvent.usage.completion_tokens || 0;
-                            context.setVariable("usage_completion_tokens", completionTokens);
-                            context.setVariable("usage_prompt_tokens", promptTokens);
-                            context.setVariable("usage_total_tokens", (promptTokens + completionTokens).toFixed(0));
+                            var inT = parsedEvent.usage.prompt_tokens || 0;
+                            var outT = parsedEvent.usage.completion_tokens || 0;
+                            if (inT > 0 || outT > 0) {
+                                context.setVariable("saved_stream_prompt_tokens", inT);
+                                context.setVariable("saved_stream_completion_tokens", outT);
+                            }
                         }
                         if (finishReason) {
                             isFinished = true;
@@ -152,7 +205,11 @@ if (rawContent && dataIdx !== -1) {
                         modelName = parsedEvent.model || modelName;
                     }
 
-                    // Translate to Claude SSE format!
+                    // Retrieve latest token counts for SSE translation headers
+                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || 0, 10);
+                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || 0, 10);
+
+                    // Translate chunk to Claude SSE format
                     var outputChunks = [];
                     var msgId = parsedEvent.id ? parsedEvent.id.replace("chatcmpl-", "msg_") : "msg_stream";
                     
@@ -269,6 +326,17 @@ if (rawContent && dataIdx !== -1) {
                             "type": "message_stop"
                         };
                         outputChunks.push("event: message_stop\ndata: " + JSON.stringify(msgStop));
+
+                        // Emit tokens ONCE upon stream completion
+                        if (!tokensAlreadyCounted) {
+                            var totalT = promptTokens + completionTokens;
+                            if (totalT > 0) {
+                                context.setVariable("usage_prompt_tokens", promptTokens);
+                                context.setVariable("usage_completion_tokens", completionTokens);
+                                context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                                context.setVariable("stream_tokens_already_counted", "true");
+                            }
+                        }
                     }
                     
                     if (outputChunks.length > 0) {
@@ -280,17 +348,15 @@ if (rawContent && dataIdx !== -1) {
                 
                 // Buffer management for Model Armor sanitization (shared)
                 var idx = context.getVariable("response.event.current.count");
+                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
+                var newBuffer = previousBufferVal + (eventText || "");
                 
-                if (idx % bufferSize === 0 || finishReason === "stop" || finishReason === "STOP") {
-                    var currentBuffer = context.getVariable("tmp_buffer_pre");
-                    context.setVariable("response_partial", currentBuffer);
-                    context.setVariable("buff_ready", true);
+                if ((idx % bufferSize === 0 || finishReason === "stop" || finishReason === "STOP" || isFinished) && newBuffer.length > 0) {
+                    context.setVariable("response_partial", newBuffer);
+                    context.setVariable("buff_ready", "true");
                     context.setVariable("tmp_buffer_pre", "");
                 } else {
-                    context.setVariable("buff_ready", false);
-                    context.setVariable("response_partial", "");
-                    var previousBufferVal = context.getVariable("tmp_buffer_pre");
-                    var newBuffer = (previousBufferVal || "") + (eventText || "");
+                    context.setVariable("buff_ready", "false");
                     context.setVariable("tmp_buffer_pre", newBuffer);
                 }
             }
