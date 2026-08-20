@@ -1,25 +1,50 @@
-# 📦 Installation & Prerequisites
+# Installation & Setup
 
-To configure, generate, and deploy the **Apigee AI Gateway**, ensure you have the following prerequisites installed on your development machine or CI/CD environment.
+To configure, generate, and deploy the **Apigee AI Gateway**, install the required CLI tools on your workstation or CI/CD environment.
 
 ---
 
-## 1. Prerequisites
+## 1. Prerequisites Overview
 
-| Tool | Minimum Version | Description |
+| Tool | Purpose | Installation Method |
 | :--- | :--- | :--- |
-| **Go** | `>= 1.22` | Required for compiling and running `apigee-go-gen`. |
-| **Google Cloud SDK (`gcloud`)** | `>= 450.0.0` | Required for authenticating and managing GCP resources. |
-| **Apigee CLI (`apigeecli`)** | `>= 1.120` | Official CLI for deploying Apigee bundles, managing data collectors, and developer apps. |
-| **Node.js** | `>= 18.0.0` | Optional, used for local JavaScript policy testing and verification. |
+| **`apigee-go-gen`** | Declarative YAML &rarr; Apigee Proxy compiler | Binary download, Homebrew, or `go install` |
+| **`apigeecli`** | Apigee deployment & management CLI | `curl \| bash` or Homebrew |
+| **`gcloud`** | Google Cloud authentication & IAM | Google Cloud SDK |
 
 ---
 
-## 2. Install Apigee CLI (`apigeecli`)
+## 2. Install CLI Tools
 
-Install the official `apigeecli` tool:
+### Install `apigee-go-gen` (Template Generator)
 
-=== "macOS / Linux"
+=== "Go Install (Recommended)"
+    ```bash
+    go install github.com/apigee/apigee-go-gen/cmd/apigee-go-gen@latest
+    ```
+
+=== "Homebrew (macOS / Linux)"
+    ```bash
+    brew install apigee/tools/apigee-go-gen
+    ```
+
+=== "Build from Source"
+    ```bash
+    git clone https://github.com/apigee/apigee-go-gen.git
+    cd apigee-go-gen
+    go build -o /usr/local/bin/apigee-go-gen ./cmd/apigee-go-gen
+    ```
+
+Verify installation:
+```bash
+apigee-go-gen version || apigee-go-gen --help
+```
+
+---
+
+### Install `apigeecli` (Deployment CLI)
+
+=== "Direct Install Script (macOS / Linux)"
     ```bash
     curl -s https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | bash
     export PATH=$PATH:$HOME/.apigeecli/bin
@@ -37,24 +62,7 @@ apigeecli version
 
 ---
 
-## 3. Build & Set Up `apigee-go-gen`
-
-Clone and build the `apigee-go-gen` generator tool:
-
-```bash
-git clone https://github.com/apigee/apigee-go-gen
-cd apigee-go-gen
-go build -o ./bin/apigee-go-gen ./cmd/apigee-go-gen
-```
-
-Verify that the CLI runs successfully:
-```bash
-./bin/apigee-go-gen --help
-```
-
----
-
-## 4. Google Cloud Authentication
+## 3. Google Cloud Authentication
 
 Authenticate with Google Cloud and set your target project:
 
@@ -66,3 +74,4 @@ gcloud config set project "$PROJECT_ID"
 gcloud auth login
 gcloud auth application-default login
 ```
+

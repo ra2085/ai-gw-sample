@@ -20,3 +20,13 @@ sample-adk
 apigeegg
 out
 site
+test-integration.sh
+test-*-integration.sh
+test-byo-*.sh
+test-byo-models.sh
+test-custom-auth.sh
+tests/
+cloud-run-mocks/
+
+mocks/
+mock-servers/

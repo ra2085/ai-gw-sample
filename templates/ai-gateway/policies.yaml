@@ -13,7 +13,9 @@
 # Translation & Variable Extractors
 - {{ include "./policies/JS-anthropic-to-gemini.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-gemini-to-anthropic-resp.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-anthropic-to-openai-resp.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-inject-anthropic-version.yaml" . | indent 2 | trim }}
+
 - {{ include "./policies/JS-restore-model-openai.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-extract-vars-gemini.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-extract-vars-openai.yaml" . | indent 2 | trim }}

@@ -41,7 +41,7 @@ go build -o ./bin/apigee-go-gen ./cmd/apigee-go-gen
 Generate a deployable Apigee API proxy bundle (`.zip` or directory):
 
 ```bash
-./apigeegg/apigee-go-gen/bin/apigee-go-gen render apiproxy \
+apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.yaml \
     --output ./out/ai-gateway.zip

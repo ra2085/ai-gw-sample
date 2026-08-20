@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-anthropic-to-openai-resp
+  DisplayName: JS-anthropic-to-openai-resp
+  Properties: {}
+  ResourceURL: jsc://anthropic_to_openai_resp.js

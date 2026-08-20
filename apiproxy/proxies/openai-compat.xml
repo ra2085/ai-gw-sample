@@ -97,7 +97,12 @@
       <Property name="api.timeout">300000</Property>
     </Properties>
   </HTTPProxyConnection>
+  <RouteRule name="claude">
+    <Condition>route_target = "claude"</Condition>
+    <TargetEndpoint>claude</TargetEndpoint>
+  </RouteRule>
   <RouteRule name="gemini-openai-compat">
     <TargetEndpoint>gemini-openai-compat</TargetEndpoint>
   </RouteRule>
 </ProxyEndpoint>
+

@@ -7,7 +7,7 @@ gateway:
   displayName: "Apigee Enterprise AI Gateway"
   description: "Enterprise AI Gateway with Smart Routing, LLM Judge, Model Armor Security, and Token Monetization"
   revision: 1
-  project_id: "{propertyset.config.project_id}"
+  project_id: "your-gcp-project-id"
 
 # ------------------------------------------------------------------------------
 # Feature Toggles
@@ -19,7 +19,10 @@ features:
     default_markup: 1.0
   model_armor:
     enabled: true
-    template_id: "projects/your-gcp-project-id/locations/global/templates/ai-gateway-filter"
+    location: "global"
+    template: "ai-gateway-filter"
+
+
   llm_judge:
     enabled: true
     classifier_model: "gemini-3.1-flash-lite"

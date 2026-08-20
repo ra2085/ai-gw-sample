@@ -68,29 +68,29 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - Home: index.md
-  - Getting Started:
-      - ⚡ 30-Second Quickstart Template: getting-started/quickstart-template.md
+  - Overview: index.md
+  - 1. Getting Started:
+      - 5-Minute Quickstart: getting-started/quickstart-template.md
+      - Installation & Setup: getting-started/installation.md
+      - End-to-End Walkthrough: getting-started/quickstart.md
       - Choose Your Workflow: getting-started/choose-workflow.md
-      - Installation & Prerequisites: getting-started/installation.md
-      - Full Quickstart Guide: getting-started/quickstart.md
-
-  - Declarative Template Guide:
-      - values.yaml Reference: template-guide/configuration.md
-      - Custom URLs & API Formats: template-guide/custom-urls.md
+  - 2. Model Configuration:
+      - Custom Providers & URLs: template-guide/custom-urls.md
+      - Configuration Reference: template-guide/configuration.md
       - Feature Toggles: template-guide/feature-flags.md
-  - Native Proxy Deep Dive:
-      - Bundle & PropertySets Structure: proxy-deep-dive/bundle-structure.md
-      - XML Policies Catalog: proxy-deep-dive/policies-reference.md
-      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
-      - Targets & Google Cloud Auth: proxy-deep-dive/targets-and-routing.md
-  - Architecture & Capabilities:
-      - Universal Protocol Normalization: architecture/protocols.md
+  - 3. Enterprise Features:
       - Smart Routing & LLM Judge: architecture/routing.md
-      - Enterprise Security (Model Armor): architecture/security.md
-      - Monetization & Micro-Transactions: architecture/monetization.md
-  - Operations & Testing:
+      - Security & Model Armor: architecture/security.md
+      - Token Monetization & Quotas: architecture/monetization.md
+  - 4. Architecture & Deep Dive:
+      - Protocol Normalization: architecture/protocols.md
+      - Proxy & Policies Catalog: proxy-deep-dive/policies-reference.md
+      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
+      - Targets & Cloud Auth: proxy-deep-dive/targets-and-routing.md
+      - Bundle & PropertySets: proxy-deep-dive/bundle-structure.md
+  - 5. Operations & CI/CD:
       - Deployment Guide: operations/deployment.md
-      - Automated Test Suites: operations/testing.md
+      - Automated Testing: operations/testing.md
       - Telemetry & Data Collectors: operations/telemetry.md
+
 

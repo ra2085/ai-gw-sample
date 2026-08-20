@@ -6,6 +6,7 @@ try {
     var defaultFallback = context.getVariable("propertyset.model_locations.default.fallback") || "gemini-3.1-flash-lite";
     var defaultPublisher = context.getVariable("propertyset.model_locations.default.publisher") || "google";
     var defaultTarget = context.getVariable("propertyset.model_locations.default.target") || "gemini";
+    var defaultFormat = context.getVariable("propertyset.model_locations.default.format") || "gemini";
 
     var requestedModel = extractedModel || "default";
     var primaryModel = extractedModel || defaultModel;
@@ -106,12 +107,14 @@ try {
     }
 
     // -------------------------------------------------------------------------
-    // 3. Dynamic Target, Publisher & Region Resolution via PropertySet
+    // 3. Dynamic Target, Publisher, Region & Custom URL Resolution
     // -------------------------------------------------------------------------
     var publisher = context.getVariable("propertyset.model_locations." + primaryModel + ".publisher") || defaultPublisher;
     var targetName = context.getVariable("propertyset.model_locations." + primaryModel + ".target") || defaultTarget;
     var endpointLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".endpoint") || "global";
     var modelLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".model") || "global";
+    var modelFormat = context.getVariable("propertyset.model_locations." + primaryModel + ".format") || defaultFormat;
+    var customUrl = context.getVariable("propertyset.model_locations." + primaryModel + ".url");
 
     var endpointHost = (endpointLocation && endpointLocation !== "global") ? (endpointLocation + "-aiplatform.googleapis.com") : "aiplatform.googleapis.com";
 
@@ -125,10 +128,33 @@ try {
     context.setVariable("allow_fallbacks", allowFallbacks ? "true" : "false");
 
     context.setVariable("model_publisher", publisher);
+    context.setVariable("model_format", modelFormat);
     context.setVariable("route_target", targetName);
     context.setVariable("endpoint_host", endpointHost);
     context.setVariable("endpoint_location", endpointLocation);
     context.setVariable("model_location", modelLocation);
+
+    if (customUrl) {
+        context.setVariable("model_custom_url", customUrl);
+        context.setVariable("target.url", customUrl);
+    }
+
+    // Optional Custom Auth Configuration per Model
+    var authType = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_type");
+    var authHeader = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_header");
+    var authTokenRef = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token_ref");
+    var authTokenDirect = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token");
+
+    var tokenVal = (authTokenRef ? context.getVariable(authTokenRef) : null) || authTokenDirect;
+
+    if (authType && tokenVal) {
+        if (authType === "bearer") {
+            context.setVariable("request.header.Authorization", "Bearer " + tokenVal);
+        } else if ((authType === "header" || authType === "apikey") && authHeader) {
+            context.setVariable("request.header." + authHeader, tokenVal);
+        }
+    }
+
 
     context.setVariable("response.header.X-Gateway-Requested-Model", requestedModel);
     context.setVariable("response.header.X-Gateway-Routed-Model", primaryModel);

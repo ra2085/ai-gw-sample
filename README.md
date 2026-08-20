@@ -1,33 +1,44 @@
-# 🚀 Apigee Enterprise AI Gateway (`ai-gateway`)
+# Apigee Enterprise AI Gateway (`ai-gateway`)
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
 [![Template Engine](https://img.shields.io/badge/template-apigee--go--gen-orange.svg)](https://github.com/apigee/apigee-go-gen)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-An enterprise-grade, production-ready **AI Gateway** built on Google Cloud Apigee, featuring **Universal Protocol Normalization**, **Smart Routing & LLM as a Judge**, **GCP Model Armor Security**, **Token Quotas**, and **Apigee Monetization with Real-Time Micro-Transactions Tracking**.
+An enterprise-grade, production-ready **AI Gateway** on Google Cloud Apigee, featuring **Universal Protocol Normalization**, **Smart Routing & LLM as a Judge**, **GCP Model Armor Security**, **Token Quotas**, and **Apigee Monetization with Real-Time Micro-Transactions Tracking**.
 
 ---
 
-## 📖 Documentation Site
+## Documentation Site
 
 Full guides, architecture specifications, and API references are available on our documentation site:
 
-👉 **[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**
+**[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**
 
 ---
 
-## 🌟 Key Highlights
+## Progressive Adoption Journey
 
-* **🔄 Universal Protocol Normalization:** Query Anthropic Claude, Google Gemini on Vertex AI, or self-hosted OpenAI models using Anthropic (`/v1/messages`), Gemini (`/ai-gateway`), or OpenAI (`/v1/chat/completions`) schemas with real-time SSE streaming translation.
-* **⚡ Smart Routing & LLM Judge:** Optimize cost and performance using abstract cost tiers (`low`, `medium`, `high`, `max`), fallback chains, or real-time prompt complexity classification powered by Gemini 3.1 Flash-Lite.
-* **🔒 Enterprise Security:** Automated prompt and response sanitization via GCP Model Armor to prevent data leakage and prompt injection.
-* **💳 Token Monetization:** Pre-flight prepaid wallet balance verification and real-time micro-transaction token billing.
-* **🌐 Custom URLs & Multi-Cloud LLMs:** Declare custom target URLs and formats (`openai`, `anthropic`, `gemini`) in `values.yaml` to route to self-hosted vLLM/Ollama or Azure OpenAI instances.
-* **📦 Declarative Helm-Style Templates:** Powered by [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen) to compile clean Apigee proxy bundles in seconds.
+The repository is organized for a progressive learning curve:
+
+1. **Quickstart (5 Minutes)**: Deploy a working gateway with minimal configuration supporting Gemini and Claude.
+2. **Custom Providers & URLs**: Bring your own models (Azure, DeepSeek, Mistral, Ollama, vLLM) with custom auth.
+3. **Enterprise Governance**: Turn on Model Armor security, token quotas, and monetization as needed.
+4. **Smart Routing**: Enable AI-driven complexity classification and cost tier routing.
 
 ---
 
-## 🏛 Architecture Overview
+## Key Highlights
+
+* **Universal Protocol Normalization:** Query Anthropic Claude, Google Gemini on Vertex AI, or self-hosted OpenAI models using Anthropic (`/v1/messages`), Gemini (`/ai-gateway`), or OpenAI (`/v1/chat/completions`) schemas with real-time SSE streaming translation.
+* **Smart Routing & LLM Judge:** Optimize cost and performance using abstract cost tiers (`low`, `medium`, `high`, `max`), fallback chains, or real-time prompt complexity classification powered by Gemini 3.1 Flash-Lite.
+* **Enterprise Security:** Automated prompt and response sanitization via GCP Model Armor to prevent data leakage and prompt injection.
+* **Token Monetization:** Pre-flight prepaid wallet balance verification and real-time micro-transaction token billing.
+* **Custom URLs & Multi-Cloud LLMs:** Declare custom target URLs and formats (`openai`, `anthropic`, `gemini`) in `values.yaml` to route to self-hosted vLLM/Ollama or Azure OpenAI instances.
+* **Declarative Helm-Style Templates:** Powered by [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen) to compile clean Apigee proxy bundles in seconds.
+
+---
+
+## Architecture Overview
 
 ```mermaid
 graph TD
@@ -41,10 +52,10 @@ graph TD
     end
 
     subgraph Pipeline["PreFlow Execution Pipeline"]
-        Auth["1. Auth (VA-ApiKey)"]
-        MLC["2. Monetization Pre-flight (MLC)"]
+        Auth["1. Auth & API Key Validation"]
+        MLC["2. Monetization Pre-flight"]
         Judge["3. Smart Router & LLM Judge"]
-        Quota["4. Token Quota Enforcement (LTQ)"]
+        Quota["4. Token Quota Enforcement"]
         Armor["5. Model Armor Prompt Sanitization"]
         Xlate["6. Protocol Transcoding"]
         
@@ -55,7 +66,7 @@ graph TD
         T_Claude["Vertex Claude (us-east5)"]
         T_Gemini["Vertex Gemini (global)"]
         T_OpenAI["Vertex OpenAI Endpoint"]
-        T_Custom["Custom Self-Hosted / Regional (vLLM, Ollama, Azure)"]
+        T_Custom["Custom Upstreams (vLLM, Ollama, Azure, DeepSeek)"]
     end
 
     Client -->|Anthropic SDK| EP_Claude
@@ -92,7 +103,7 @@ graph TD
 
 ---
 
-## ⚡ 30-Second Quickstart
+## Quickstart (5 Minutes)
 
 ### 1. Define Your Gateway in `values.quickstart.yaml`
 
@@ -105,25 +116,17 @@ models:
   - name: "gemini-2.5-flash"
     displayName: "Gemini 2.5 Flash"
     publisher: "google"
-    target: "gemini"
     format: "gemini"
     region: "global"
     is_default: true
-    pricing:
-      input_rate: 0.100
-      output_rate: 0.400
 
   - name: "claude-haiku-4-5"
     displayName: "Claude 4.5 Haiku"
     publisher: "anthropic"
-    target: "claude"
     format: "anthropic"
     region: "us-east5"
-    pricing:
-      input_rate: 1.000
-      output_rate: 5.000
 
-  # Custom Self-Hosted Model in 4 lines!
+  # Optional: Custom Self-Hosted Model in 4 lines
   - name: "my-vllm-model"
     displayName: "Llama 3 (Self-Hosted)"
     format: "openai"
@@ -134,7 +137,7 @@ models:
 
 ```bash
 # Render bundle using apigee-go-gen
-./apigeegg/apigee-go-gen/bin/apigee-go-gen render apiproxy \
+apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
@@ -152,19 +155,20 @@ apigeecli apis create bundle \
 
 ---
 
-## 📚 Documentation Index
+## Documentation Index
 
 Explore the complete guides on the **[Documentation Site](https://ra2085.github.io/ai-gw-sample/)**:
 
 | Section | Description |
 | :--- | :--- |
-| **[⚡ 30-Second Quickstart Template](https://ra2085.github.io/ai-gw-sample/getting-started/quickstart-template/)** | Get a gateway running immediately with 20 lines of YAML. |
-| **[🧭 Choose Your Workflow](https://ra2085.github.io/ai-gw-sample/getting-started/choose-workflow/)** | Compare the Declarative Template approach vs. the Native Proxy Deep Dive. |
-| **[⚙️ `values.yaml` Reference](https://ra2085.github.io/ai-gw-sample/template-guide/configuration/)** | Full schema reference for models, pricing, feature flags, and routing tiers. |
-| **[🌐 Custom URLs & Formats](https://ra2085.github.io/ai-gw-sample/template-guide/custom-urls/)** | Connect self-hosted vLLM/Ollama, Azure OpenAI, or regional Vertex AI endpoints. |
-| **[🔄 Protocol Normalization](https://ra2085.github.io/ai-gw-sample/architecture/protocols/)** | Deep dive into Anthropic, Gemini, and OpenAI request/response/SSE transcoding. |
-| **[⚡ Smart Routing & LLM Judge](https://ra2085.github.io/ai-gw-sample/architecture/routing/)** | Real-time prompt complexity classifier and fallback chains. |
-| **[🔒 Enterprise Security (Model Armor)](https://ra2085.github.io/ai-gw-sample/architecture/security/)** | Prompt and response sanitization with automated de-identification. |
-| **[💳 Token Monetization](https://ra2085.github.io/ai-gw-sample/architecture/monetization/)** | Pre-flight wallet balance checks and real-time micro-cost rating engine. |
-| **[📁 Native Proxy Deep Dive](https://ra2085.github.io/ai-gw-sample/proxy-deep-dive/bundle-structure/)** | Raw XML policies catalog, 17 JavaScript callouts, and target configurations. |
-| **[🚀 Deployment & Operations](https://ra2085.github.io/ai-gw-sample/operations/deployment/)** | Data collectors setup, service account permissions, and test suites. |
+| **[5-Minute Quickstart](https://ra2085.github.io/ai-gw-sample/getting-started/quickstart-template/)** | Get a gateway running immediately with minimal configuration. |
+| **[Choose Your Workflow](https://ra2085.github.io/ai-gw-sample/getting-started/choose-workflow/)** | Declarative Template approach vs. Native Proxy structure. |
+| **[Custom Providers & URLs](https://ra2085.github.io/ai-gw-sample/template-guide/custom-urls/)** | Connect self-hosted vLLM/Ollama, Azure OpenAI, or DeepSeek endpoints. |
+| **[Configuration Reference](https://ra2085.github.io/ai-gw-sample/template-guide/configuration/)** | Schema reference for models, pricing, feature flags, and routing tiers. |
+| **[Feature Toggles](https://ra2085.github.io/ai-gw-sample/template-guide/feature-flags/)** | Enable or disable security, quotas, judge, and monetization modules. |
+| **[Protocol Normalization](https://ra2085.github.io/ai-gw-sample/architecture/protocols/)** | Deep dive into Anthropic, Gemini, and OpenAI request/response/SSE transcoding. |
+| **[Smart Routing & LLM Judge](https://ra2085.github.io/ai-gw-sample/architecture/routing/)** | Real-time prompt complexity classifier and fallback chains. |
+| **[Enterprise Security](https://ra2085.github.io/ai-gw-sample/architecture/security/)** | Prompt and response sanitization with GCP Model Armor. |
+| **[Token Monetization](https://ra2085.github.io/ai-gw-sample/architecture/monetization/)** | Pre-flight wallet balance checks and real-time micro-cost rating engine. |
+| **[Deployment & CI/CD](https://ra2085.github.io/ai-gw-sample/operations/deployment/)** | Service accounts, deployment automation, and automated test suites. |
+

@@ -1,5 +1,12 @@
 try {
-    var originalModel = context.getVariable("original_model") || ("google/" + context.getVariable("model"));
+    var customUrl = context.getVariable("model_custom_url");
+    if (customUrl) {
+        context.setVariable("target.url", customUrl);
+    }
+    var originalModel = context.getVariable("original_model");
+    if (!originalModel || customUrl) {
+        originalModel = context.getVariable("model");
+    }
     var bodyStr = context.getVariable("request.content");
     if (bodyStr) {
         var body = JSON.parse(bodyStr);
@@ -9,3 +16,4 @@ try {
 } catch (e) {
     print("Error restoring original OpenAI model prefix: " + e);
 }
+

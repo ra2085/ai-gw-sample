@@ -143,17 +143,18 @@ try {
     var authType = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_type");
     var authHeader = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_header");
     var authTokenRef = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token_ref");
+    var authTokenDirect = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token");
 
-    if (authType && authTokenRef) {
-        var tokenVal = context.getVariable(authTokenRef);
-        if (tokenVal) {
-            if (authType === "bearer") {
-                context.setVariable("request.header.Authorization", "Bearer " + tokenVal);
-            } else if (authType === "header" && authHeader) {
-                context.setVariable("request.header." + authHeader, tokenVal);
-            }
+    var tokenVal = (authTokenRef ? context.getVariable(authTokenRef) : null) || authTokenDirect;
+
+    if (authType && tokenVal) {
+        if (authType === "bearer") {
+            context.setVariable("request.header.Authorization", "Bearer " + tokenVal);
+        } else if ((authType === "header" || authType === "apikey") && authHeader) {
+            context.setVariable("request.header." + authHeader, tokenVal);
         }
     }
+
 
     context.setVariable("response.header.X-Gateway-Requested-Model", requestedModel);
     context.setVariable("response.header.X-Gateway-Routed-Model", primaryModel);

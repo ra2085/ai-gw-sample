@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Javascript continueOnError="false" enabled="true" timeLimit="200" name="JS-anthropic-to-openai-resp">
+  <DisplayName>JS-anthropic-to-openai-resp</DisplayName>
+  <Properties/>
+  <ResourceURL>jsc://anthropic_to_openai_resp.js</ResourceURL>
+</Javascript>

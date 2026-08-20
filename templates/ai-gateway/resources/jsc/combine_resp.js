@@ -82,20 +82,92 @@ if (rawContent && dataIdx !== -1) {
                 // -------------------------------------------------------------
                 // Branch 2: OpenAI Request Format (/v1/chat/completions)
                 // -------------------------------------------------------------
-                if (parsedEvent.usage) {
-                    var inT = parsedEvent.usage.prompt_tokens || 0;
-                    var outT = parsedEvent.usage.completion_tokens || 0;
-                    if (inT > 0 || outT > 0) {
-                        context.setVariable("saved_stream_prompt_tokens", inT);
-                        context.setVariable("saved_stream_completion_tokens", outT);
-                    }
-                }
+                var modelName = context.getVariable("model") || "claude";
 
-                var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
-                eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
-                finishReason = choice ? choice.finish_reason : null;
-                if (finishReason || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) {
-                    isFinished = true;
+                if (targetName === "claude" || parsedEvent.type) {
+                    // Target is Anthropic Claude -> Translate Anthropic SSE chunk to OpenAI SSE!
+                    if (parsedEvent.type === "message_start") {
+                        var inT = (parsedEvent.message && parsedEvent.message.usage && parsedEvent.message.usage.input_tokens) || 0;
+                        if (inT > 0) {
+                            context.setVariable("saved_stream_prompt_tokens", inT);
+                        }
+                        if (parsedEvent.message && parsedEvent.message.id) {
+                            context.setVariable("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
+                        }
+                    } else if (parsedEvent.type === "content_block_delta") {
+                        eventText = (parsedEvent.delta && parsedEvent.delta.text) ? parsedEvent.delta.text : "";
+                    } else if (parsedEvent.type === "message_delta") {
+                        if (parsedEvent.usage && parsedEvent.usage.output_tokens) {
+                            context.setVariable("saved_stream_completion_tokens", parsedEvent.usage.output_tokens);
+                        }
+                        finishReason = "stop";
+                        isFinished = true;
+                    } else if (parsedEvent.type === "message_stop") {
+                        isFinished = true;
+                    }
+
+                    var msgId = context.getVariable("stream_msg_id") || ("chatcmpl-" + Math.random().toString(36).substring(2, 12));
+                    var outputChunks = [];
+
+                    if (eventText) {
+                        var openAiChunk = {
+                            id: msgId,
+                            object: "chat.completion.chunk",
+                            created: Math.floor(Date.now() / 1000),
+                            model: modelName,
+                            choices: [
+                                {
+                                    index: 0,
+                                    delta: {
+                                        content: eventText
+                                    },
+                                    finish_reason: null
+                                }
+                            ]
+                        };
+                        outputChunks.push("data: " + JSON.stringify(openAiChunk));
+                    }
+
+                    if (isFinished) {
+                        var finalChunk = {
+                            id: msgId,
+                            object: "chat.completion.chunk",
+                            created: Math.floor(Date.now() / 1000),
+                            model: modelName,
+                            choices: [
+                                {
+                                    index: 0,
+                                    delta: {},
+                                    finish_reason: "stop"
+                                }
+                            ]
+                        };
+                        outputChunks.push("data: " + JSON.stringify(finalChunk));
+                        outputChunks.push("data: [DONE]");
+                    }
+
+                    if (outputChunks.length > 0) {
+                        context.setVariable("response.event.current.content", outputChunks.join("\n\n") + "\n\n");
+                    } else {
+                        context.setVariable("response.event.current.content", "");
+                    }
+
+                } else {
+                    if (parsedEvent.usage) {
+                        var inT = parsedEvent.usage.prompt_tokens || 0;
+                        var outT = parsedEvent.usage.completion_tokens || 0;
+                        if (inT > 0 || outT > 0) {
+                            context.setVariable("saved_stream_prompt_tokens", inT);
+                            context.setVariable("saved_stream_completion_tokens", outT);
+                        }
+                    }
+
+                    var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
+                    eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
+                    finishReason = choice ? choice.finish_reason : null;
+                    if (finishReason || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) {
+                        isFinished = true;
+                    }
                 }
 
                 // Buffer management for Model Armor sanitization
@@ -124,6 +196,7 @@ if (rawContent && dataIdx !== -1) {
                         context.setVariable("stream_tokens_already_counted", "true");
                     }
                 }
+
 
             } else {
                 // -------------------------------------------------------------

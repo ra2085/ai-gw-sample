@@ -23,7 +23,7 @@ Apigee requires the following Data Collectors to record token metrics and billin
 
 ```bash
 # Render bundle from template
-./apigeegg/apigee-go-gen/bin/apigee-go-gen render apiproxy \
+apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.yaml \
     --output ./out/ai-gateway.zip

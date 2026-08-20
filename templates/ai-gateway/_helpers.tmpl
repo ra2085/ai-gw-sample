@@ -68,7 +68,11 @@ alias.{{ $alias }}={{ $target }}
 {{- if .auth.token_ref }}
 {{ .name }}.auth_token_ref={{ .auth.token_ref }}
 {{- end }}
+{{- if .auth.token }}
+{{ .name }}.auth_token={{ .auth.token }}
 {{- end }}
+{{- end }}
+
 
 {{ end }}
 # --- Fallback Defaults ---
@@ -106,17 +110,19 @@ default.markup={{ $.Values.features.monetization.default_markup | default 1.0 }}
   Dynamically builds config.properties
 */}}
 {{- define "generate_config_properties" -}}
-project_id={{ $.Values.gateway.project_id | default "{propertyset.config.project_id}" }}
-model_armor_template={{ $.Values.features.model_armor.template_id | default "projects/your-gcp-project-id/locations/global/templates/ai-gateway-filter" }}
+project_id={{ $.Values.gateway.project_id | default "{organization.name}" }}
+model_armor_project_id={{ $.Values.features.model_armor.project_id | default $.Values.gateway.project_id | default "{organization.name}" }}
+model_armor_location={{ $.Values.features.model_armor.location | default "us-central1" }}
+model_armor_template={{ $.Values.features.model_armor.template | default "ai-gw-template" }}
 {{- end -}}
 
 {{/*
   Helper: generate_extract_expressions_properties
 */}}
 {{- define "generate_extract_expressions_properties" -}}
-prompt_tokens_path=$.usage.prompt_tokens
-completion_tokens_path=$.usage.completion_tokens
-total_tokens_path=$.usage.total_tokens
+prompt_exp=$.messages[?(@.role=='user')].content
+buffer_size=50
 {{- end -}}
 
 {{- define "blank" -}}{{- end -}}
+

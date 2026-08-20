@@ -33,7 +33,7 @@ features:
 Use `apigee-go-gen` to render the bundle from the template:
 
 ```bash
-./apigeegg/apigee-go-gen/bin/apigee-go-gen render apiproxy \
+apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.yaml \
     --output ./out/ai-gateway.zip
@@ -42,7 +42,7 @@ Use `apigee-go-gen` to render the bundle from the template:
 > [!TIP]
 > You can also preview the rendered XML before bundling using `--dry-run xml`:
 > ```bash
-> ./apigeegg/apigee-go-gen/bin/apigee-go-gen render apiproxy \
+> apigee-go-gen render apiproxy \
 >     --template ./templates/ai-gateway/apiproxy.yaml \
 >     --values ./templates/ai-gateway/values.yaml \
 >     --dry-run xml

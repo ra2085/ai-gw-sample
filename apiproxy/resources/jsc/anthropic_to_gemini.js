@@ -173,8 +173,14 @@ try {
         var endpointHost = context.getVariable("endpoint_host") || "aiplatform.googleapis.com";
         var modelLocation = context.getVariable("model_location") || "global";
         
-        var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action + (stream ? "?alt=sse" : "");
-        context.setVariable("target.url", targetUrl);
+        var customUrl = context.getVariable("model_custom_url") || context.getVariable("propertyset.model_locations." + model + ".url");
+        if (customUrl) {
+            context.setVariable("target.url", customUrl);
+        } else {
+            var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/google/models/" + model + ":" + action + (stream ? "?alt=sse" : "");
+            context.setVariable("target.url", targetUrl);
+        }
+
     }
 } catch (e) {
     print("Error translating Anthropic to Gemini request: " + e);
