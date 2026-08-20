@@ -9,13 +9,18 @@ Follow these steps to deploy and manage the AI Gateway in production.
 Apigee requires the following Data Collectors to record token metrics and billing telemetry:
 
 ```bash
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_prompt_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_completion_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_total_token_count -p INTEGER --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_model -p STRING --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_requested_model -p STRING --default-token
-~/.apigeecli/bin/apigeecli datacollectors create -o $PROJECT_ID -n dc_tx_cost_usd -p FLOAT --default-token
+for dc in \
+  "dc_prompt_token_count:INTEGER" \
+  "dc_completion_token_count:INTEGER" \
+  "dc_total_token_count:INTEGER" \
+  "dc_model:STRING" \
+  "dc_requested_model:STRING" \
+  "dc_tx_cost_usd:FLOAT"; do
+  IFS=":" read -r name type <<< "$dc"
+  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+done
 ```
+
 
 ---
 

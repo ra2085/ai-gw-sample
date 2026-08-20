@@ -124,4 +124,26 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 > [!IMPORTANT]
 > Always pass this service account using `-s "$SERVICE_ACCOUNT"` (or `--sa`) when deploying with `apigeecli`. Apigee requires an attached service account whenever `<Authentication>` elements exist in the proxy bundle.
 
+---
+
+## 5. Create Data Collectors (Required One-Time Organization Setup)
+
+Apigee captures real-time token metrics and transaction costs into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
+
+Run this loop once per organization to create all 6 required Data Collectors:
+
+```bash
+for dc in \
+  "dc_prompt_token_count:INTEGER" \
+  "dc_completion_token_count:INTEGER" \
+  "dc_total_token_count:INTEGER" \
+  "dc_model:STRING" \
+  "dc_requested_model:STRING" \
+  "dc_tx_cost_usd:FLOAT"; do
+  IFS=":" read -r name type <<< "$dc"
+  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+done
+```
+
+
 

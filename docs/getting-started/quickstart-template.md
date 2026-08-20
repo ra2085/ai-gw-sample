@@ -69,6 +69,15 @@ graph LR
 
 ## Deploy to Apigee
 
+> [!TIP]
+> **First-time deployment in this organization?** Ensure the 6 required telemetry Data Collectors exist:
+> ```bash
+> for dc in "dc_prompt_token_count:INTEGER" "dc_completion_token_count:INTEGER" "dc_total_token_count:INTEGER" "dc_model:STRING" "dc_requested_model:STRING" "dc_tx_cost_usd:FLOAT"; do
+>   IFS=":" read -r name type <<< "$dc"
+>   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+> done
+> ```
+
 Deploy the generated `.zip` bundle to your Apigee environment. Apigee requires the `-s` / `--sa` Service Account flag because the proxy's TargetEndpoints use Google Cloud IAM authentication to call Vertex AI:
 
 ```bash
@@ -84,6 +93,7 @@ apigeecli apis create bundle \
     --wait \
     --default-token
 ```
+
 
 
 ---

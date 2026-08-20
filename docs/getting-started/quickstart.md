@@ -56,6 +56,15 @@ apigee-go-gen render apiproxy \
 
 ## Step 3: Deploy to Apigee
 
+> [!TIP]
+> **First-time deployment in this organization?** Create the 6 required telemetry Data Collectors:
+> ```bash
+> for dc in "dc_prompt_token_count:INTEGER" "dc_completion_token_count:INTEGER" "dc_total_token_count:INTEGER" "dc_model:STRING" "dc_requested_model:STRING" "dc_tx_cost_usd:FLOAT"; do
+>   IFS=":" read -r name type <<< "$dc"
+>   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+> done
+> ```
+
 Deploy the generated `.zip` bundle to your Apigee environment. A Service Account with `roles/aiplatform.user` is required at deploy time because the TargetEndpoints authenticate against Vertex AI using Google IAM tokens:
 
 ```bash
@@ -71,6 +80,7 @@ apigeecli apis create bundle \
     --wait \
     --default-token
 ```
+
 
 
 ---

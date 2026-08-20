@@ -76,7 +76,13 @@ graph LR
 
 ## Quickstart (5 Minutes)
 
-> **Prerequisites:** Ensure you have [`apigee-go-gen`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigee-go-gen-template-generator) and [`apigeecli`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigeecli-deployment-cli) installed. See the [Installation Guide](https://ra2085.github.io/ai-gw-sample/getting-started/installation/) for 1-line install commands.
+> **Prerequisites:** 
+> 1. Install [`apigee-go-gen`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigee-go-gen-template-generator) and [`apigeecli`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigeecli-deployment-cli).
+> 2. Ensure the 6 required telemetry Data Collectors exist in your Apigee org (`apigeecli datacollectors create ...`).
+> 3. Have a Google Cloud Service Account with `roles/aiplatform.user` for deployment (`-s "$SERVICE_ACCOUNT"`).
+> 
+> See the [Installation & Prerequisites Guide](https://ra2085.github.io/ai-gw-sample/getting-started/installation/) for 1-line setup scripts.
+
 
 ### 1. Define Your Gateway in `values.quickstart.yaml`
 
