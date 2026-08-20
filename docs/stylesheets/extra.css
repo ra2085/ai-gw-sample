@@ -1,0 +1,97 @@
+/* ==========================================================================
+   Google Cloud Documentation Theme Overrides for MkDocs Material
+   ========================================================================== */
+
+:root {
+  /* Google Cloud Brand Colors */
+  --gcp-blue: #1a73e8;
+  --gcp-blue-hover: #174ea6;
+  --gcp-blue-light: #e8f0fe;
+  --gcp-green: #1e8e3e;
+  --gcp-yellow: #f9ab00;
+  --gcp-red: #d93025;
+  --gcp-gray: #5f6368;
+  --gcp-surface: #f8f9fa;
+
+  /* Material Theme Primary / Accent */
+  --md-primary-fg-color: #1a73e8;
+  --md-primary-fg-color--light: #4285f4;
+  --md-primary-fg-color--dark: #174ea6;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #f8f9fa;
+
+  --md-accent-fg-color: #1a73e8;
+  --md-accent-fg-color--transparent: rgba(26, 115, 232, 0.1);
+  --md-accent-bg-color: #ffffff;
+
+  /* Typography */
+  --md-typeset-a-color: #1a73e8;
+}
+
+[data-md-color-scheme="slate"] {
+  /* Dark Mode Palette */
+  --md-primary-fg-color: #1a73e8;
+  --md-primary-fg-color--light: #8ab4f8;
+  --md-primary-fg-color--dark: #174ea6;
+  --md-primary-bg-color: #202124;
+  --md-primary-bg-color--light: #2d2e31;
+
+  --md-accent-fg-color: #8ab4f8;
+  --md-accent-fg-color--transparent: rgba(138, 180, 248, 0.15);
+  
+  --md-typeset-a-color: #8ab4f8;
+}
+
+/* Header & Tabs styling matching Google Cloud Console / Documentation */
+.md-header {
+  background-color: var(--md-primary-fg-color);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+}
+
+.md-tabs {
+  background-color: var(--md-primary-fg-color--dark);
+}
+
+/* Cards & Grid styling */
+.md-typeset .grid.cards > ul > li {
+  border: 1px solid #dadce0;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.md-typeset .grid.cards > ul > li:hover {
+  border-color: #1a73e8;
+  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  transform: translateY(-2px);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li {
+  border-color: #3c4043;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover {
+  border-color: #8ab4f8;
+  box-shadow: 0 4px 12px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Admonitions styling */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-color: #1e8e3e;
+}
+
+.md-typeset .tip > .admonition-title,
+.md-typeset .tip > summary {
+  background-color: rgba(30, 142, 62, 0.1);
+}
+
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: #1a73e8;
+}
+
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: rgba(26, 115, 232, 0.1);
+}

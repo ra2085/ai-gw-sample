@@ -10,23 +10,25 @@ theme:
   logo: img/Apigee-512-color.png
   favicon: img/Apigee-512-color.png
   palette:
-
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: deep purple
+      primary: blue
+      accent: light blue
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     # Palette toggle for dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: deep purple
+      primary: blue
+      accent: light blue
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
   features:
     - navigation.tabs
     - navigation.tabs.sticky
@@ -41,6 +43,10 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
+
+extra_css:
+  - stylesheets/extra.css
+
 
 markdown_extensions:
   - admonition
