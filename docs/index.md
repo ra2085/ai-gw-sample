@@ -1,8 +1,9 @@
 # Apigee AI Gateway
 
-Welcome to the documentation for the **Enterprise AI Gateway** on Google Cloud Apigee, configured declaratively using [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen).
+Welcome to the documentation for the **Enterprise AI Gateway** on Google Cloud Apigee.
 
-The AI Gateway provides a unified, production-grade control plane for generative AI workloads across Anthropic Claude, OpenAI, Google Gemini on Vertex AI, and self-hosted models (vLLM, Ollama, Groq, Azure OpenAI).
+The AI Gateway provides a unified, production-grade control plane for generative AI workloads across Anthropic Claude, OpenAI, Google Gemini on Vertex AI, and self-hosted models (vLLM, Ollama, Groq, Azure OpenAI) — configured declaratively through simple YAML.
+
 
 ---
 

@@ -1,10 +1,14 @@
-# ⚡ Quickstart Guide
-
+# End-to-End Walkthrough
+ 
 Deploy the complete Apigee AI Gateway in 3 simple steps using declarative templates.
+
+> [!NOTE]
+> **Prerequisites:** Ensure you have `apigee-go-gen` and `apigeecli` installed and Google Cloud authenticated. If you haven't completed this yet, see the [Installation & Setup Guide](installation.md).
 
 ---
 
 ## Step 1: Customize `values.yaml`
+
 
 Navigate to [`templates/ai-gateway/values.yaml`](../template-guide/configuration.md) and configure your project ID, enabled models, and features:
 

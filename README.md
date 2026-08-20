@@ -1,7 +1,6 @@
 # Apigee Enterprise AI Gateway (`ai-gateway`)
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
-[![Template Engine](https://img.shields.io/badge/template-apigee--go--gen-orange.svg)](https://github.com/apigee/apigee-go-gen)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 An enterprise-grade, production-ready **AI Gateway** on Google Cloud Apigee, featuring **Universal Protocol Normalization**, **Smart Routing & LLM as a Judge**, **GCP Model Armor Security**, **Token Quotas**, and **Apigee Monetization with Real-Time Micro-Transactions Tracking**.
@@ -34,7 +33,8 @@ The repository is organized for a progressive learning curve:
 * **Enterprise Security:** Automated prompt and response sanitization via GCP Model Armor to prevent data leakage and prompt injection.
 * **Token Monetization:** Pre-flight prepaid wallet balance verification and real-time micro-transaction token billing.
 * **Custom URLs & Multi-Cloud LLMs:** Declare custom target URLs and formats (`openai`, `anthropic`, `gemini`) in `values.yaml` to route to self-hosted vLLM/Ollama or Azure OpenAI instances.
-* **Declarative Helm-Style Templates:** Powered by [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen) to compile clean Apigee proxy bundles in seconds.
+* **Declarative Configuration:** Define models, pricing, and features in a single `values.yaml` file to generate a complete Apigee proxy bundle.
+
 
 ---
 
@@ -73,7 +73,10 @@ graph LR
 
 ## Quickstart (5 Minutes)
 
+> **Prerequisites:** Ensure you have [`apigee-go-gen`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigee-go-gen-template-generator) and [`apigeecli`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigeecli-deployment-cli) installed. See the [Installation Guide](https://ra2085.github.io/ai-gw-sample/getting-started/installation/) for 1-line install commands.
+
 ### 1. Define Your Gateway in `values.quickstart.yaml`
+
 
 ```yaml
 gateway:

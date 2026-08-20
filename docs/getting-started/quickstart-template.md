@@ -4,9 +4,13 @@ Want to get an enterprise-grade AI Gateway up and running immediately? You don't
 
 With the **AI Gateway Template**, a simple **15-line YAML file** is all you need to generate a full, production-ready Apigee gateway with universal protocol normalization, token monetization, and custom backend model routing.
 
+> [!NOTE]
+> **Prerequisites:** Ensure you have `apigee-go-gen` and `apigeecli` installed. If you haven't installed them yet, see the [Installation & Setup Guide](installation.md).
+
 ---
 
 ## The Minimal `values.quickstart.yaml`
+
 
 ```yaml
 gateway:
