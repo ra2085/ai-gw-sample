@@ -1,97 +1,113 @@
 /* ==========================================================================
-   Google Cloud Documentation Theme Overrides for MkDocs Material
+   Google Cloud Documentation Theme (Cloud Style Guide)
    ========================================================================== */
 
-:root {
-  /* Google Cloud Brand Colors */
-  --gcp-blue: #1a73e8;
-  --gcp-blue-hover: #174ea6;
-  --gcp-blue-light: #e8f0fe;
-  --gcp-green: #1e8e3e;
-  --gcp-yellow: #f9ab00;
-  --gcp-red: #d93025;
-  --gcp-gray: #5f6368;
-  --gcp-surface: #f8f9fa;
-
-  /* Material Theme Primary / Accent */
-  --md-primary-fg-color: #1a73e8;
-  --md-primary-fg-color--light: #4285f4;
-  --md-primary-fg-color--dark: #174ea6;
-  --md-primary-bg-color: #ffffff;
-  --md-primary-bg-color--light: #f8f9fa;
+/* Light Mode (Google Cloud Console / Documentation Style) */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #ffffff;
+  --md-primary-fg-color--light: #f8f9fa;
+  --md-primary-fg-color--dark: #f1f3f4;
+  --md-primary-bg-color: #202124;
+  --md-primary-bg-color--light: #3c4043;
 
   --md-accent-fg-color: #1a73e8;
-  --md-accent-fg-color--transparent: rgba(26, 115, 232, 0.1);
-  --md-accent-bg-color: #ffffff;
+  --md-accent-fg-color--transparent: rgba(26, 115, 232, 0.08);
 
-  /* Typography */
   --md-typeset-a-color: #1a73e8;
 }
 
+/* Dark Mode (Google Cloud Dark Console Style: Deep Charcoal & Soft Blue) */
 [data-md-color-scheme="slate"] {
-  /* Dark Mode Palette */
-  --md-primary-fg-color: #1a73e8;
-  --md-primary-fg-color--light: #8ab4f8;
-  --md-primary-fg-color--dark: #174ea6;
-  --md-primary-bg-color: #202124;
-  --md-primary-bg-color--light: #2d2e31;
+  --md-primary-fg-color: #202124;
+  --md-primary-fg-color--light: #2d2e31;
+  --md-primary-fg-color--dark: #17181a;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #f8f9fa;
 
   --md-accent-fg-color: #8ab4f8;
-  --md-accent-fg-color--transparent: rgba(138, 180, 248, 0.15);
-  
+  --md-accent-fg-color--transparent: rgba(138, 180, 248, 0.12);
+
   --md-typeset-a-color: #8ab4f8;
+  --md-default-bg-color: #18191c;
+  --md-default-bg-color--light: #202124;
+  --md-default-bg-color--lighter: #282a2e;
 }
 
-/* Header & Tabs styling matching Google Cloud Console / Documentation */
+/* Header & Navigation Bar (Clean Border, No Neon Backgrounds) */
 .md-header {
-  background-color: var(--md-primary-fg-color);
-  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 
-.md-tabs {
-  background-color: var(--md-primary-fg-color--dark);
+[data-md-color-scheme="default"] .md-header {
+  color: #202124;
 }
 
-/* Cards & Grid styling */
+[data-md-color-scheme="default"] .md-header__title,
+[data-md-color-scheme="default"] .md-header__topic {
+  color: #202124;
+  font-weight: 500;
+}
+
+[data-md-color-scheme="default"] .md-tabs {
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8eaed;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link {
+  color: #5f6368;
+  opacity: 1;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link--active,
+[data-md-color-scheme="default"] .md-tabs__link:hover {
+  color: #1a73e8;
+  border-bottom: 2px solid #1a73e8;
+}
+
+[data-md-color-scheme="slate"] .md-header {
+  border-bottom: 1px solid #3c4043;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #202124;
+  border-bottom: 1px solid #3c4043;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link {
+  color: #9aa0a6;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link--active,
+[data-md-color-scheme="slate"] .md-tabs__link:hover {
+  color: #8ab4f8;
+  border-bottom: 2px solid #8ab4f8;
+}
+
+/* Google Cloud Style Cards & Grid */
 .md-typeset .grid.cards > ul > li {
   border: 1px solid #dadce0;
   border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.3);
-  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.1);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 
 .md-typeset .grid.cards > ul > li:hover {
   border-color: #1a73e8;
-  box-shadow: 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  box-shadow: 0 4px 12px 0 rgba(60, 64, 67, 0.15);
   transform: translateY(-2px);
 }
 
 [data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li {
   border-color: #3c4043;
+  background-color: #202124;
 }
 
 [data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover {
   border-color: #8ab4f8;
-  box-shadow: 0 4px 12px 3px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.5);
 }
 
-/* Admonitions styling */
-.md-typeset .admonition.tip,
-.md-typeset details.tip {
-  border-color: #1e8e3e;
-}
-
-.md-typeset .tip > .admonition-title,
-.md-typeset .tip > summary {
-  background-color: rgba(30, 142, 62, 0.1);
-}
-
-.md-typeset .admonition.note,
-.md-typeset details.note {
-  border-color: #1a73e8;
-}
-
-.md-typeset .note > .admonition-title,
-.md-typeset .note > summary {
-  background-color: rgba(26, 115, 232, 0.1);
+/* Code Blocks */
+.md-typeset pre > code {
+  border-radius: 6px;
 }

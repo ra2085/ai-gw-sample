@@ -10,22 +10,23 @@ theme:
   logo: img/Apigee-512-color.png
   favicon: img/Apigee-512-color.png
   palette:
-    # Palette toggle for light mode
+    # Palette toggle for light mode (Google Cloud White Header & Light Surface)
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: blue
-      accent: light blue
+      primary: white
+      accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Palette toggle for dark mode
+    # Palette toggle for dark mode (Google Cloud Dark Charcoal Console)
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue
-      accent: light blue
+      primary: slate
+      accent: indigo
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+
   font:
     text: Roboto
     code: Roboto Mono
