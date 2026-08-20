@@ -18,47 +18,66 @@ To configure, generate, and deploy the **Apigee AI Gateway**, install the requir
 
 ### Install `apigee-go-gen` (Template Generator)
 
-=== "Go Install (Recommended)"
+=== "Automated Install Script (Recommended)"
     ```bash
-    go install github.com/apigee/apigee-go-gen/cmd/apigee-go-gen@latest
+    # Install latest version into /usr/local/bin
+    curl -s https://apigee.github.io/apigee-go-gen/install | sh
     ```
 
-=== "Homebrew (macOS / Linux)"
+    To install to a custom directory (e.g. `~/.local/bin`):
     ```bash
-    brew install apigee/tools/apigee-go-gen
+    curl -s https://apigee.github.io/apigee-go-gen/install | sh -s latest ~/.local/bin
     ```
 
-=== "Build from Source"
+=== "From Source (with Go)"
     ```bash
-    git clone https://github.com/apigee/apigee-go-gen.git
-    cd apigee-go-gen
-    go build -o /usr/local/bin/apigee-go-gen ./cmd/apigee-go-gen
+    go install github.com/apigee/apigee-go-gen/cmd/...@latest
     ```
+
+=== "Manual Download"
+    Download the pre-compiled binary tarball for your OS and architecture from [GitHub Releases](https://github.com/apigee/apigee-go-gen/releases), extract it, and place `apigee-go-gen` into your `$PATH`.
 
 Verify installation:
 ```bash
-apigee-go-gen version || apigee-go-gen --help
+apigee-go-gen --help
 ```
+
 
 ---
 
 ### Install `apigeecli` (Deployment CLI)
 
-=== "Direct Install Script (macOS / Linux)"
+=== "Automated Install Script (Recommended)"
     ```bash
-    curl -s https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | bash
+    # Install latest version into ~/.apigeecli/bin
+    curl -L https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | sh -
     export PATH=$PATH:$HOME/.apigeecli/bin
+    ```
+
+    To install to a custom directory or specific version:
+    ```bash
+    curl -L https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | sh -s -- -v <version> -b /usr/local/bin
     ```
 
 === "Homebrew (macOS)"
     ```bash
+    brew tap apigee/apigeecli
     brew install apigeecli
     ```
+
+=== "From Source (with Go)"
+    ```bash
+    go install github.com/apigee/apigeecli/cmd/apigeecli@latest
+    ```
+
+=== "Manual Download"
+    Download the pre-compiled binary package for your operating system from [apigeecli GitHub Releases](https://github.com/apigee/apigeecli/releases), extract it, and add it to your `$PATH`.
 
 Verify installation:
 ```bash
 apigeecli version
 ```
+
 
 ---
 
