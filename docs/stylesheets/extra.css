@@ -1,113 +1,78 @@
 /* ==========================================================================
-   Google Cloud Documentation Theme (Cloud Style Guide)
+   Google Sans & ADK-inspired Typography and Theme Overrides
    ========================================================================== */
 
-/* Light Mode (Google Cloud Console / Documentation Style) */
-[data-md-color-scheme="default"] {
-  --md-primary-fg-color: #ffffff;
-  --md-primary-fg-color--light: #f8f9fa;
-  --md-primary-fg-color--dark: #f1f3f4;
-  --md-primary-bg-color: #202124;
-  --md-primary-bg-color--light: #3c4043;
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:ital,wght@0,400;0,500;0,700;1,400&family=Roboto+Mono:wght@400;500;700&display=swap');
 
-  --md-accent-fg-color: #1a73e8;
-  --md-accent-fg-color--transparent: rgba(26, 115, 232, 0.08);
-
-  --md-typeset-a-color: #1a73e8;
+:root {
+  --md-text-font: "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --md-code-font: "Roboto Mono", "SFMono-Regular", Consolas, Menlo, monospace;
 }
 
-/* Dark Mode (Google Cloud Dark Console Style: Deep Charcoal & Soft Blue) */
-[data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #202124;
-  --md-primary-fg-color--light: #2d2e31;
-  --md-primary-fg-color--dark: #17181a;
-  --md-primary-bg-color: #ffffff;
-  --md-primary-bg-color--light: #f8f9fa;
-
-  --md-accent-fg-color: #8ab4f8;
-  --md-accent-fg-color--transparent: rgba(138, 180, 248, 0.12);
-
-  --md-typeset-a-color: #8ab4f8;
-  --md-default-bg-color: #18191c;
-  --md-default-bg-color--light: #202124;
-  --md-default-bg-color--lighter: #282a2e;
+/* Prevent layout shift from scrollbar appearing/disappearing */
+html {
+  scrollbar-gutter: stable;
 }
 
-/* Header & Navigation Bar (Clean Border, No Neon Backgrounds) */
-.md-header {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+/* Headings using Google Sans Display */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-header__topic,
+.md-tabs__link {
+  font-family: "Google Sans", "Google Sans Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.01em;
 }
 
-[data-md-color-scheme="default"] .md-header {
-  color: #202124;
+.md-typeset h1 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
-[data-md-color-scheme="default"] .md-header__title,
-[data-md-color-scheme="default"] .md-header__topic {
-  color: #202124;
+.md-typeset h2 {
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.md-typeset h3 {
   font-weight: 500;
 }
 
-[data-md-color-scheme="default"] .md-tabs {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e8eaed;
+/* Hero / Logo Text Alignment */
+.centered-logo-text-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.2em;
+  margin-bottom: 0.5em;
+  vertical-align: middle;
 }
 
-[data-md-color-scheme="default"] .md-tabs__link {
-  color: #5f6368;
-  opacity: 1;
+.centered-logo-text-group img {
+  height: auto;
 }
 
-[data-md-color-scheme="default"] .md-tabs__link--active,
-[data-md-color-scheme="default"] .md-tabs__link:hover {
-  color: #1a73e8;
-  border-bottom: 2px solid #1a73e8;
+.centered-logo-text-group h1 {
+  margin: 0;
+  text-align: left;
 }
 
-[data-md-color-scheme="slate"] .md-header {
-  border-bottom: 1px solid #3c4043;
-}
-
-[data-md-color-scheme="slate"] .md-tabs {
-  background-color: #202124;
-  border-bottom: 1px solid #3c4043;
-}
-
-[data-md-color-scheme="slate"] .md-tabs__link {
-  color: #9aa0a6;
-}
-
-[data-md-color-scheme="slate"] .md-tabs__link--active,
-[data-md-color-scheme="slate"] .md-tabs__link:hover {
-  color: #8ab4f8;
-  border-bottom: 2px solid #8ab4f8;
-}
-
-/* Google Cloud Style Cards & Grid */
+/* Cards & Grid Styling */
 .md-typeset .grid.cards > ul > li {
-  border: 1px solid #dadce0;
   border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, 0.1);
   transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 
 .md-typeset .grid.cards > ul > li:hover {
-  border-color: #1a73e8;
-  box-shadow: 0 4px 12px 0 rgba(60, 64, 67, 0.15);
   transform: translateY(-2px);
 }
 
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li {
-  border-color: #3c4043;
-  background-color: #202124;
-}
-
-[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover {
-  border-color: #8ab4f8;
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.5);
-}
-
-/* Code Blocks */
+/* Code Block Styling */
 .md-typeset pre > code {
   border-radius: 6px;
+  font-family: var(--md-code-font);
+}
+
+.md-typeset code {
+  font-family: var(--md-code-font);
 }

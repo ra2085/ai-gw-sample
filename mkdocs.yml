@@ -28,8 +28,9 @@ theme:
         name: Switch to light mode
 
   font:
-    text: Roboto
+    text: Google Sans Text
     code: Roboto Mono
+
   features:
     - navigation.tabs
     - navigation.tabs.sticky
