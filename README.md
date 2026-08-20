@@ -19,10 +19,12 @@ Full guides, architecture specifications, and API references are available on ou
 
 The repository is organized for a progressive learning curve:
 
-1. **Quickstart (5 Minutes)**: Deploy a working gateway with minimal configuration supporting Gemini and Claude.
-2. **Custom Providers & URLs**: Bring your own models (Azure, DeepSeek, Mistral, Ollama, vLLM) with custom auth.
-3. **Enterprise Governance**: Turn on Model Armor security, token quotas, and monetization as needed.
-4. **Smart Routing**: Enable AI-driven complexity classification and cost tier routing.
+1. **[Quickstart (5 Minutes)](docs/getting-started/quickstart-template.md)**: Deploy a working gateway with minimal configuration supporting Gemini and Claude.
+2. **[Configuration Reference](docs/template-guide/configuration.md)**: Full schema reference of all `values.yaml` options, endpoints, and defaults.
+3. **[Custom Providers & URLs](docs/template-guide/custom-urls.md)**: Bring your own models (Azure, DeepSeek, Mistral, Ollama, vLLM) with custom auth.
+4. **[Enterprise Feature Toggles](docs/template-guide/feature-flags.md)**: Turn on Model Armor security, token quotas, and monetization as needed.
+5. **[Smart Routing & LLM Judge](docs/architecture/routing.md)**: Enable AI-driven complexity classification and cost tier routing.
+
 
 ---
 

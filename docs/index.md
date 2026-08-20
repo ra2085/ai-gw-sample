@@ -19,9 +19,11 @@ graph LR
 ```
 
 1. **[Quickstart (5 Minutes)](getting-started/quickstart-template.md)**: Deploy a working gateway with 15 lines of YAML supporting Gemini and Claude.
-2. **[Custom Providers & URLs](template-guide/custom-urls.md)**: Connect external APIs (Azure, DeepSeek) and private clusters (vLLM, Ollama) with custom auth.
-3. **[Enterprise Features](template-guide/feature-flags.md)**: Enable Model Armor prompt/response sanitization, token quotas, and monetization.
-4. **[Smart Routing & LLM as a Judge](architecture/routing.md)**: Automatically route prompts based on cost tiers and complexity.
+2. **[Configuration Reference (`values.yaml`)](template-guide/configuration.md)**: Complete reference of all template schema options, metadata, and defaults.
+3. **[Custom Providers & URLs](template-guide/custom-urls.md)**: Connect external APIs (Azure, DeepSeek) and private clusters (vLLM, Ollama) with custom auth.
+4. **[Enterprise Feature Toggles](template-guide/feature-flags.md)**: Enable Model Armor prompt/response sanitization, token quotas, and monetization.
+5. **[Smart Routing & LLM as a Judge](architecture/routing.md)**: Automatically route prompts based on cost tiers and complexity.
+
 
 ---
 
@@ -101,11 +103,36 @@ graph LR
 
 ---
 
-## Next Steps
+## Documentation & Template Guides
 
-* **[5-Minute Quickstart](getting-started/quickstart-template.md)**: Generate and deploy your first gateway bundle.
-* **[Configuration Reference](template-guide/configuration.md)**: Full guide to `values.yaml` settings.
-* **[Custom Models Guide](template-guide/custom-urls.md)**: How to bring self-hosted and third-party models.
+<div class="grid cards" markdown>
+
+-   :material-file-code-outline: **[Configuration Reference](template-guide/configuration.md)**
+    
+    ---
+    
+    Complete schema specification for `values.yaml` covering gateway metadata, endpoints, models, routing tiers, and pricing.
+
+-   :material-server-network: **[Custom Providers & URLs](template-guide/custom-urls.md)**
+    
+    ---
+    
+    How to connect self-hosted LLMs (vLLM, Ollama), third-party providers (DeepSeek, Azure OpenAI), and upstream bearer/header authentication.
+
+-   :material-toggle-switch: **[Feature Toggles](template-guide/feature-flags.md)**
+    
+    ---
+    
+    Enable or disable Model Armor security, token monetization, rate quotas, and LLM Judge evaluation.
+
+-   :material-rocket-launch: **[5-Minute Quickstart](getting-started/quickstart-template.md)**
+    
+    ---
+    
+    Deploy a working AI Gateway bundle using the minimal 15-line starter configuration.
+
+</div>
+
 
 
 
