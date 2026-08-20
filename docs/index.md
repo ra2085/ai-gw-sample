@@ -68,68 +68,35 @@ graph LR
 
 ---
 
-## Architecture
+## Architecture Overview
 
 ```mermaid
-graph TD
-    Client["Client Application / SDK"]
-
-    subgraph Ingress["Apigee Proxy Endpoints"]
-        EP_Claude["claude-messages<br/>(/v1/messages)"]
-        EP_Gemini["gemini-native<br/>(/ai-gateway)"]
-        EP_OpenAI["openai-compat<br/>(/v1/chat/completions)"]
-        EP_Models["claude-models<br/>(/v1/models)"]
+graph LR
+    subgraph Clients["Client Applications"]
+        C1["OpenAI SDK"]
+        C2["Anthropic Claude SDK"]
+        C3["Vertex AI SDK"]
     end
 
-    subgraph Pipeline["PreFlow Execution Pipeline"]
-        Auth["1. Auth & API Key Validation"]
-        MLC["2. Monetization Pre-flight"]
-        Judge["3. Smart Router & LLM Judge"]
-        Quota["4. Token Quota Enforcement"]
-        Armor["5. Model Armor Prompt Sanitization"]
-        Xlate["6. Protocol Transcoding (if needed)"]
-        
-        Auth --> MLC --> Judge --> Quota --> Armor --> Xlate
+    subgraph Gateway["Apigee AI Gateway"]
+        direction TB
+        G1["Universal Protocol Normalization"]
+        G2["Model Armor Security & PII Sanitization"]
+        G3["Smart Routing & Cost Optimization"]
+        G4["Token Quotas & Monetization"]
     end
 
-    subgraph Targets["Backend Model Targets"]
-        T_Claude["Vertex Claude (us-east5)"]
-        T_Gemini["Vertex Gemini (global)"]
-        T_OpenAI["Vertex OpenAI Endpoint"]
-        T_Custom["Custom Upstreams (vLLM, Ollama, Azure, DeepSeek)"]
+    subgraph Providers["Backend LLM Providers"]
+        P1["Google Vertex AI (Gemini & Claude)"]
+        P2["Third-Party APIs (OpenAI, Azure, DeepSeek)"]
+        P3["Self-Hosted Clusters (vLLM, Ollama)"]
     end
 
-    Client -->|Anthropic Request| EP_Claude
-    Client -->|Gemini Predict| EP_Gemini
-    Client -->|OpenAI Chat| EP_OpenAI
-    Client -->|Catalog Discovery| EP_Models
-
-    EP_Claude --> Pipeline
-    EP_Gemini --> Pipeline
-    EP_OpenAI --> Pipeline
-
-    Xlate -->|route_target = claude| T_Claude
-    Xlate -->|route_target = gemini| T_Gemini
-    Xlate -->|route_target = openai| T_OpenAI
-    Xlate -->|custom_url / format| T_Custom
-
-    subgraph Egress["PostFlow Response & Telemetry"]
-        SMR["1. Model Armor Response Filter"]
-        Calc["2. Micro-Cost Calculator (USD)"]
-        LTQ_Cnt["3. Token Quota Accumulation"]
-        DC["4. Apigee Data Collectors"]
-        Hdrs["5. Observability Response Headers"]
-        
-        SMR --> Calc --> LTQ_Cnt --> DC --> Hdrs
-    end
-
-    T_Claude --> Egress
-    T_Gemini --> Egress
-    T_OpenAI --> Egress
-    T_Custom --> Egress
-    Hdrs --> Client
-    EP_Models --> Client
+    Clients --> Gateway
+    Gateway --> Providers
 ```
+
+> Looking for the complete 25-step policy execution sequence? See the [Pipeline Execution Flow (Appendix)](proxy-deep-dive/bundle-structure.md#3-appendix-end-to-end-pipeline-execution-flow).
 
 ---
 
@@ -138,5 +105,6 @@ graph TD
 * **[5-Minute Quickstart](getting-started/quickstart-template.md)**: Generate and deploy your first gateway bundle.
 * **[Configuration Reference](template-guide/configuration.md)**: Full guide to `values.yaml` settings.
 * **[Custom Models Guide](template-guide/custom-urls.md)**: How to bring self-hosted and third-party models.
+
 
 
