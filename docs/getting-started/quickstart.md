@@ -2,8 +2,13 @@
  
 Deploy the complete Apigee AI Gateway in 3 simple steps using declarative templates.
 
-> [!NOTE]
-> **Prerequisites:** Ensure you have `apigee-go-gen` and `apigeecli` installed and Google Cloud authenticated. If you haven't completed this yet, see the [Installation & Setup Guide](installation.md).
+> [!IMPORTANT]
+> **Prerequisites:** Before deploying, ensure you have completed all setup steps in the **[Installation & Setup Guide](installation.md)**:
+> 1. Installed CLI tools (`apigee-go-gen` and `apigeecli`).
+> 2. Authenticated with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
+> 3. Created the deployment Service Account (`roles/aiplatform.user`).
+> 4. Created the 6 required telemetry Data Collectors in your Apigee organization.
+
 
 ---
 

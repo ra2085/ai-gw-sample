@@ -4,8 +4,13 @@ Want to get an enterprise-grade AI Gateway up and running immediately? You don't
 
 With the **AI Gateway Template**, a simple **15-line YAML file** is all you need to generate a full, production-ready Apigee gateway with universal protocol normalization, token monetization, and custom backend model routing.
 
-> [!NOTE]
-> **Prerequisites:** Ensure you have `apigee-go-gen` and `apigeecli` installed. If you haven't installed them yet, see the [Installation & Setup Guide](installation.md).
+> [!IMPORTANT]
+> **Prerequisites:** Before deploying, make sure you have completed all setup steps in the **[Installation & Setup Guide](installation.md)**:
+> 1. Installed CLI tools (`apigee-go-gen` and `apigeecli`).
+> 2. Authenticated with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
+> 3. Created the deployment Service Account (`roles/aiplatform.user`).
+> 4. Created the 6 required telemetry Data Collectors in your Apigee organization.
+
 
 ---
 
@@ -78,10 +83,11 @@ graph LR
 > done
 > ```
 
-Deploy the generated `.zip` bundle to your Apigee environment. Apigee requires the `-s` / `--sa` Service Account flag because the proxy's TargetEndpoints use Google Cloud IAM authentication to call Vertex AI:
+Deploy the generated `.zip` bundle to your Apigee environment. A Service Account with the **Vertex AI User** role (`roles/aiplatform.user`) is required at deploy time (`-s` / `--sa`) because the proxy's TargetEndpoints use Google Cloud IAM authentication to call Vertex AI:
 
 ```bash
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
 
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
