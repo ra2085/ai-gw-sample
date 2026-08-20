@@ -104,9 +104,9 @@ nav:
       - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
       - Targets & Cloud Auth: proxy-deep-dive/targets-and-routing.md
       - Bundle & PropertySets: proxy-deep-dive/bundle-structure.md
-  - 5. Operations & CI/CD:
+  - 5. Operations & Observability:
       - Deployment Guide: operations/deployment.md
-      - Automated Testing: operations/testing.md
       - Telemetry & Data Collectors: operations/telemetry.md
+
 
 
