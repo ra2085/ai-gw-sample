@@ -56,18 +56,22 @@ apigee-go-gen render apiproxy \
 
 ## Step 3: Deploy to Apigee
 
-Deploy the generated `.zip` bundle to your Apigee environment:
+Deploy the generated `.zip` bundle to your Apigee environment. A Service Account with `roles/aiplatform.user` is required at deploy time because the TargetEndpoints authenticate against Vertex AI using Google IAM tokens:
 
 ```bash
+export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
+    -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
     --default-token
 ```
+
 
 ---
 

@@ -50,12 +50,36 @@ html {
 }
 
 /* --------------------------------------------------------------------------
-   HEADER & TABS - DARK MODE (Charcoal Surface, NO Blue Header)
+   DARK MODE - TRUE NEUTRAL OBSIDIAN (No Blue/Purple Background Tints)
    -------------------------------------------------------------------------- */
+[data-md-color-scheme="slate"] {
+  /* Main Background - Pure Neutral Dark Obsidian */
+  --md-default-bg-color: #121316;
+  --md-default-bg-color--light: #1c1d22;
+  --md-default-bg-color--lighter: #26272e;
+  --md-default-bg-color--lightest: #32333c;
+
+  /* Text Contrast */
+  --md-default-fg-color: #e4e6eb;
+  --md-default-fg-color--light: #9aa0a6;
+  --md-default-fg-color--lighter: #80868b;
+  --md-default-fg-color--lightest: #5f6368;
+
+  /* Code Block Background */
+  --md-code-bg-color: #18191e;
+  --md-code-fg-color: #e4e6eb;
+
+  /* Accent & Link Color - Crisp Soft Blue (No Purple) */
+  --md-accent-fg-color: #8ab4f8;
+  --md-accent-fg-color--transparent: rgba(138, 180, 248, 0.12);
+  --md-typeset-a-color: #8ab4f8;
+}
+
+/* Header & Tabs (Deep Matte Black/Charcoal) */
 [data-md-color-scheme="slate"] .md-header {
-  background-color: #1a1b1e !important;
+  background-color: #141518 !important;
   color: #e8eaed !important;
-  border-bottom: 1px solid #2d2e33 !important;
+  border-bottom: 1px solid #28292e !important;
 }
 
 [data-md-color-scheme="slate"] .md-header__button {
@@ -69,8 +93,8 @@ html {
 }
 
 [data-md-color-scheme="slate"] .md-tabs {
-  background-color: #161719 !important;
-  border-bottom: 1px solid #2d2e33 !important;
+  background-color: #101113 !important;
+  border-bottom: 1px solid #28292e !important;
 }
 
 [data-md-color-scheme="slate"] .md-tabs__link {
@@ -135,8 +159,18 @@ html {
   transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li {
+  background-color: #18191e;
+  border: 1px solid #28292e;
+}
+
 .md-typeset .grid.cards > ul > li:hover {
   transform: translateY(-2px);
+}
+
+[data-md-color-scheme="slate"] .md-typeset .grid.cards > ul > li:hover {
+  border-color: #8ab4f8;
+  box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.5);
 }
 
 /* Code Block Styling */

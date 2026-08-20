@@ -116,16 +116,18 @@ apigee-go-gen render apiproxy \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
 
-# Deploy to Apigee
+# Deploy to Apigee (requires Service Account for Vertex AI IAM authentication)
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
+    -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
     --default-token
 ```
+
 
 ---
 

@@ -69,16 +69,22 @@ graph LR
 
 ## Deploy to Apigee
 
+Deploy the generated `.zip` bundle to your Apigee environment. Apigee requires the `-s` / `--sa` Service Account flag because the proxy's TargetEndpoints use Google Cloud IAM authentication to call Vertex AI:
+
 ```bash
+export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
+
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
+    -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
     --default-token
 ```
+
 
 ---
 
