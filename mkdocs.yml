@@ -7,7 +7,10 @@ repo_url: https://github.com/ra2085/ai-gw-sample
 
 theme:
   name: material
+  logo: img/Apigee-512-color.png
+  favicon: img/Apigee-512-color.png
   palette:
+
     # Palette toggle for light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default

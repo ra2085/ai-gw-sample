@@ -1,4 +1,5 @@
-# Apigee AI Gateway
+# <img src="img/Apigee-512-color.png" alt="Apigee Logo" width="40" style="vertical-align: middle; margin-right: 8px;" /> Apigee AI Gateway
+
 
 Welcome to the documentation for the **Enterprise AI Gateway** on Google Cloud Apigee.
 

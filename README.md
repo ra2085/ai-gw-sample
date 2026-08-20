@@ -1,4 +1,5 @@
-# Apigee Enterprise AI Gateway (`ai-gateway`)
+# <img src="img/Apigee-512-color.png" alt="Apigee Logo" width="40" style="vertical-align: middle; margin-right: 8px;" /> Apigee Enterprise AI Gateway (`ai-gateway`)
+
 
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
