@@ -8,12 +8,12 @@ APIProxy:
 Policies: {{ include "./policies.yaml" . | nindent 2 }}
 
 ProxyEndpoints:
-  {{- if $.Values.endpoints.claude.enabled }}
+  {{- if or (not $.Values.endpoints) (not $.Values.endpoints.claude) (and $.Values.endpoints.claude (ne $.Values.endpoints.claude.enabled false)) }}
   - ProxyEndpoint:
-      .name: {{ $.Values.endpoints.claude.name | default "claude-messages" }}
+      .name: {{ if and $.Values.endpoints $.Values.endpoints.claude }}{{ $.Values.endpoints.claude.name | default "claude-messages" }}{{ else }}claude-messages{{ end }}
       -Data:
         - Description: Anthropic Claude Messages Proxy Endpoint
-        {{- if $.Values.features.model_armor.enabled }}
+        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
             FaultRule:
               .name: sanitize
@@ -28,12 +28,12 @@ ProxyEndpoints:
         - PreFlow:
             .name: PreFlow
             Request:
-              {{- if $.Values.features.auth.enabled }}
+              {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               - Step:
                   Condition: '!(request.header.Authorization Matches "Bearer *")'
                   Name: VA-ApiKey
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -43,7 +43,7 @@ ProxyEndpoints:
                   Name: OAS-VerifyClaude
               - Step:
                   Name: EV-Model
-              {{- if $.Values.features.llm_judge.enabled }}
+              {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
                   Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
                   Name: JS-prepare-judge-request
@@ -56,14 +56,14 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
               {{- end }}
               - Step:
                   Name: JS-extract-prompt
-              {{- if $.Values.features.model_armor.enabled }}
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
@@ -78,7 +78,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-monetization-cost
@@ -86,7 +86,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: DC-CaptureTokenCountsNonStreaming
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
@@ -94,14 +94,15 @@ ProxyEndpoints:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetMonetizationHeaders
               {{- end }}
         - Flows: {}
         - HTTPProxyConnection:
-            BasePath: {{ $.Values.endpoints.claude.base_path | default "/v1/messages" }}
+            BasePath: {{ if and $.Values.endpoints $.Values.endpoints.claude }}{{ $.Values.endpoints.claude.base_path | default "/v1/messages" }}{{ else }}/v1/messages{{ end }}
+
             Properties:
               - Property:
                   .name: response.streaming.enabled
@@ -118,12 +119,12 @@ ProxyEndpoints:
             TargetEndpoint: gemini
   {{- end }}
 
-  {{- if $.Values.endpoints.gemini_native.enabled }}
+  {{- if or (not $.Values.endpoints) (not $.Values.endpoints.gemini_native) (and $.Values.endpoints.gemini_native (ne $.Values.endpoints.gemini_native.enabled false)) }}
   - ProxyEndpoint:
-      .name: {{ $.Values.endpoints.gemini_native.name | default "gemini-native" }}
+      .name: {{ if and $.Values.endpoints $.Values.endpoints.gemini_native }}{{ $.Values.endpoints.gemini_native.name | default "gemini-native" }}{{ else }}gemini-native{{ end }}
       -Data:
         - Description: Native Gemini API Proxy Endpoint compatible with ADK
-        {{- if $.Values.features.model_armor.enabled }}
+        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
             FaultRule:
               .name: sanitize
@@ -138,12 +139,12 @@ ProxyEndpoints:
         - PreFlow:
             .name: PreFlow
             Request:
-              {{- if $.Values.features.auth.enabled }}
+              {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               - Step:
                   Condition: '!(request.header.Authorization Matches "Bearer *")'
                   Name: VA-ApiKey
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -151,7 +152,7 @@ ProxyEndpoints:
                   Name: OAS-VerifyGemini
               - Step:
                   Name: JS-extract-vars-gemini
-              {{- if $.Values.features.llm_judge.enabled }}
+              {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
                   Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
                   Name: JS-prepare-judge-request
@@ -164,12 +165,12 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
               {{- end }}
-              {{- if $.Values.features.model_armor.enabled }}
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
                   Condition: request_format = "gemini" and gemini_text_prompt != null and gemini_text_prompt != ""
                   Name: SUP-SanitizeUserPromptGemini
@@ -191,7 +192,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-monetization-cost
@@ -199,7 +200,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: DC-CaptureTokenCountsNonStreaming
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
@@ -207,14 +208,14 @@ ProxyEndpoints:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetMonetizationHeaders
               {{- end }}
         - Flows: {}
         - HTTPProxyConnection:
-            BasePath: {{ $.Values.endpoints.gemini_native.base_path | default "/ai-gateway" }}
+            BasePath: {{ if and $.Values.endpoints $.Values.endpoints.gemini_native }}{{ $.Values.endpoints.gemini_native.base_path | default "/ai-gateway" }}{{ else }}/ai-gateway{{ end }}
             Properties:
               - Property:
                   .name: response.streaming.enabled
@@ -223,20 +224,21 @@ ProxyEndpoints:
                   .name: api.timeout
                   -Data: 300000
         - RouteRule:
-            .name: claude
-            Condition: route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"
-            TargetEndpoint: claude
-        - RouteRule:
-            .name: gemini-native-target
-            TargetEndpoint: gemini-native-target
+            - .name: claude
+              -Data:
+                - TargetEndpoint: claude
+                - Condition: route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"
+            - .name: gemini-native-target
+              -Data:
+                - TargetEndpoint: gemini-native-target
   {{- end }}
 
-  {{- if $.Values.endpoints.openai_compat.enabled }}
+  {{- if or (not $.Values.endpoints) (not $.Values.endpoints.openai_compat) (and $.Values.endpoints.openai_compat (ne $.Values.endpoints.openai_compat.enabled false)) }}
   - ProxyEndpoint:
-      .name: {{ $.Values.endpoints.openai_compat.name | default "openai-compat" }}
+      .name: {{ if and $.Values.endpoints $.Values.endpoints.openai_compat }}{{ $.Values.endpoints.openai_compat.name | default "openai-compat" }}{{ else }}openai-compat{{ end }}
       -Data:
         - Description: OpenAI Compatibility API Proxy Endpoint for Gemini
-        {{- if $.Values.features.model_armor.enabled }}
+        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
             FaultRule:
               .name: sanitize
@@ -251,12 +253,12 @@ ProxyEndpoints:
         - PreFlow:
             .name: PreFlow
             Request:
-              {{- if $.Values.features.auth.enabled }}
+              {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               - Step:
                   Condition: '!(request.header.Authorization Matches "Bearer *")'
                   Name: VA-ApiKey
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -266,7 +268,7 @@ ProxyEndpoints:
                   Name: OAS-VerifyOpenAI
               - Step:
                   Name: JS-extract-vars-openai
-              {{- if $.Values.features.llm_judge.enabled }}
+              {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
                   Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
                   Name: JS-prepare-judge-request
@@ -279,12 +281,12 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
               {{- end }}
-              {{- if $.Values.features.model_armor.enabled }}
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
                   Condition: extracted_prompt != null and extracted_prompt != ""
                   Name: SUP-SanitizeUserPrompt
@@ -300,7 +302,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-monetization-cost
@@ -308,7 +310,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: DC-CaptureTokenCountsNonStreaming
-              {{- if $.Values.features.quotas.enabled }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
@@ -316,14 +318,14 @@ ProxyEndpoints:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
-              {{- if $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetMonetizationHeaders
               {{- end }}
         - Flows: {}
         - HTTPProxyConnection:
-            BasePath: {{ $.Values.endpoints.openai_compat.base_path | default "/v1/chat/completions" }}
+            BasePath: {{ if and $.Values.endpoints $.Values.endpoints.openai_compat }}{{ $.Values.endpoints.openai_compat.base_path | default "/v1/chat/completions" }}{{ else }}/v1/chat/completions{{ end }}
             Properties:
               - Property:
                   .name: response.streaming.enabled
@@ -332,31 +334,31 @@ ProxyEndpoints:
                   .name: api.timeout
                   -Data: 300000
         - RouteRule:
-            .name: claude
-            Condition: route_target = "claude"
-            TargetEndpoint: claude
+            - .name: claude
+              -Data:
+                - TargetEndpoint: claude
+                - Condition: (route_target = "claude") or (route_format = "anthropic")
         - RouteRule:
-            .name: gemini-openai-compat
-            TargetEndpoint: gemini-openai-compat
+            - .name: gemini-openai-compat
+              -Data:
+                - TargetEndpoint: gemini-openai-compat
   {{- end }}
 
 
-
-
-  {{- if $.Values.endpoints.models_catalog.enabled }}
+  {{- if or (not $.Values.endpoints) (not $.Values.endpoints.models_catalog) (and $.Values.endpoints.models_catalog (ne $.Values.endpoints.models_catalog.enabled false)) }}
   - ProxyEndpoint:
-      .name: {{ $.Values.endpoints.models_catalog.name | default "claude-models" }}
+      .name: {{ if and $.Values.endpoints $.Values.endpoints.models_catalog }}{{ $.Values.endpoints.models_catalog.name | default "claude-models" }}{{ else }}claude-models{{ end }}
       Description: Anthropic & OpenAI Models API Catalog Proxy Endpoint
       FaultRules: {}
       PreFlow:
         .name: PreFlow
         Request:
-          {{- if $.Values.features.auth.enabled }}
+          {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
           - Step:
               Condition: '!(request.header.Authorization Matches "Bearer *")'
               Name: VA-ApiKey
           {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
+          {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
           - Step:
               Name: MLC-EnforceMonetizationLimits
           {{- end }}
@@ -385,10 +387,11 @@ ProxyEndpoints:
               Step:
                 Name: JS-models-endpoint
       HTTPProxyConnection:
-        BasePath: {{ $.Values.endpoints.models_catalog.base_path | default "/v1/models" }}
+        BasePath: {{ if and $.Values.endpoints $.Values.endpoints.models_catalog }}{{ $.Values.endpoints.models_catalog.base_path | default "/v1/models" }}{{ else }}/v1/models{{ end }}
       RouteRule:
         .name: no-target
   {{- end }}
+
 
 TargetEndpoints:
   - TargetEndpoint:

@@ -14,31 +14,33 @@
 models.catalog={{ $modelNames | join "," }}
 
 # Global defaults
-default.model={{ $.Values.defaults.model | default "gemini-3.5-flash" }}
-default.fallback={{ $.Values.defaults.fallback | default "gemini-3.1-flash-lite" }}
-default.target={{ $.Values.defaults.target | default "gemini" }}
-default.publisher={{ $.Values.defaults.publisher | default "google" }}
-default.format={{ $.Values.defaults.format | default "gemini" }}
+default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-2.5-flash{{ end }}
+default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-2.5-flash{{ end }}
+default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
+default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
+default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Values.defaults.format }}{{ else }}gemini{{ end }}
 
 # ==============================================================================
 # SECTION 2: SMART ROUTER TIERS & TASK MAPPINGS
 # ==============================================================================
-tier.low={{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}
-tier.medium={{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}
-tier.high={{ $.Values.routing.tiers.high | default "gemini-2.5-pro" }}
-tier.max={{ $.Values.routing.tiers.max | default "claude-haiku-4-5" }}
+tier.low={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
+tier.medium={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
+tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
+tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-haiku-4-5" }}{{ else }}claude-haiku-4-5{{ end }}
 
-task.coding={{ $.Values.routing.tasks.coding | default "gemini-2.5-pro" }}
-task.reasoning={{ $.Values.routing.tasks.reasoning | default "gemini-2.5-pro" }}
-task.summarization={{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}
-task.simple_chat={{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}
-task.classifier_model={{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}
+task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
+task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
+task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
+task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
+task.classifier_model={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 
 # ==============================================================================
 # SECTION 3: BACKWARD COMPATIBILITY ALIASES & REWRITES
 # ==============================================================================
+{{- if and $.Values.routing $.Values.routing.aliases }}
 {{- range $alias, $target := $.Values.routing.aliases }}
 alias.{{ $alias }}={{ $target }}
+{{- end }}
 {{- end }}
 
 # ==============================================================================
@@ -46,12 +48,13 @@ alias.{{ $alias }}={{ $target }}
 # ==============================================================================
 {{- range $.Values.models }}
 # --- {{ .displayName | default .name }} ---
-{{ .name }}.publisher={{ .publisher | default "google" }}
-{{ .name }}.target={{ .target | default "gemini" }}
+{{ .name }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
+{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
 {{ .name }}.endpoint={{ .region | default "global" }}
 {{ .name }}.model={{ .region | default "global" }}
 {{ .name }}.format={{ .format | default "gemini" }}
 {{ .name }}.display_name={{ .displayName | default .name }}
+
 {{- if .created_at }}
 {{ .name }}.created_at={{ .created_at }}
 {{- end }}
@@ -90,8 +93,8 @@ default_openai.model=us
 */}}
 {{- define "generate_monetization_rates_properties" -}}
 # Default fallback pricing parameters
-default.currency={{ $.Values.features.monetization.default_currency | default "USD" }}
-default.markup={{ $.Values.features.monetization.default_markup | default 1.0 }}
+default.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
+default.markup={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
 
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
@@ -110,11 +113,12 @@ default.markup={{ $.Values.features.monetization.default_markup | default 1.0 }}
   Dynamically builds config.properties
 */}}
 {{- define "generate_config_properties" -}}
-project_id={{ $.Values.gateway.project_id | default "{organization.name}" }}
-model_armor_project_id={{ $.Values.features.model_armor.project_id | default $.Values.gateway.project_id | default "{organization.name}" }}
-model_armor_location={{ $.Values.features.model_armor.location | default "us-central1" }}
-model_armor_template={{ $.Values.features.model_armor.template | default "ai-gw-template" }}
+project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
+model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
+model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
+model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
 {{- end -}}
+
 
 {{/*
   Helper: generate_extract_expressions_properties
