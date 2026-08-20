@@ -14,7 +14,79 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* Headings using Google Sans Display */
+/* --------------------------------------------------------------------------
+   HEADER & TABS - LIGHT MODE (Clean White Surface & Subtle Border)
+   -------------------------------------------------------------------------- */
+[data-md-color-scheme="default"] .md-header {
+  background-color: #ffffff !important;
+  color: #202124 !important;
+  border-bottom: 1px solid #dadce0 !important;
+}
+
+[data-md-color-scheme="default"] .md-header__button {
+  color: #5f6368 !important;
+}
+
+[data-md-color-scheme="default"] .md-header__title,
+[data-md-color-scheme="default"] .md-header__topic,
+[data-md-color-scheme="default"] .md-header__ellipsis {
+  color: #202124 !important;
+}
+
+[data-md-color-scheme="default"] .md-tabs {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e8eaed !important;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link {
+  color: #5f6368 !important;
+  opacity: 1 !important;
+}
+
+[data-md-color-scheme="default"] .md-tabs__link--active,
+[data-md-color-scheme="default"] .md-tabs__link:hover {
+  color: #1a73e8 !important;
+  border-bottom: 2px solid #1a73e8 !important;
+}
+
+/* --------------------------------------------------------------------------
+   HEADER & TABS - DARK MODE (Charcoal Surface, NO Blue Header)
+   -------------------------------------------------------------------------- */
+[data-md-color-scheme="slate"] .md-header {
+  background-color: #1a1b1e !important;
+  color: #e8eaed !important;
+  border-bottom: 1px solid #2d2e33 !important;
+}
+
+[data-md-color-scheme="slate"] .md-header__button {
+  color: #9aa0a6 !important;
+}
+
+[data-md-color-scheme="slate"] .md-header__title,
+[data-md-color-scheme="slate"] .md-header__topic,
+[data-md-color-scheme="slate"] .md-header__ellipsis {
+  color: #e8eaed !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #161719 !important;
+  border-bottom: 1px solid #2d2e33 !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link {
+  color: #9aa0a6 !important;
+  opacity: 1 !important;
+}
+
+[data-md-color-scheme="slate"] .md-tabs__link--active,
+[data-md-color-scheme="slate"] .md-tabs__link:hover {
+  color: #8ab4f8 !important;
+  border-bottom: 2px solid #8ab4f8 !important;
+}
+
+/* --------------------------------------------------------------------------
+   TYPOGRAPHY - GOOGLE SANS
+   -------------------------------------------------------------------------- */
 .md-typeset h1,
 .md-typeset h2,
 .md-typeset h3,

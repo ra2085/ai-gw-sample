@@ -21,11 +21,12 @@ theme:
     # Palette toggle for dark mode (Google Cloud Dark Charcoal Console)
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: slate
+      primary: black
       accent: indigo
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
+
 
   font:
     text: Google Sans Text
