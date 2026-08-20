@@ -22,10 +22,10 @@ The AI Gateway includes 17 specialized JavaScript callouts in `apiproxy/resource
 ### `anthropic_to_gemini.js`
 * **Purpose:** Converts Anthropic Claude requests (`/v1/messages`) to Google Gemini `generateContent` or `streamGenerateContent` format.
 * **Handles:**
-  * System instructions mapping (`system` string or content blocks $\to$ `systemInstruction.parts`).
-  * Message history and role mapping (`assistant` $\to$ `model`).
-  * Multimodal base64 image transcoding (`image/jpeg`, `image/png` $\to$ `inlineData`).
-  * Tool definitions and tool call invocations (`tool_use` $\to$ `functionCall`).
+  * System instructions mapping (`system` string or content blocks → `systemInstruction.parts`).
+  * Message history and role mapping (`assistant` → `model`).
+  * Multimodal base64 image transcoding (`image/jpeg`, `image/png` → `inlineData`).
+  * Tool definitions and tool call invocations (`tool_use` → `functionCall`).
   * Generation configs (`max_tokens`, `temperature`, `top_p`, `top_k`, `stop_sequences`).
 
 ### `gemini_to_anthropic_resp.js`
@@ -33,7 +33,7 @@ The AI Gateway includes 17 specialized JavaScript callouts in `apiproxy/resource
 * **Handles:**
   * Text content aggregation from candidates.
   * Function call translations to Anthropic `tool_use` blocks.
-  * Token usage mapping (`usageMetadata` $\to$ `usage.input_tokens`, `usage.output_tokens`).
+  * Token usage mapping (`usageMetadata` → `usage.input_tokens`, `usage.output_tokens`).
 
 ---
 
@@ -54,5 +54,11 @@ The AI Gateway includes 17 specialized JavaScript callouts in `apiproxy/resource
 ### `calculate_monetization_cost.js`
 * **Purpose:** Computes the micro-transaction charge for every API call.
 * **Formula:**
-  $$\text{Charged USD} = \left[ \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \right] \times \text{Markup}$$
+  ```text
+  Charged USD = [ (Prompt Tokens / 1,000,000 × Input Rate) + (Completion Tokens / 1,000,000 × Output Rate) ] × Markup
+  ```
+  $$
+  \text{Charged USD} = \left[ \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \right] \times \text{Markup}
+  $$
 * Populates `perUnitPriceMultiplier`, `currency`, and `tx_cost_usd` variables for Apigee Monetization.
+

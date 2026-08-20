@@ -21,9 +21,16 @@ Before dispatching expensive requests to Vertex AI, the gateway evaluates the de
 
 ## 2. Micro-Cost Calculation
 
-Executed in PostFlow response to calculate exact dollar costs:
+Executed in PostFlow response by `JS-calculate-monetization-cost` to calculate exact dollar charges:
 
-$$\text{Total Cost (USD)} = \left[ \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \right] \times \text{Markup}$$
+```text
+Total Cost (USD) = [ (Prompt Tokens / 1,000,000 × Input Rate) + (Completion Tokens / 1,000,000 × Output Rate) ] × Markup
+```
+
+$$
+\text{Total Cost (USD)} = \left[ \left( \frac{\text{Prompt Tokens}}{10^6} \times \text{Input Rate} \right) + \left( \frac{\text{Completion Tokens}}{10^6} \times \text{Output Rate} \right) \right] \times \text{Markup}
+$$
+
 
 ### Pricing Matrix (USD per 1,000,000 Tokens)
 

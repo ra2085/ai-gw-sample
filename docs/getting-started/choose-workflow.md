@@ -17,7 +17,7 @@ This repository provides two distinct, fully supported ways to work with the Api
     * **Configuration:** Single declarative `values.yaml` file.
     * **Tooling:** [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen).
     * **Capabilities:** Toggle features (Monetization, Model Armor, Judge, Quotas), add custom model URLs, and compile clean bundles on the fly.
-    * **Workflow:** `Edit values.yaml` $\to$ `apigee-go-gen render apiproxy` $\to$ `Deploy`.
+    * **Workflow:** `Edit values.yaml` → `apigee-go-gen render apiproxy` → `Deploy`.
 
     [Explore Template Guide :octicons-arrow-right-24:](../template-guide/configuration.md)
 
@@ -30,7 +30,8 @@ This repository provides two distinct, fully supported ways to work with the Api
     * **Configuration:** Direct access to 30+ XML policies, 4 TargetEndpoints, 4 ProxyEndpoints, and 17 JavaScript callouts.
     * **Tooling:** Standard Apigee bundle tools, `apigeecli`, and source control.
     * **Capabilities:** Deep customization of EventFlow SSE streaming, custom error traps, custom Java/Python callouts, and low-level HTTPTargetConnection tuning.
-    * **Workflow:** `Edit apiproxy/ XML/JS` $\to$ `Deploy with apigeecli`.
+    * **Workflow:** `Edit apiproxy/ XML/JS` → `Deploy with apigeecli`.
+
 
     [Explore Native Proxy Deep Dive :octicons-arrow-right-24:](../proxy-deep-dive/bundle-structure.md)
 

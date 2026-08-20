@@ -19,10 +19,11 @@ Clients can supply an abstract cost tier instead of hardcoding model names:
 }
 ```
 
-* `cost_tier: "low"` $\to$ **Gemini 3.1 Flash-Lite** (`global`)
-* `cost_tier: "medium"` $\to$ **Gemini 3.5 Flash** (`global`)
-* `cost_tier: "high"` $\to$ **Gemini 2.5 Pro** (`global`)
-* `cost_tier: "max"` $\to$ **Claude 4.5 Haiku** (`us-east5`)
+* `cost_tier: "low"` → **Gemini 3.1 Flash-Lite** (`global`)
+* `cost_tier: "medium"` → **Gemini 3.5 Flash** (`global`)
+* `cost_tier: "high"` → **Gemini 2.5 Pro** (`global`)
+* `cost_tier: "max"` → **Claude 4.5 Haiku** (`us-east5`)
+
 
 ---
 

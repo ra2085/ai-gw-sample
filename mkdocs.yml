@@ -60,7 +60,10 @@ markdown_extensions:
   - tables
   - footnotes
   - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
   - pymdownx.details
+
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
