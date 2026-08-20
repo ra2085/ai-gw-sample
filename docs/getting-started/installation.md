@@ -59,11 +59,11 @@ apigee-go-gen --help
     curl -L https://raw.githubusercontent.com/apigee/apigeecli/main/downloadLatest.sh | sh -s -- -v <version> -b /usr/local/bin
     ```
 
-=== "Homebrew (macOS)"
+=== "Homebrew (macOS / Linux)"
     ```bash
-    brew tap apigee/apigeecli
     brew install apigeecli
     ```
+
 
 === "From Source (with Go)"
     ```bash
