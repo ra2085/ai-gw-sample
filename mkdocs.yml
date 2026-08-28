@@ -107,6 +107,7 @@ nav:
   - 5. Operations & Observability:
       - Deployment Guide: operations/deployment.md
       - Telemetry & Data Collectors: operations/telemetry.md
+      - Looker Studio Cost Dashboard: operations/looker-studio-dashboard.md
 
 
 
