@@ -224,13 +224,12 @@ ProxyEndpoints:
                   .name: api.timeout
                   -Data: 300000
         - RouteRule:
-            - .name: claude
-              -Data:
-                - TargetEndpoint: claude
-                - Condition: route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"
-            - .name: gemini-native-target
-              -Data:
-                - TargetEndpoint: gemini-native-target
+            .name: claude
+            Condition: route_target = "claude" or proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"
+            TargetEndpoint: claude
+        - RouteRule:
+            .name: gemini-native-target
+            TargetEndpoint: gemini-native-target
   {{- end }}
 
   {{- if or (not $.Values.endpoints) (not $.Values.endpoints.openai_compat) (and $.Values.endpoints.openai_compat (ne $.Values.endpoints.openai_compat.enabled false)) }}
@@ -334,14 +333,12 @@ ProxyEndpoints:
                   .name: api.timeout
                   -Data: 300000
         - RouteRule:
-            - .name: claude
-              -Data:
-                - TargetEndpoint: claude
-                - Condition: (route_target = "claude") or (route_format = "anthropic")
+            .name: claude
+            Condition: (route_target = "claude") or (route_format = "anthropic")
+            TargetEndpoint: claude
         - RouteRule:
-            - .name: gemini-openai-compat
-              -Data:
-                - TargetEndpoint: gemini-openai-compat
+            .name: gemini-openai-compat
+            TargetEndpoint: gemini-openai-compat
   {{- end }}
 
 
@@ -478,7 +475,6 @@ TargetEndpoints:
       PreFlow:
         .name: PreFlow
         Request: {}
-        Response: {}
         Response: {}
       PostFlow:
         .name: PostFlow
