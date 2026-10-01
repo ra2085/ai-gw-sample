@@ -31,7 +31,7 @@ Below is the complete reference of the **51 default Apigee policies** in `apipro
 
 ---
 
-## 2. Quotas, Rate Limits, Team Budgets & Monetization
+## 2. Quotas, Rate Limits, Team Budgets & Invoice-Accurate Cost Attribution
 
 | Policy | Type | Description | Attachment Flow |
 | :--- | :--- | :--- | :--- |

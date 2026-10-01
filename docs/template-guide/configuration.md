@@ -24,26 +24,26 @@ gateway:
 
 ```yaml
 features:
-  # 1. Token Monetization & Micro-Cost Rating
+  # 1. Invoice-Accurate Cost Attribution
   monetization:
-    enabled: true                                     # Attaches MLC and cost calculation policies
+    enabled: true                                     # Calculates exact USD cost (cached & reasoning tokens) and checks prepaid balances
     default_currency: "USD"                           # Default currency code
     default_markup: 1.0                               # Default markup multiplier
 
   # 2. GCP Model Armor Prompt & Response Sanitization
   model_armor:
-    enabled: true                                     # Attaches SUP, SUPGemini, and SMR policies
+    enabled: true                                     # Screens prompts and responses via Google Cloud Model Armor
     project_id: "your-gcp-project-id"                 # GCP Project hosting the Model Armor template
     template_id: "filter"                             # Model Armor template ID
 
   # 3. Real-Time LLM Judge Classifier (auto:judge)
   llm_judge:
-    enabled: true                                     # Attaches SC-LLMJudge classifier callout
+    enabled: true                                     # Enables automatic prompt complexity classification
     classifier_model: "gemini-2.5-flash-lite"         # Fast model used for classification
 
   # 4. Rolling-Window Token Quotas & Team Budgets
   quotas:
-    enabled: true                                     # Attaches LTQ-EnforceOnly and LTQ-CountOnly
+    enabled: true                                     # Enforces AI Product rolling token quotas and per-model limits
     secondary_window:
       enabled: false                                  # Opt-in: 2nd rolling window (7-day cap OR shared Team Budget)
       allow_count: 1000000                            # Default fallback token limit
@@ -56,45 +56,45 @@ features:
   # 5. Burst & Concurrency Rate Limits (Opt-In)
   rate_limits:
     burst:
-      enabled: false                                  # Opt-in: injects SA-BurstRateLimit (SpikeArrest)
+      enabled: false                                  # Opt-in: smooths sudden request arrival spikes per user/agent
       rate: "600pm"                                   # Default fallback rate ("<N>ps" or "<N>pm")
       identifier_ref: "rate_limit_client_id"          # Per-client/user/agent spike smoothing
       use_effective_count: true                       # Synchronizes counters across runtime pods
     concurrency:
-      enabled: false                                  # Opt-in: injects Q-ConcurrencyLimit & RQ-ReleaseConcurrencySlot
+      enabled: false                                  # Opt-in: caps simultaneous in-flight requests/streams per client
       limit: 20                                       # Max simultaneous in-flight requests/streams per client
       identifier_ref: "rate_limit_client_id"
-      ttl_minutes: 1                                  # Dead-man switch auto-expiry for abandoned SSE streams
+      ttl_minutes: 1                                  # Auto-expiry for disconnected SSE streams
 
   # 6. CORS Support
   cors:
     enabled: true                                     # Emits CORS headers & handles OPTIONS preflight
 
-  # 7. Zero-Passthrough 4-Option Authentication & Persona Mapping
+  # 7. Authentication & AI Product Persona Mapping
   auth:
     enabled: true                                     # Enforces zero-passthrough authentication
     type: "apikey"                                    # Primary mode: apikey | oauth | multi
     allow_x_api_key_alias: true                       # Accepts both x-apikey and x-api-key (Anthropic/OpenAI SDKs)
     oauth:
-      enabled: true                                   # Enables Option 2: Native Apigee OAuthV2 (OA-VerifyAccessToken)
+      enabled: true                                   # Enables native Apigee OAuth 2.0 tokens
     agent_identity:
-      enabled: true                                   # Enables Option 3: GCP Agent Identity (ya29.* tokeninfo + L1 cache)
+      enabled: true                                   # Enables Google Cloud Agent Identity (ya29.* Service Account tokens)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
       cache_ttl_seconds: 300
     idp_opaque:
-      enabled: true                                   # Enables Option 4A: Enterprise IdP Opaque Token (RFC 7662 + Import)
+      enabled: true                                   # Enables Corporate SSO Opaque Tokens (RFC 7662 introspection)
       introspection_url: "https://idp.internal.corp/oauth2/introspect"
       auth_header: "Basic YXBpZ2VlLWdhdGV3YXk6c2VjcmV0"
       cache_ttl_seconds: 300
     idp_jwt:
-      enabled: true                                   # Enables Option 4B: Enterprise IdP JWT (JWKS + Import)
+      enabled: true                                   # Enables Corporate SSO JWTs (JWKS signature verification)
       jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
       issuer: ""                                      # Optional expected JWT iss claim
       audience: ""                                    # Optional expected JWT aud claim
     personas:
       claim_name: "groups"                            # JWT/Introspection claim holding user groups/roles
-      default_persona: "developer-default"            # Fallback persona when no group matches
-      mappings:                                       # Group -> Persona name:API_KEY_FOR_PERSONA_PRODUCT
+      default_persona: "developer-default"            # Fallback AI Product persona when no group matches
+      mappings:                                       # Group -> AI Product name:Consumer Key of that AI Product
         "ai-gateway-leads": "lead-ai-engineer:DEMO_KEY_LEAD_PERSONA"
         "ai-gateway-PowerUsers": "power-developer:DEMO_KEY_POWER_PERSONA"
         "ai-gateway-contractors": "contractor-restricted:DEMO_KEY_CONTRACTOR_PERSONA"
@@ -105,7 +105,7 @@ features:
 
 ## 3. Supported Ingress Endpoints (`endpoints`)
 
-All 5 ProxyEndpoints are enabled by default:
+All 5 client endpoints are enabled by default:
 
 ```yaml
 endpoints:
@@ -135,7 +135,7 @@ endpoints:
 
 ## 4. Models Catalog (`models`)
 
-Each entry in `models` registers a model in `/v1/models`, configures its routing target (`model_locations.properties`), and defines its token pricing (`monetization_rates.properties`):
+Each entry in `models` registers a model in `/v1/models`, configures its backend routing target, and defines its token pricing for **Invoice-Accurate Cost Attribution**:
 
 ```yaml
 models:

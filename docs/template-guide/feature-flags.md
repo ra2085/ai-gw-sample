@@ -13,7 +13,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.quotas.secondary_window.enabled`** | `false` | Adds a second rolling window for **Shared Team Budgets** or 7-day weekly caps. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.burst.enabled`** | `false` | Smooths sudden request-per-second/minute spikes per user or agent. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
-| **`features.monetization.enabled`** | `true` | Calculates real-time USD cost (including cached & reasoning tokens) and checks prepaid balances. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and checks prepaid balances. | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.model_armor.enabled`** | `true` | Screens prompts and responses for PII, secrets, and prompt injection via GCP Model Armor. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.cors.enabled`** | `true` | Adds CORS headers and `OPTIONS` preflight support for browser-based applications. | [`values.yaml` Reference](configuration.md) |
@@ -23,7 +23,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 ## Minimal vs. Full Enterprise Feature Configuration
 
 === "Minimal (Default Quickstart)"
-    If you omit the `features:` block in `values.yaml`, sensible defaults are applied automatically. To disable optional external dependencies (like Model Armor or Monetization) during initial testing:
+    If you omit the `features:` block in `values.yaml`, sensible defaults are applied automatically. To disable optional external dependencies (like Model Armor or Invoice-Accurate Cost Attribution) during initial testing:
 
     ```yaml
     features:
@@ -40,7 +40,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
     ```
 
 === "Full Enterprise Governance"
-    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Cache-Aware Cost Attribution, and Model Armor:
+    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, and Model Armor:
 
     ```yaml
     features:

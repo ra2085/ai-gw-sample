@@ -3,7 +3,7 @@
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-A declarative **Enterprise AI Gateway framework** on Google Cloud Apigee. Define your models, **AI Products** (personas and tenant boundaries), authentication, token quotas, and routing rules in a single `values.yaml` file—without writing or maintaining raw Apigee XML policies.
+A declarative **Enterprise AI Gateway framework** on Google Cloud Apigee. Define your models, **AI Products** (personas and tenant boundaries), authentication, token quotas, **Invoice-Accurate Cost Attribution**, and routing rules in a single `values.yaml` file—without writing or maintaining raw Apigee XML policies.
 
 Full documentation is available at **[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**.
 
@@ -89,6 +89,6 @@ The documentation is organized into four task-oriented sections:
 | Section | Guides | What You Will Find |
 | :--- | :--- | :--- |
 | **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal 15-line YAML quickstart, and one-time CLI/IAM setup. |
-| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI multi-tenancy, token budgets, and Model Armor. |
+| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI multi-tenancy, token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
 | **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md)<br>• [Extending the Proxy (Advanced)](docs/getting-started/choose-workflow.md) | Complete schema table, feature toggles, client SDK compatibility matrix, and advanced internal proxy reference. |
 | **4. Analytics & Operations** | • [Telemetry & Headers](docs/operations/telemetry.md)<br>• [Looker Studio Cost Dashboard](docs/operations/looker-studio-dashboard.md)<br>• [Testing & CI/CD Validation](docs/operations/deployment.md) | Response headers (`X-Gateway-*`, `X-RateLimit-*`), BigQuery / Looker Studio executive cost reporting, and automated test suites. |

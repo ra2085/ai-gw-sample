@@ -16,7 +16,7 @@ This repository provides two distinct, fully supported ways to work with the Api
 
     * **Configuration:** Single declarative `values.yaml` file.
     * **Tooling:** [`apigee-go-gen`](https://github.com/apigee/apigee-go-gen).
-    * **Capabilities:** Toggle features (Monetization, Model Armor, Judge, Quotas), add custom model URLs, and compile clean bundles on the fly.
+    * **Capabilities:** Toggle features (Invoice-Accurate Cost Attribution, Model Armor, Judge, Quotas), add custom model URLs, and compile clean bundles on the fly.
     * **Workflow:** `Edit values.yaml` → `apigee-go-gen render apiproxy` → `Deploy`.
 
     [Explore Template Guide](../template-guide/configuration.md)

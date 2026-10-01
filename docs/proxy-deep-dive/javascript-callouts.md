@@ -41,7 +41,7 @@ The AI Gateway includes **20 specialized JavaScript callouts** in `apiproxy/reso
 
 ---
 
-## 4. Streaming, Monetization & Error Formatting
+## 4. Streaming, Invoice-Accurate Cost Attribution & Error Formatting
 
 | Script | Policy | Purpose |
 | :--- | :--- | :--- |

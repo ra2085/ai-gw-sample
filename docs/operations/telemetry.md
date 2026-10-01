@@ -43,7 +43,7 @@ X-RateLimit-Remaining-Tokens-Secondary: 9842000
 
 ## 2. Apigee Analytics Data Collectors (All 9 Required)
 
-Both `DC-CaptureTokenCountsNonStreaming` (`PostFlow`) and `DC-CaptureTokenCountsStreaming` (`EventFlow`) populate **9 Data Collectors** on every request so you can build custom Apigee Analytics reports grouped by **Model**, **Developer**, **User (`dc_identity_user_id`)**, **Persona (`dc_identity_persona`)**, or **Team/Department (`dc_identity_team`)**:
+The gateway populates **9 Data Collectors** on every non-streaming and streaming request so you can build custom Apigee Analytics and Looker Studio reports grouped by **Model**, **Developer**, **User (`dc_identity_user_id`)**, **AI Product Persona (`dc_identity_persona`)**, or **Team/Department (`dc_identity_team`)**:
 
 | Data Collector | Type | Flow Variable Source | Description |
 | :--- | :---: | :--- | :--- |
@@ -52,7 +52,7 @@ Both `DC-CaptureTokenCountsNonStreaming` (`PostFlow`) and `DC-CaptureTokenCounts
 | **`dc_total_token_count`** | `INTEGER` | `usage_total_tokens` | Total tokens consumed (`prompt + completion + reasoning`). |
 | **`dc_model`** | `STRING` | `model` | Effective backend model that processed the request. |
 | **`dc_requested_model`** | `STRING` | `requested_model` | Original client-requested model, alias, or `auto:judge`. |
-| **`dc_tx_cost_usd`** | `FLOAT` | `tx_cost_usd` | Exact micro-transaction cost in USD (cache- & reasoning-aware). |
+| **`dc_tx_cost_usd`** | `FLOAT` | `tx_cost_usd` | Exact USD cost calculated via **Invoice-Accurate Cost Attribution**. |
 | **`dc_identity_user_id`** | `STRING` | `identity_user_id` | Authenticated human user (`sub`/`email`), GCP Service Account, or App ID. |
-| **`dc_identity_persona`** | `STRING` | `identity_persona` | Mapped enterprise persona (`lead-ai-engineer`, `power-developer`, etc.). |
+| **`dc_identity_persona`** | `STRING` | `identity_persona` | Mapped AI Product persona (`lead-ai-engineer`, `power-developer`, etc.). |
 | **`dc_identity_team`** | `STRING` | `identity_team` | Department / cost-center / team attribute (`eng-ml`, `platform`, etc.). |

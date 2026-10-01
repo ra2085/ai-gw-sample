@@ -64,11 +64,11 @@ Click any tab below to see how to configure that control on your **AI Products**
 
 ---
 
-## 2. Invoice-Accurate Cost Attribution & Monetization
+## 2. Invoice-Accurate Cost Attribution
 
 Modern LLMs bill differently for **standard input tokens**, **cached prompt reads**, **cache creation writes**, and **internal reasoning/thinking tokens**.
 
-When `features.monetization.enabled: true` is set, the gateway automatically calculates the exact USD micro-cost of every request (both non-streaming and streaming) using the rates defined on each model in `values.yaml`:
+When `features.monetization.enabled: true` is set, the gateway automatically performs **Invoice-Accurate Cost Attribution** on every request (both non-streaming and streaming) using the rates defined on each model in `values.yaml`:
 
 ```yaml
 models:
@@ -84,6 +84,6 @@ models:
       markup: 1.0                 # Optional markup multiplier
 ```
 
-* **Chargeback & Showback Analytics:** Every transaction records its USD cost (`dc_tx_cost_usd`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
-* **Prepaid Wallet Enforcement:** If you use Apigee Monetization prepaid wallets, accounts with depleted balances are automatically blocked before calling the upstream model provider.
+* **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
+* **Prepaid Balance Enforcement:** Accounts with depleted prepaid balances are automatically blocked before calling the upstream model provider.
 
