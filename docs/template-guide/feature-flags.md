@@ -91,6 +91,6 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       llm_judge:
         enabled: true
-        classifier_model: "gemini-2.5-flash-lite"
+        classifier_model: "gemini-3.1-flash-lite"
     ```
 

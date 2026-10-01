@@ -15,9 +15,9 @@ Instead of managing per-user rules or separate proxies for every model provider,
 
 | AI Product Example | Target Consumers | Allowed Models | Default Token Quota |
 | :--- | :--- | :--- | :--- |
-| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Codex`) | All models (including `claude-opus-4-6` & `gemini-2.5-pro`) | 500,000 tokens / 4 hours |
-| **`power-developer`** | Senior Developers | `claude-sonnet-4-6`, `gemini-2.5-pro`, `gemini-2.5-flash` | 200,000 tokens / 4 hours |
-| **`developer-default`** | Standard Engineering Org | Fast / Economy models (`gemini-2.5-flash`, `claude-haiku-4-5`) | 50,000 tokens / 4 hours |
+| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Codex`) | All models (including `claude-opus-4-6` & `gemini-3.1-pro-preview`) | 500,000 tokens / 4 hours |
+| **`power-developer`** | Senior Developers | `claude-sonnet-4-6`, `gemini-3.1-pro-preview`, `gemini-3.5-flash` | 200,000 tokens / 4 hours |
+| **`developer-default`** | Standard Engineering Org | Fast / Economy models (`gemini-3.5-flash`, `claude-haiku-4-5`) | 50,000 tokens / 4 hours |
 | **`autonomous-agent`** | CI/CD Pipelines & Cloud Run Agents | Approved workflow models + shared department budget | 1,000,000 tokens / hour |
 
 With 3–5 AI Products, you can govern **10,000+ developers and autonomous agents** while enforcing isolated per-user token counters, shared team budgets, and per-department backend credentials (such as separate OpenAI API keys per business unit).
@@ -36,8 +36,8 @@ gateway:
   project_id: "your-gcp-project-id"
 
 models:
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
     publisher: "google"
     format: "gemini"
     region: "global"
@@ -56,7 +56,7 @@ models:
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
 ```
 
-### 2. Render, Validate & Deploy
+### 2. Render & Deploy
 
 ```bash
 # 1. Compile the Apigee proxy bundle from YAML
@@ -65,10 +65,7 @@ apigee-go-gen render apiproxy \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
 
-# 2. Validate locally
-./tests/scripts/test_template.sh && ./tests/scripts/test_quickstart.sh
-
-# 3. Deploy to Apigee X / Hybrid
+# 2. Deploy to Apigee X / Hybrid
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
@@ -90,5 +87,5 @@ The documentation is organized into four task-oriented sections:
 | :--- | :--- | :--- |
 | **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal 15-line YAML quickstart, and one-time CLI/IAM setup. |
 | **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI multi-tenancy, token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
-| **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md)<br>• [Extending the Proxy (Advanced)](docs/getting-started/choose-workflow.md) | Complete schema table, feature toggles, client SDK compatibility matrix, and advanced internal proxy reference. |
-| **4. Analytics & Operations** | • [Telemetry & Headers](docs/operations/telemetry.md)<br>• [Looker Studio Cost Dashboard](docs/operations/looker-studio-dashboard.md)<br>• [Testing & CI/CD Validation](docs/operations/deployment.md) | Response headers (`X-Gateway-*`, `X-RateLimit-*`), BigQuery / Looker Studio executive cost reporting, and automated test suites. |
+| **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md) | Complete schema table, feature toggles, and client SDK compatibility matrix. |
+| **4. Analytics & Operations** | • [Telemetry & Headers](docs/operations/telemetry.md)<br>• [Analytics & Looker Studio Reports](docs/operations/looker-studio-dashboard.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Response headers (`X-Gateway-*`, `X-RateLimit-*`), Looker Studio reporting (tokenomics, team/peer insights, security & quota governance, Judge ROI), and CI/CD deployment. |

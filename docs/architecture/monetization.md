@@ -12,7 +12,7 @@ Click any tab below to see how to configure that control on your **AI Products**
     **What it does:** Sets a rolling token allowance (for example, `500,000 tokens per 4 hours`) for each individual user belonging to an **AI Product**.
 
     * **Standard AI Product Quota:** Set the LLM Token Quota directly on the Apigee API Product. Every user mapped to that product receives their own isolated rolling counter.
-    * **Per-Model Quota:** Want to cap expensive frontier models (such as `claude-opus-4-6` or `gpt-5.4` at `50,000 tokens / 4h`) while leaving fast models (`gemini-2.5-flash-lite`) unlimited? Add a model-specific **LLM Operation Quota** on the API Product. Unquoted models automatically run without throttling.
+    * **Per-Model Quota:** Want to cap expensive frontier models (such as `claude-opus-4-6` or `gpt-5.4` at `50,000 tokens / 4h`) while leaving fast models (`gemini-3.1-flash-lite`) unlimited? Add a model-specific **LLM Operation Quota** on the API Product. Unquoted models automatically run without throttling.
 
     ```yaml
     features:
@@ -72,15 +72,15 @@ When `features.monetization.enabled: true` is set, the gateway automatically per
 
 ```yaml
 models:
-  - name: "claude-sonnet-4-5"
+  - name: "claude-sonnet-4-6"
     publisher: "anthropic"
     format: "anthropic"
-    region: "us-east5"
+    region: "global"              # Global base pricing (use 1.1x rates for regional endpoints like "us-east5")
     pricing:
-      input_rate: 3.000           # USD per 1M uncached input tokens
-      output_rate: 15.000         # USD per 1M output & reasoning tokens
-      cache_read_rate: 0.300      # USD per 1M cached prompt read tokens (0.10x)
-      cache_write_rate: 3.750     # USD per 1M cache creation tokens (1.25x)
+      input_rate: 3.000           # $3.00 per 1M uncached input tokens ($3.30 regional)
+      output_rate: 15.000         # $15.00 per 1M output & reasoning tokens ($16.50 regional)
+      cache_read_rate: 0.300      # $0.30 per 1M cached prompt read tokens (0.10x)
+      cache_write_rate: 3.750     # $3.75 per 1M 5-minute cache write tokens (1.25x)
       markup: 1.0                 # Optional markup multiplier
 ```
 

@@ -39,7 +39,7 @@ features:
   # 3. Real-Time LLM Judge Classifier (auto:judge)
   llm_judge:
     enabled: true                                     # Enables automatic prompt complexity classification
-    classifier_model: "gemini-2.5-flash-lite"         # Fast model used for classification
+    classifier_model: "gemini-3.1-flash-lite"         # Fast model used for classification
 
   # 4. Rolling-Window Token Quotas & Team Budgets
   quotas:
@@ -78,7 +78,7 @@ features:
     oauth:
       enabled: true                                   # Enables native Apigee OAuth 2.0 tokens
     agent_identity:
-      enabled: true                                   # Enables Google Cloud Agent Identity (ya29.* Service Account tokens)
+      enabled: true                                   # Enables Google Cloud Agents (Agent Identity, Service Accounts via ya29.* tokens)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
       cache_ttl_seconds: 300
     idp_opaque:
@@ -139,12 +139,12 @@ Each entry in `models` registers a model in `/v1/models`, configures its backend
 
 ```yaml
 models:
-  - name: "gemini-2.5-pro"                            # Unique model identifier
-    displayName: "Gemini 2.5 Pro"                     # Catalog display name
+  - name: "gemini-3.1-pro-preview"                    # Unique model identifier
+    displayName: "Gemini 3.1 Pro Preview"             # Catalog display name
     publisher: "google"                               # google | anthropic | openai | meta | mistralai | custom
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
     region: "global"                                  # Region: global | us-east5 | us-central1 | europe-west1
-    created_at: "2025-05-01T00:00:00Z"                # ISO timestamp for /v1/models
+    created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
     custom_url: ""                                    # Optional: full URL for OpenAI, Azure, vLLM, or DeepSeek
     auth:                                             # Optional: upstream auth for custom_url
       type: "bearer"                                  # bearer | header | none
@@ -152,10 +152,10 @@ models:
       token: ""
       token_ref: "propertyset.config.openai_api_key"
     pricing:
-      input_rate: 1.250                               # USD per 1M uncached prompt tokens
-      output_rate: 10.000                             # USD per 1M completion & reasoning tokens
-      cache_read_rate: 0.3125                         # Optional: USD per 1M cached input tokens (e.g. 0.25x)
-      cache_write_rate: 1.5625                        # Optional: USD per 1M cache creation tokens (e.g. 1.25x)
+      input_rate: 2.000                               # USD per 1M uncached prompt tokens (<= 200K context)
+      output_rate: 12.000                             # USD per 1M completion & reasoning tokens
+      cache_read_rate: 0.200                          # Optional: USD per 1M cached input tokens (0.10x)
+      cache_write_rate: 2.500                         # Optional: USD per 1M cache creation tokens (e.g. 1.25x on Claude/OpenAI)
       markup: 1.0                                     # Optional per-model markup multiplier
 ```
 
@@ -166,20 +166,20 @@ models:
 ```yaml
 routing:
   tiers:
-    low: "gemini-2.5-flash-lite"                      # X-Model-Cost-Tier: low
-    medium: "gemini-2.5-flash"                        # X-Model-Cost-Tier: medium
-    high: "gemini-2.5-pro"                            # X-Model-Cost-Tier: high
-    max: "claude-sonnet-4-5"                          # X-Model-Cost-Tier: max
+    low: "gemini-3.1-flash-lite"                      # X-Model-Cost-Tier: low
+    medium: "gemini-3.5-flash"                        # X-Model-Cost-Tier: medium
+    high: "gemini-3.1-pro-preview"                    # X-Model-Cost-Tier: high
+    max: "claude-sonnet-4-6"                          # X-Model-Cost-Tier: max
   tasks:
-    coding: "gemini-2.5-pro"                          # Classifier task: coding
-    reasoning: "gemini-2.5-pro"                       # Classifier task: reasoning
-    creative_writing: "claude-sonnet-4-5"             # Classifier task: creative_writing
-    summarization: "gemini-2.5-flash-lite"            # Classifier task: summarization
-    extraction: "gemini-2.5-flash-lite"               # Classifier task: extraction
-    simple_chat: "gemini-2.5-flash"                   # Classifier task: simple_chat
+    coding: "gemini-3.1-pro-preview"                  # Classifier task: coding
+    reasoning: "gemini-3.1-pro-preview"               # Classifier task: reasoning
+    creative_writing: "claude-sonnet-4-6"             # Classifier task: creative_writing
+    summarization: "gemini-3.1-flash-lite"            # Classifier task: summarization
+    extraction: "gemini-3.1-flash-lite"               # Classifier task: extraction
+    simple_chat: "gemini-3.5-flash"                   # Classifier task: simple_chat
   aliases:
-    "gpt-5.4": "gemini-2.5-pro"                       # Rewrite alias
-    "gpt-5.4-mini": "gemini-2.5-flash-lite"
-    "claude-3-5-sonnet": "claude-sonnet-4-5"
+    "gpt-5.4": "gemini-3.1-pro-preview"               # Rewrite alias
+    "gpt-5.4-mini": "gemini-3.1-flash-lite"
+    "claude-3-5-sonnet": "claude-sonnet-4-6"
 ```
 

@@ -11,7 +11,7 @@ HTTP/1.1 200 OK
 Content-Type: application/json
 # 1. Routing & Identity Attribution
 X-Gateway-Requested-Model: auto:judge
-X-Gateway-Routed-Model: gemini-2.5-pro
+X-Gateway-Routed-Model: gemini-3.1-pro-preview
 X-Gateway-Cost-Tier: high
 X-Gateway-Auth-Method: idp_jwt
 X-Gateway-User-Id: alice@corp.com
@@ -53,6 +53,6 @@ The gateway populates **9 Data Collectors** on every non-streaming and streaming
 | **`dc_model`** | `STRING` | `model` | Effective backend model that processed the request. |
 | **`dc_requested_model`** | `STRING` | `requested_model` | Original client-requested model, alias, or `auto:judge`. |
 | **`dc_tx_cost_usd`** | `FLOAT` | `tx_cost_usd` | Exact USD cost calculated via **Invoice-Accurate Cost Attribution**. |
-| **`dc_identity_user_id`** | `STRING` | `identity_user_id` | Authenticated human user (`sub`/`email`), GCP Service Account, or App ID. |
+| **`dc_identity_user_id`** | `STRING` | `identity_user_id` | Authenticated human user (`sub`/`email`), Google Cloud Agent (Agent Identity, Service Account), or App ID. |
 | **`dc_identity_persona`** | `STRING` | `identity_persona` | Mapped AI Product persona (`lead-ai-engineer`, `power-developer`, etc.). |
 | **`dc_identity_team`** | `STRING` | `identity_team` | Department / cost-center / team attribute (`eng-ml`, `platform`, etc.). |

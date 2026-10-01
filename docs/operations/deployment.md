@@ -1,12 +1,12 @@
-# Deployment & Testing Guide
+# CI/CD & Deployment Guide
 
-Follow these steps to validate, deploy, and test the AI Gateway in CI/CD or production.
+Follow these steps to render, validate, and deploy the AI Gateway in CI/CD or production environments.
 
 ---
 
 ## 1. Create Required Data Collectors (Once per Organization)
 
-Apigee requires the following **9 Data Collectors** to record token metrics, billing telemetry, and identity attribution (`user_id`, `persona`, `team`):
+Apigee requires the following **9 Data Collectors** to record token metrics, cost attribution telemetry, and identity dimensions (`user_id`, `persona`, `team`):
 
 ```bash
 for dc in \
@@ -26,24 +26,23 @@ done
 
 ---
 
-## 2. Offline Template & Runtime Validation (Pre-Deploy CI/CD)
+## 2. Dry-Run Template Validation (Pre-Deploy CI/CD)
 
-Before deploying to Apigee, run the offline validation suites to verify template rendering, XML policy integrity, cross-protocol JS transcoding, 4-Option Auth, and Per-Model/Team/Exception Quotas:
+Before packaging and deploying to Apigee, validate that your `values.yaml` configuration renders cleanly using `apigee-go-gen --dry-run xml`:
 
 ```bash
-# 1. Validate full enterprise template (8 test suites including JS runtime simulation)
-./tests/scripts/test_template.sh
-
-# 2. Validate 15-line minimal quickstart template
-./tests/scripts/test_quickstart.sh
+apigee-go-gen render apiproxy \
+    --template ./templates/ai-gateway/apiproxy.yaml \
+    --values ./templates/ai-gateway/values.yaml \
+    --dry-run xml
 ```
 
 ---
 
-## 3. Deploy Generated Proxy Bundle
+## 3. Render & Deploy Proxy Bundle
 
 > [!IMPORTANT]
-> **Service Account Prerequisite**: Because the proxy's TargetEndpoints and Google Cloud features (Model Armor, LLM Judge) authenticate using Google Cloud IAM tokens, you must attach a Service Account with `roles/aiplatform.user` (and `roles/modelarmor.user` if Model Armor is enabled) at deploy time using `-s "$SERVICE_ACCOUNT"`.
+> **Service Account Prerequisite**: Because the gateway's upstream targets and Google Cloud features (Model Armor, LLM Judge) authenticate using Google Cloud IAM tokens, attach a Service Account with `roles/aiplatform.user` (and `roles/modelarmor.user` if Model Armor is enabled) at deploy time using `-s "$SERVICE_ACCOUNT"`.
 
 ```bash
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -68,19 +67,23 @@ apigeecli apis create bundle \
 
 ---
 
-## 4. Run End-to-End Live Test Suites
+## 4. Verify the Deployment
 
-Once deployed, run the automated live verification scripts against your Apigee hostname:
+Once deployed, verify your model catalog and inspect the `X-Gateway-*` response headers using `curl`:
 
 ```bash
-# Master end-to-end test suite
-./tests/scripts/test_all.sh "$APIGEE_HOST" "$API_KEY" "$PROJECT_ID"
+# 1. Verify the dynamic model catalog
+curl -s "https://$APIGEE_HOST/v1/models" \
+  -H "x-api-key: $API_KEY" | jq .
 
-# Targeted feature test suites
-./tests/scripts/test_smart_routing.sh "$APIGEE_HOST" "$API_KEY"
-./tests/scripts/test_judge.sh "$APIGEE_HOST" "$API_KEY" "$PROJECT_ID"
-./tests/scripts/test_monetization.sh "$APIGEE_HOST" "$API_KEY"
-./tests/scripts/test_quota.sh "$APIGEE_HOST" "$API_KEY"
-./tests/scripts/test_model_armor.sh "$APIGEE_HOST" "$API_KEY"
+# 2. Send a test request and inspect X-Gateway-* telemetry headers
+curl -i -X POST "https://$APIGEE_HOST/v1/messages" \
+  -H "x-api-key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-3.5-flash",
+    "max_tokens": 128,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
 ```
 

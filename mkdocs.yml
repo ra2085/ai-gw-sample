@@ -91,14 +91,8 @@ nav:
       - values.yaml Reference: template-guide/configuration.md
       - Feature Toggles: template-guide/feature-flags.md
       - Client Endpoints & Protocols: architecture/protocols.md
-      - Extending the Proxy (Advanced):
-          - Workflow Options: getting-started/choose-workflow.md
-          - Bundle Structure: proxy-deep-dive/bundle-structure.md
-          - Targets & Upstream Auth: proxy-deep-dive/targets-and-routing.md
-          - Policies Catalog: proxy-deep-dive/policies-reference.md
-          - JavaScript Callouts: proxy-deep-dive/javascript-callouts.md
   - Analytics & Operations:
       - Telemetry & Headers: operations/telemetry.md
-      - Looker Studio Cost Dashboard: operations/looker-studio-dashboard.md
-      - Testing & CI/CD Validation: operations/deployment.md
+      - Analytics & Looker Studio Reports: operations/looker-studio-dashboard.md
+      - CI/CD & Deployment: operations/deployment.md
 

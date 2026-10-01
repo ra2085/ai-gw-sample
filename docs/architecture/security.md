@@ -10,10 +10,10 @@ Instead of configuring settings for one user at a time, you define a small set o
 
 | AI Product Example | Target Persona / Tenant | Allowed Models | Default Guardrails |
 | :--- | :--- | :--- | :--- |
-| **`lead-ai-engineer`** | Principal Engineers & AI Researchers | All Frontier Models (`claude-opus-4-6`, `gemini-2.5-pro`, `gpt-5.4`) | **2M tokens / 4h** per user |
-| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Codex`) | Coding & Reasoning Models (`claude-sonnet-4-5`, `gemini-2.5-pro`) | **500k tokens / 4h** per user |
-| **`developer-default`** | Knowledge Workers & Internal Portals | Fast, Cost-Efficient Models (`gemini-2.5-flash`, `claude-haiku-4-5`) | **100k tokens / 4h** per user |
-| **`autonomous-agent`** | Cloud Run / Vertex AI Production Agents | Scoped Task Models (`gemini-2.5-flash-lite`, `text-embedding-005`) | **Dedicated service quota** & burst limit |
+| **`lead-ai-engineer`** | Principal Engineers & AI Researchers | All Frontier Models (`claude-opus-4-6`, `gemini-3.1-pro-preview`, `gpt-5.4`) | **2M tokens / 4h** per user |
+| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Codex`) | Coding & Reasoning Models (`claude-sonnet-4-6`, `gemini-3.1-pro-preview`) | **500k tokens / 4h** per user |
+| **`developer-default`** | Knowledge Workers & Internal Portals | Fast, Cost-Efficient Models (`gemini-3.5-flash`, `claude-haiku-4-5`) | **100k tokens / 4h** per user |
+| **`autonomous-agent`** | Cloud Run / Vertex AI Production Agents | Scoped Task Models (`gemini-3.1-flash-lite`, `text-embedding-005`) | **Dedicated service quota** & burst limit |
 
 ### How AI Products Simplify Operations
 * **Define Once, Apply Everywhere:** Model access, token limits, and department budgets are configured once on the **AI Product**.
@@ -73,13 +73,13 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     curl -X POST "https://$APIGEE_HOSTNAME/v1/messages" \
       -H "x-api-key: $API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"model": "gemini-2.5-flash", "max_tokens": 256, "messages": [{"role": "user", "content": "Hello"}]}'
+      -d '{"model": "gemini-3.5-flash", "max_tokens": 256, "messages": [{"role": "user", "content": "Hello"}]}'
     ```
 
-=== "Google Cloud Agents (Service Accounts)"
-    **Best for:** Autonomous agents and microservices running on Vertex AI Agent Engine, Cloud Run, or GKE using Google Cloud Service Accounts.
+=== "Google Cloud Agents (Agent Identity, Service Accounts)"
+    **Best for:** Autonomous agents and microservices running on Vertex AI Agent Engine, Cloud Run, or GKE using Google Cloud Agent Identity or Service Accounts.
 
-    Workloads present their standard Google Cloud access token (`Authorization: Bearer ya29...`). The gateway verifies the token with Google Cloud IAM, caches it for `< 1ms` repeat lookups, and maps the service account to your **Agent AI Product**:
+    Workloads present their standard Google Cloud access token (`Authorization: Bearer ya29...`). The gateway verifies the token with Google Cloud IAM, caches it for `< 1ms` repeat lookups, and maps the agent identity or service account to your **Agent AI Product**:
 
     ```yaml
     features:
@@ -94,7 +94,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     curl -X POST "https://$APIGEE_HOSTNAME/v1/chat/completions" \
       -H "Authorization: Bearer $(gcloud auth print-access-token)" \
       -H "Content-Type: application/json" \
-      -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Summarize status."}]}'
+      -d '{"model": "gemini-3.5-flash", "messages": [{"role": "user", "content": "Summarize status."}]}'
     ```
 
 === "Apigee OAuth 2.0"

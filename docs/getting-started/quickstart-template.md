@@ -20,8 +20,8 @@ gateway:
 
 models:
   # 1. Google Gemini on Vertex AI
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
     publisher: "google"
     format: "gemini"
     region: "global"
@@ -83,7 +83,7 @@ Once deployed, developers can call any model in your catalog using their preferr
       -H "x-api-key: $API_KEY" \
       -H "Content-Type: application/json" \
       -d '{
-        "model": "gemini-2.5-flash",
+        "model": "gemini-3.5-flash",
         "max_tokens": 256,
         "messages": [{"role": "user", "content": "Explain quantum computing in one sentence."}]
       }'

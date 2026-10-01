@@ -15,12 +15,12 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     ```yaml
     routing:
       aliases:
-        "gpt-5.4": "gemini-2.5-pro"
-        "gpt-5.4-mini": "gemini-2.5-flash-lite"
-        "claude-3-5-sonnet": "claude-sonnet-4-5"
+        "gpt-5.4": "gemini-3.1-pro-preview"
+        "gpt-5.4-mini": "gemini-3.1-flash-lite"
+        "claude-3-5-sonnet": "claude-sonnet-4-6"
     ```
 
-    When a client requests `"model": "gpt-5.4"`, the gateway transparently routes the call to `gemini-2.5-pro` while recording both the requested alias (`X-Gateway-Requested-Model`) and the actual model used (`X-Gateway-Routed-Model`).
+    When a client requests `"model": "gpt-5.4"`, the gateway transparently routes the call to `gemini-3.1-pro-preview` while recording both the requested alias (`X-Gateway-Requested-Model`) and the actual model used (`X-Gateway-Routed-Model`).
 
 === "Cost Tiers (`low`, `medium`, `high`, `max`)"
     **Best for:** Decoupling applications from specific model versions so platform teams can upgrade underlying models centrally.
@@ -29,10 +29,10 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     ```yaml
     routing:
       tiers:
-        low: "gemini-2.5-flash-lite"
-        medium: "gemini-2.5-flash"
-        high: "gemini-2.5-pro"
-        max: "claude-sonnet-4-5"
+        low: "gemini-3.1-flash-lite"
+        medium: "gemini-3.5-flash"
+        high: "gemini-3.1-pro-preview"
+        max: "claude-sonnet-4-6"
     ```
 
     Clients can request a tier using `"model": "auto:low"`, the `X-Model-Cost-Tier: low` header, or `"plugins": [{"id": "auto-router", "cost_tier": "low"}]`.
@@ -45,15 +45,15 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     features:
       llm_judge:
         enabled: true
-        classifier_model: "gemini-2.5-flash-lite"
+        classifier_model: "gemini-3.1-flash-lite"
 
     routing:
       tasks:
-        coding: "gemini-2.5-pro"
-        reasoning: "gemini-2.5-pro"
-        creative_writing: "claude-sonnet-4-5"
-        summarization: "gemini-2.5-flash-lite"
-        simple_chat: "gemini-2.5-flash"
+        coding: "gemini-3.1-pro-preview"
+        reasoning: "gemini-3.1-pro-preview"
+        creative_writing: "claude-sonnet-4-6"
+        summarization: "gemini-3.1-flash-lite"
+        simple_chat: "gemini-3.5-flash"
     ```
 
     Clients simply pass `"model": "auto:judge"` (or header `X-Gateway-Judge: true`).
@@ -64,7 +64,7 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     Clients pass a `models` array in the request body, and the gateway selects the first configured and available model:
     ```json
     {
-      "models": ["claude-sonnet-4-5", "gemini-2.5-pro", "gemini-2.5-flash"],
+      "models": ["claude-sonnet-4-6", "gemini-3.1-pro-preview", "gemini-3.5-flash"],
       "messages": [{"role": "user", "content": "Analyze this quarterly report."}]
     }
     ```
