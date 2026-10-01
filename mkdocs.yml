@@ -96,7 +96,7 @@ nav:
       - Protocol Normalization & Embeddings: architecture/protocols.md
       - Bundle Structure & Execution Flow: proxy-deep-dive/bundle-structure.md
       - Policies Reference Catalog: proxy-deep-dive/policies-reference.md
-      - JavaScript Callouts & Memory Safety: proxy-deep-dive/javascript-callouts.md
+      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
       - Targets & Upstream Auth: proxy-deep-dive/targets-and-routing.md
   - 5. Operations & Observability:
       - Deployment & Testing Guide: operations/deployment.md

@@ -19,7 +19,7 @@ graph LR
 | :--- | :--- | :--- |
 | **Stage 1: Deploy in 5 Minutes** | Point Claude Code, Codex, OpenAI SDK, or Vertex ADK to Apigee with zero code changes. | **[5-Minute Quickstart](getting-started/quickstart-template.md)** |
 | **Stage 2: Add Models & Endpoints** | Connect Vertex Gemini/Claude, Vertex MaaS (`meta/`, `mistralai/`), Direct OpenAI, self-hosted vLLM, and `/v1/embeddings`. | **[Models & Custom URLs](template-guide/custom-urls.md)** |
-| **Stage 3: Enterprise Identity & Personas** | Map IdP roles (Okta/Ping/Entra) and GCP Agents (`ya29.*`) to **Persona API Products** (`knowledge-worker`, `developer`, `it`, `agent`) with `<1ms` L1 cache hits. | **[Authentication & Persona Tiers](architecture/security.md)** |
+| **Stage 3: API Products & Persona Auth** | Govern **10,000+ users and agents with just 3–5 Apigee API Products** (avoiding high-cardinality per-user provisioning) while keeping isolated per-user quota buckets (`<1ms` L1 cache). | **[API Products & Persona Auth](architecture/security.md)** |
 | **Stage 4: Quotas, Rate Limits & Cost** | Enforce Per-Model Quotas, 4h/7d Windows, Shared Team Budgets, Time-Bound Exceptions, Burst/Concurrency Limits, and Cache-Aware Monetization. | **[Quotas, Budgets & Cost](architecture/monetization.md)** |
 | **Stage 5: Smart Routing & Safety** | Classify prompt complexity dynamically (`auto:judge`) and sanitize prompts/responses with GCP Model Armor. | **[Smart Routing & LLM Judge](architecture/routing.md)** |
 
@@ -29,41 +29,41 @@ graph LR
 
 <div class="grid cards" markdown>
 
--   :material-account-group-outline: **Persona-Based Governance (Less Is More)**
+-   **API Products as Persona Tiers (Zero Per-User Bloat)**
 
     ---
 
-    Instead of managing high-cardinality shadow budgets for thousands of individual users, map IdP roles to reusable **Apigee API Products (Personas)** (`knowledge-worker`, `developer`, `it`, `agent`) while keeping **isolated per-user quota buckets** and supporting time-bound individual exceptions.
+    Instead of syncing 10,000 individual employees into the gateway, define **3 to 5 Apigee API Products** (`lead-ai-engineer`, `power-developer`, `developer-default`, `contractor-restricted`). Policy management stays low-cardinality, while runtime quota counters (`rate_limit_client_id`) remain strictly isolated per individual user.
 
--   :material-shield-lock-outline: **Zero-Passthrough 4-Option Authentication**
+-   **Any Client Credential &rarr; One API Product Model**
 
     ---
 
-    Terminates and validates **API Keys** (all SDK header variants), **Apigee OAuth**, **GCP Agent Identity (`ya29.*`)**, and **Enterprise IdP Opaque/JWT Tokens** at the gateway perimeter via Apigee Token Import (`<1ms` L1 cache on subsequent calls).
+    Whether callers present **API Keys** (`x-apikey`/`x-api-key`), **Apigee OAuth**, **GCP Agent Identity (`ya29.*`)**, or **Corporate SSO (Okta / Ping / Entra ID)**, every credential resolves to an **API Product** and is cached in Apigee's L1 token store (`<1ms` repeat-call latency).
 
--   :material-swap-horizontal: **Universal 4×3 Protocol & Embeddings Transcoding**
+-   **Universal 4×3 Protocol & Embeddings Transcoding**
 
     ---
 
     Exposes `/v1/messages` (Anthropic), `/v1/chat/completions` (OpenAI), `/v1/embeddings` (Embeddings), `/ai-gateway` (Native Vertex/ADK), and `/v1/models` — translating requests, tool calls, thinking blocks, and SSE streams across any backend.
 
--   :material-scale-balance: **Layered Quotas, Team Budgets & Rate Limits**
+-   **Layered Quotas, Team Budgets & Rate Limits**
 
     ---
 
     Combine **Per-Model LLM Operation Quotas**, **4h + 7d Rolling Token Windows**, **Shared Team Budgets**, **Time-Bound Individual Exceptions**, **Burst Rate Limits**, and **Active Stream Concurrency Semaphores** with protocol-native `429` diagnostics.
 
--   :material-cash-check: **Invoice-Accurate Cache & Reasoning Cost Engine**
+-   **Invoice-Accurate Cache & Reasoning Cost Engine**
 
     ---
 
     Extracts and rates **uncached input**, **cache read** (`0.10x`–`0.50x`), **cache write** (`1.25x`), and **thinking/reasoning tokens** across both non-streaming and SSE streaming responses.
 
--   :material-tune: **Zero-Overhead Modular Template**
+-   **Zero-Overhead Modular Template**
 
     ---
 
-    Driven by a single `values.yaml`. Disabled features are completely omitted from the compiled proxy zip, and all 20 JavaScript callouts are strict-mode IIFE-encapsulated for zero Rhino memory leaks.
+    Driven by a single `values.yaml`. Disabled features are completely omitted from the compiled proxy bundle so you only run the policies you need.
 
 </div>
 
@@ -73,28 +73,29 @@ graph LR
 
 <div class="grid cards" markdown>
 
--   :material-rocket-launch: **[5-Minute Quickstart](getting-started/quickstart-template.md)**
+-   **[5-Minute Quickstart](getting-started/quickstart-template.md)**
 
     ---
 
     Deploy a working AI Gateway bundle using the minimal 15-line starter configuration.
 
--   :material-file-code-outline: **[`values.yaml` Reference](template-guide/configuration.md)**
+-   **[`values.yaml` Reference](template-guide/configuration.md)**
 
     ---
 
     Complete schema reference for gateway metadata, auth personas, quotas, rate limits, models, and pricing.
 
--   :material-toggle-switch: **[Feature Toggles & Decision Matrix](template-guide/feature-flags.md)**
+-   **[Feature Toggles & Decision Matrix](template-guide/feature-flags.md)**
 
     ---
 
     Understand which optional features to turn on for your use case and what they compile under the hood.
 
--   :material-shield-key: **[Authentication & Persona Tiers](architecture/security.md)**
+-   **[API Products & Persona Auth](architecture/security.md)**
 
     ---
 
-    How the 4-Option Auth chain, IdP Opaque/JWT Token Import, and GCP Model Armor work.
+    How the API Product Persona abstraction, IdP Opaque/JWT Token Import, and GCP Model Armor work.
 
 </div>
+

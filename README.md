@@ -23,9 +23,9 @@ You do not need to configure everything on Day 1. Every enterprise capability is
 | :--- | :--- | :--- | :--- |
 | **Stage 1: 5-Minute Quickstart** | 15-line `values.quickstart.yaml` | Repoint Claude Code, Codex, OpenAI SDK, or Vertex ADK to Apigee with zero code changes and full SSE streaming. | **[5-Minute Quickstart](docs/getting-started/quickstart-template.md)** |
 | **Stage 2: Multi-Model & Multi-Host** | Add entries under `models:` | Route to Vertex Gemini & Claude, Vertex Model Garden MaaS (`meta/`, `mistralai/`), Direct OpenAI (`api.openai.com`), Azure, vLLM/Ollama, and `/v1/embeddings`. | **[Models & Custom URLs](docs/template-guide/custom-urls.md)** |
-| **Stage 3: Identity & Persona Tiers** | Configure `features.auth` | Authenticate API Keys, Apigee OAuth, GCP Agent Identity (`ya29.*`), and Local Harnesses with IdP Opaque/JWT tokens mapped to **Persona API Products** (`knowledge-worker`, `developer`, `it`, `agent`) with `<1ms` L1 cache hits. | **[Auth & Persona Tiers](docs/architecture/security.md)** |
+| **Stage 3: API Products & Persona Auth** | Configure `features.auth` | Govern **10,000+ users and agents with just 3–5 Apigee API Products** (zero per-user provisioning in Apigee). Maps API Keys, OAuth, GCP Agent Identity (`ya29.*`), and Corporate SSO (Okta/Ping/Entra) to Persona API Products while enforcing isolated per-user quota buckets in `<1ms`. | **[API Products & Persona Auth](docs/architecture/security.md)** |
 | **Stage 4: Quotas, Budgets & Cost** | Configure `features.quotas`, `rate_limits`, `monetization` | Enforce Per-Model LLM Operation quotas, 4h/7d sliding windows, Shared Team Budgets, Time-Bound Individual Exceptions, Burst/Concurrency limits, and Cache/Reasoning-aware USD billing. | **[Quotas, Limits & Cost](docs/architecture/monetization.md)** |
-| **Stage 5: Smart Routing & Safety** | Enable `llm_judge` & `model_armor` | Dynamically classify prompt complexity with Gemini 3.1 Flash-Lite and sanitize prompts/responses with GCP Model Armor. | **[Smart Routing](docs/architecture/routing.md)** |
+| **Stage 5: Smart Routing & Safety** | Enable `llm_judge` & `model_armor` | Dynamically classify prompt complexity with Gemini 2.5 Flash-Lite and sanitize prompts/responses with GCP Model Armor. | **[Smart Routing](docs/architecture/routing.md)** |
 
 ---
 
@@ -136,5 +136,5 @@ apigeecli apis create bundle \
 | | **[Smart Routing & LLM Judge](docs/architecture/routing.md)** | Cost tiers, model aliases, fallback chains, and real-time complexity classification. |
 | **4. Deep Dive** | **[Protocol Normalization & Embeddings](docs/architecture/protocols.md)** | How `/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, and `/ai-gateway` transcode across providers. |
 | | **[Bundle Structure & Execution Flow](docs/proxy-deep-dive/bundle-structure.md)** | End-to-end PreFlow, Target, EventFlow, and PostFlow execution order. |
-| | **[Policies & JS Callouts Reference](docs/proxy-deep-dive/policies-reference.md)** | Complete catalog of all policies and Rhino IIFE-encapsulated JavaScript callouts. |
+| | **[Policies & JS Callouts Reference](docs/proxy-deep-dive/policies-reference.md)** | Complete catalog of all XML policies and JavaScript callouts. |
 | **5. Operations** | **[Telemetry, Headers & Dashboards](docs/operations/telemetry.md)** | Response headers (`X-Gateway-*`, `X-RateLimit-*`), Data Collectors, and Looker Studio cost reporting. |

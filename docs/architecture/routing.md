@@ -1,4 +1,4 @@
-# ⚡ Smart Routing, Fallbacks, Aliases & LLM Judge
+# Smart Routing, Fallbacks, Aliases & LLM Judge
 
 The gateway provides **4 intelligent request routing mechanisms** inside `JS-resolve-model-location` to optimize latency, cost, and availability across multiple LLM providers without requiring application code changes.
 

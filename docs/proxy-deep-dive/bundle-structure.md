@@ -1,4 +1,4 @@
-# 📁 Native Proxy Bundle Structure
+# Native Proxy Bundle Structure
 
 For users who want to work directly with the raw Apigee API proxy, the `apiproxy/` directory contains the complete, production-ready bundle.
 
@@ -38,7 +38,7 @@ apiproxy/
 │   ├── LTQ-CountOnly.xml                 # Primary & Per-Model Token Quota Accumulation
 │   └── ...
 └── resources/
-    ├── jsc/                       # JavaScript Resources (20 IIFE-encapsulated scripts)
+    ├── jsc/                       # JavaScript Resources (20 scripts)
     ├── oas/                       # OpenAPI 3.0 Specs for Request Validation (4 files)
     └── properties/                # PropertySets (Model routing, pricing, auth, config)
         ├── model_locations.properties

@@ -1,4 +1,4 @@
-# 📜 Policies Reference Catalog
+# Policies Reference Catalog
 
 Below is the complete reference of the **51 default Apigee policies** in `apiproxy/policies/` plus the **5 opt-in rate-limit & secondary quota policies** available in `templates/ai-gateway/policies/`.
 

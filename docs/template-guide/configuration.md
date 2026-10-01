@@ -1,4 +1,4 @@
-# ⚙️ `values.yaml` Schema Reference
+# `values.yaml` Schema Reference
 
 The Apigee AI Gateway template is driven by a single declarative [`values.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.yaml) file (or its 15-line minimal counterpart [`values.quickstart.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.quickstart.yaml)).
 

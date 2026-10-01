@@ -1,4 +1,4 @@
-# 💳 Quotas, Rate Limits, Team Budgets & Monetization
+# Quotas, Rate Limits, Team Budgets & Monetization
 
 Controlling LLM spend and protecting backend capacity requires more than a single static rate limit. However, configuring multi-tier governance in Apigee shouldn't require dozens of redundant policies.
 

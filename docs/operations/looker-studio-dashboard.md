@@ -1,4 +1,4 @@
-# 📈 Looker Studio Auto-Router Cost Benefits Dashboard
+# Looker Studio Auto-Router Cost Benefits Dashboard
 
 This guide provides an end-to-end walkthrough for creating a **Looker Studio** executive dashboard that quantifies and visualizes the cost savings, workload triage, and financial ROI achieved by using the **Apigee AI Gateway Auto-Router & LLM Judge**.
 

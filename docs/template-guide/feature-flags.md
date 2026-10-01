@@ -1,4 +1,4 @@
-# 🎛 Feature Toggles & Modular Policies
+# Feature Toggles & Modular Policies
 
 The AI Gateway is designed with a **zero-overhead architecture**. When a feature is disabled in `values.yaml`, `apigee-go-gen` completely strips the corresponding XML policies and flow steps during bundle compilation.
 
@@ -58,9 +58,11 @@ features:
 
 ---
 
-### 4. Rolling-Window Token Quotas (`features.quotas`)
-* **Enabled:** Evaluates native API Product token quotas via `LTQ-EnforceOnly` (`<UseQuotaConfigInAPIProduct>`) and accumulates counts via `LTQ-CountOnly`.
-* **Secondary Rolling Window (`secondary_window.enabled`):** Optional opt-in policy pair (`LTQ-SecondaryEnforceOnly` and `LTQ-SecondaryCountOnly`) for customers requiring dual simultaneous rolling token windows (e.g., a 4-hour API Product burst window paired with a 7-day rolling window). Limits are dynamically resolved from API Product or Developer App custom attributes (`secondary_quota_limit`, `secondary_quota_interval`, `secondary_quota_unit`) with configurable fallback defaults.
+### 4. Rolling-Window Token Quotas & Team Budgets (`features.quotas`)
+* **Enabled (`quotas.enabled: true`):** Evaluates native API Product token quotas and per-model LLM Operation quotas via `LTQ-EnforceOnly` (`<UseQuotaConfigInAPIProduct>`, `<LLMModelSource>{model}</LLMModelSource>`) and accumulates counts via `LTQ-CountOnly`.
+* **Secondary Rolling Window & Shared Team Budgets (`secondary_window.enabled`):** Optional opt-in policy pair (`LTQ-SecondaryEnforceOnly` and `LTQ-SecondaryCountOnly`) that serves two enterprise governance patterns using a single policy pair:
+  1. **Shared Team Budgets:** When `team_quota_limit` is present on the API Product or Developer App, `resolve_model_location.js` sets `secondary_quota_identifier = "team:<identity_team>"` so all members of a department share a pooled token budget.
+  2. **Dual Rolling Windows:** Otherwise, enforces a second per-user rolling token window (e.g., a 4-hour primary window paired with a 7-day weekly cap).
 * **Disabled:** Removes quota enforcement for unlimited throughput testing.
 
 ```yaml
@@ -68,26 +70,26 @@ features:
   quotas:
     enabled: true
     secondary_window:
-      enabled: false # Set true to add a second rolling window (e.g. 7-day)
+      enabled: false             # Opt-in: set true for Shared Team Budgets or 7-day 2nd window
       allow_count: 1000000
-      allow_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit"
+      allow_ref: "secondary_quota_limit"
       interval: 7
-      interval_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval"
+      interval_ref: "secondary_quota_interval"
       time_unit: "day"
-      time_unit_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit"
+      time_unit_ref: "secondary_quota_unit"
 ```
 
 ---
 
 ### 5. Burst & Concurrency Rate Limits (`features.rate_limits`)
-Both **Burst Rate Limiting** and **Concurrency Limiting** are **opt-in (`enabled: false` by default)** so the base proxy bundle incurs zero extra distributed cache overhead unless explicitly enabled. Note that `JS-format-rate-limit-error` and `AM-RateLimitError` remain active whenever `quotas` or `rate_limits` are enabled so that `429 Too Many Requests` responses include structured JSON (`reason: "burst_rate_limit_exceeded" | "concurrency_limit_exceeded" | "token_quota_exceeded"`) and `Retry-After` / `X-RateLimit-*` headers.
+Both **Burst Rate Limiting** and **Concurrency Limiting** are **opt-in (`enabled: false` by default)** so the base proxy bundle incurs zero extra distributed cache overhead unless explicitly enabled. Note that `JS-format-rate-limit-error` and `AM-RateLimitError` remain active whenever `quotas` or `rate_limits` are enabled so that `429 Too Many Requests` responses include structured JSON (`constraint: "per_model_quota" | "individual_exception_quota" | "team_budget_quota" | "token_quota_secondary" | "burst_rate_limit" | "concurrency_limit"`) and `Retry-After` / `X-RateLimit-*` headers.
 
 * **Burst Rate Limit (`features.rate_limits.burst`):**
-  * **Enabled (`burst.enabled: true`):** Injects `SA-BurstRateLimit` (`SpikeArrest` with `<UseEffectiveCount>true</UseEffectiveCount>`) across all 4 ProxyEndpoints to smooth sudden request spikes per client identifier (`rate_limit_client_id`).
-  * **Dynamic Overrides:** Reads `rate_limit_burst` at runtime from `X-Gateway-Burst-Rate` header -> Developer App / Developer / API Product custom attributes (`burst_rate` or `burst_rate_limit`) -> `config.properties` (`default_burst_rate`) -> policy fallback (`burst.rate`, default `"600pm"`).
+  * **Enabled (`burst.enabled: true`):** Injects `SA-BurstRateLimit` (`SpikeArrest` with `<UseEffectiveCount>true</UseEffectiveCount>`) across all 5 ProxyEndpoints to smooth sudden request spikes per client identifier (`rate_limit_client_id`).
+  * **Dynamic Overrides:** Reads `rate_limit_burst` at runtime from `X-Gateway-Burst-Rate` header &rarr; Developer App / Developer / API Product custom attributes (`burst_rate` or `burst_rate_limit`) &rarr; `config.properties` (`default_burst_rate`) &rarr; policy fallback (`burst.rate`, default `"600pm"`).
 * **Active Concurrency Limit (`features.rate_limits.concurrency`):**
   * **Enabled (`concurrency.enabled: true`):** Injects `Q-ConcurrencyLimit` and `RQ-ReleaseConcurrencySlot` to cap the maximum number of simultaneous in-flight LLM requests/streams per client (`rate_limit_client_id`).
-  * **Dynamic Overrides:** Reads `rate_limit_concurrency` at runtime from `X-Gateway-Concurrency-Limit` header -> Developer App / Developer / API Product custom attributes (`concurrency_limit`) -> `config.properties` (`default_concurrency_limit`) -> policy fallback (`concurrency.limit`, default `20`).
+  * **Dynamic Overrides:** Reads `rate_limit_concurrency` at runtime from `X-Gateway-Concurrency-Limit` header &rarr; Developer App / Developer / API Product custom attributes (`concurrency_limit`) &rarr; `config.properties` (`default_concurrency_limit`) &rarr; policy fallback (`concurrency.limit`, default `20`).
   * **Why `Quota` + `ResetQuota` is used for Concurrency in Apigee X:**
     1. **Deprecation of `ConcurrentRateLimit`:** Legacy Apigee Edge had a `<ConcurrentRateLimit>` policy, which was deprecated and removed in Apigee X / hybrid (and fails Apigee X bundle validation).
     2. **Arrival Rate vs. In-Flight Concurrency:** `SpikeArrest` only regulates *how fast requests arrive* (requests/sec), whereas an LLM SSE stream (`text/event-stream`) can remain open for 30–120+ seconds while generating tokens.
@@ -111,3 +113,11 @@ features:
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1             # Dead-man switch auto-expiry (minutes) for abandoned client streams
 ```
+
+---
+
+### 6. Zero-Passthrough Auth & Persona Mapping (`features.auth`)
+* **Enabled (`auth.enabled: true`):** Resolves any incoming client credential (API Key `x-apikey`/`x-api-key`, Apigee OAuth, GCP Agent Identity `ya29.*`, or Corporate SSO JWT/Opaque token) into a low-cardinality **Apigee API Product** while isolating quota counters per individual user (`rate_limit_client_id`).
+* **Granular Sub-Toggles:** You can independently enable or disable `oauth`, `agent_identity`, `idp_opaque`, and `idp_jwt` under `features.auth` depending on which identity providers exist in your environment.
+* See **[API Products, Persona-Based Auth & Model Armor](../architecture/security.md)** for the full architecture.
+

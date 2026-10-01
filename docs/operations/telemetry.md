@@ -1,4 +1,4 @@
-# 📊 Telemetry, Analytics & Runtime Tuning
+# Telemetry & Observability
 
 Every API transaction processed by the AI Gateway emits standardized observability response headers and records token, cost, and identity attribution metrics in **Apigee Analytics**.
 
@@ -56,13 +56,3 @@ Both `DC-CaptureTokenCountsNonStreaming` (`PostFlow`) and `DC-CaptureTokenCounts
 | **`dc_identity_user_id`** | `STRING` | `identity_user_id` | Authenticated human user (`sub`/`email`), GCP Service Account, or App ID. |
 | **`dc_identity_persona`** | `STRING` | `identity_persona` | Mapped enterprise persona (`lead-ai-engineer`, `power-developer`, etc.). |
 | **`dc_identity_team`** | `STRING` | `identity_team` | Department / cost-center / team attribute (`eng-ml`, `platform`, etc.). |
-
----
-
-## 3. Production Apigee Hybrid Runtime & Prometheus Tuning
-
-When running high-concurrency SSE streaming workloads on **Apigee Hybrid** (`apigee-runtime`), we recommend two operational best practices validated in production:
-
-1. **JavaScript `TopLevelScope` Memory Safety (Built-In):** All 20 JavaScript callouts in this repository are wrapped in strict IIFEs (`(function () { 'use strict'; ... })();`) and `combine_resp.js` avoids intermediate `context.removeVariable` churn during SSE streaming. If you add custom `.js` scripts to the proxy, always wrap them in an IIFE so Rhino does not accumulate `ScriptableObject$Slot` objects in the shared `TopLevelScope`.
-2. **Prometheus Scrape Filtering for High-Cardinality Proxy Metrics:** On Apigee Hybrid clusters with many proxy revisions, configure `metric_relabel_configs` on your Prometheus scrape job for `apigee-runtime` to drop unused per-policy latency histograms or limit label cardinality, keeping pod shallow heap and Prometheus TSDB memory flat.
-

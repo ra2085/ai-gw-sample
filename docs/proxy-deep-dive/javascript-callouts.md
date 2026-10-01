@@ -1,29 +1,10 @@
-# ⚡ JavaScript Callouts, Streaming & Rhino Memory Safety
+# JavaScript Callouts & Streaming Logic
 
 The AI Gateway includes **20 specialized JavaScript callouts** in `apiproxy/resources/jsc/` (and `templates/ai-gateway/resources/jsc/`) to perform low-latency authentication classification, smart routing, bidirectional protocol transcoding, and streaming SSE processing.
 
 ---
 
-## 1. Apigee Hybrid Rhino Memory Safety (`TopLevelScope` IIFE Encapsulation)
-
-In Apigee X and Apigee Hybrid (`apigee-runtime`), JavaScript policies execute inside the **Mozilla Rhino** engine using shared `TopLevelScope` instances backed by `ScriptableObject$Slot` and `EmbeddedSlotMap`.
-
-If top-level `var` or `function` declarations are written at global script scope—especially inside `EventFlow` streaming scripts that run 50–200 times per SSE response—Rhino retains those slot references in the shared `TopLevelScope`, causing severe JVM heap retention under sustained streaming concurrency.
-
-### Built-In Memory Safeguards
-1. **Strict IIFE Encapsulation Across All 20 Scripts:** Every `.js` resource is wrapped in a strict Immediately Invoked Function Expression:
-   ```javascript
-   (function () {
-     'use strict';
-     // All variables and helper functions remain strictly local to the stack frame
-     // and are immediately eligible for Young Generation GC upon policy completion.
-   })();
-   ```
-2. **Zero Intermediate `context.removeVariable()` Churn in `combine_resp.js`:** During SSE streaming (`EventFlow`), `combine_resp.js` only reads `saved_stream_*` variables on the first chunk (`!streamId`) and only clears flow state when `isFinalChunk` is reached, minimizing Rhino-to-Java bridge allocations per SSE token delta.
-
----
-
-## 2. Authentication & Persona Resolution Callouts
+## 1. Authentication & Persona Resolution Callouts
 
 | Script | Policy | Purpose |
 | :--- | :--- | :--- |
@@ -32,7 +13,7 @@ If top-level `var` or `function` declarations are written at global script scope
 
 ---
 
-## 3. Core Smart Router & Quota Resolution
+## 2. Core Smart Router & Quota Resolution
 
 | Script | Policy | Purpose |
 | :--- | :--- | :--- |
@@ -44,7 +25,7 @@ If top-level `var` or `function` declarations are written at global script scope
 
 ---
 
-## 4. Bidirectional Protocol & Embeddings Transcoders
+## 3. Bidirectional Protocol & Embeddings Transcoders
 
 | Script | Policy | Direction |
 | :--- | :--- | :--- |
@@ -60,7 +41,7 @@ If top-level `var` or `function` declarations are written at global script scope
 
 ---
 
-## 5. Streaming, Monetization & Error Formatting
+## 4. Streaming, Monetization & Error Formatting
 
 | Script | Policy | Purpose |
 | :--- | :--- | :--- |
@@ -69,4 +50,3 @@ If top-level `var` or `function` declarations are written at global script scope
 | **`calculate_monetization_cost.js`** | `JS-calculate-monetization-cost` | Computes exact micro-transaction USD costs across uncached input, cache read (`0.10x`/`0.25x`), cache write (`1.25x`), completion, and reasoning tokens. |
 | **`format_rate_limit_error.js`** | `JS-format-rate-limit-error` | Inspects quota/rate-limit fault variables to return a structured `429` JSON error identifying the exact constraint (`per_model_quota`, `individual_exception_quota`, `team_budget_quota`, `token_quota_secondary`, `burst_rate_limit`, or `concurrency_limit`). |
 | **`inject_deidentified_finding.js`** | `JS-inject-deidentified-finding` | Formats Model Armor sanitization and DLP findings into structured error responses. |
-

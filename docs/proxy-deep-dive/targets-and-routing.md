@@ -1,4 +1,4 @@
-# 🎯 Target Endpoints & Upstream Auth
+# Target Endpoints & Upstream Auth
 
 The gateway routes requests across **5 specialized Target Endpoints** defined in `apiproxy/targets/` (and `templates/ai-gateway/targets/`).
 

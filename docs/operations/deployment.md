@@ -1,4 +1,4 @@
-# 🚀 Deployment & Testing Guide
+# Deployment & Testing Guide
 
 Follow these steps to validate, deploy, and test the AI Gateway in CI/CD or production.
 
@@ -28,7 +28,7 @@ done
 
 ## 2. Offline Template & Runtime Validation (Pre-Deploy CI/CD)
 
-Before deploying to Apigee, run the offline validation suites to verify template rendering, XML policy integrity, cross-protocol JS transcoding, 4-Option Auth, Per-Model/Team/Exception Quotas, and Rhino IIFE memory safety:
+Before deploying to Apigee, run the offline validation suites to verify template rendering, XML policy integrity, cross-protocol JS transcoding, 4-Option Auth, and Per-Model/Team/Exception Quotas:
 
 ```bash
 # 1. Validate full enterprise template (8 test suites including JS runtime simulation)

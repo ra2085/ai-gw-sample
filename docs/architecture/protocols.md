@@ -1,4 +1,4 @@
-# 🔄 Protocol Normalization, CLI Support & Embeddings
+# Protocol Normalization, CLI Support & Embeddings
 
 The AI Gateway decouples client application SDKs and developer CLI tools (`Claude Code`, `Codex`, OpenAI SDK, Anthropic SDK, Vertex AI SDK) from backend model implementations through real-time bidirectional translation.
 
@@ -8,11 +8,11 @@ The AI Gateway decouples client application SDKs and developer CLI tools (`Claud
 
 | Ingress Client Endpoint | Target Backend: **OpenAI**<br>*(Direct OpenAI / MaaS / vLLM / Azure)* | Target Backend: **Anthropic**<br>*(Vertex Claude / Claude Direct)* | Target Backend: **Gemini**<br>*(Google Vertex AI)* |
 | :--- | :---: | :---: | :---: |
-| **Claude SDK / Claude Code**<br>`POST /v1/messages` | ✅ **Full Transcoding**<br>*(Claude &harr; OpenAI schema + SSE)* | ✅ **Native Passthrough**<br>*(Direct routing + auth injection)* | ✅ **Full Transcoding**<br>*(Claude &harr; Gemini schema + SSE)* |
-| **OpenAI SDK / Codex**<br>`POST /v1/chat/completions` | ✅ **Native Passthrough**<br>*(Direct routing + auth injection)* | ✅ **Full Transcoding**<br>*(OpenAI &harr; Claude schema + SSE)* | ✅ **Full Transcoding**<br>*(OpenAI &harr; Gemini schema + SSE)* |
-| **Embeddings SDK**<br>`POST /v1/embeddings` | ✅ **Native Passthrough**<br>*(OpenAI / vLLM `/v1/embeddings`)* | N/A | ✅ **Full Transcoding**<br>*(OpenAI &harr; Vertex `:predict`)* |
-| **Vertex AI / ADK SDK**<br>`POST /ai-gateway` | ℹ️ **Via OpenAI Endpoint**<br>*(Clients use `/v1/chat/completions`)* | ✅ **Native Passthrough**<br>*(Direct to Claude `:rawPredict`)* | ✅ **Native Passthrough**<br>*(Direct to Gemini `:generateContent`)* |
-| **Catalog Discovery**<br>`GET /v1/models` | ✅ **OpenAI Format** | ✅ **Anthropic Format** | ✅ **Dynamic Catalog** |
+| **Claude SDK / Claude Code**<br>`POST /v1/messages` | **Full Transcoding**<br>*(Claude &harr; OpenAI schema + SSE)* | **Native Passthrough**<br>*(Direct routing + auth injection)* | **Full Transcoding**<br>*(Claude &harr; Gemini schema + SSE)* |
+| **OpenAI SDK / Codex**<br>`POST /v1/chat/completions` | **Native Passthrough**<br>*(Direct routing + auth injection)* | **Full Transcoding**<br>*(OpenAI &harr; Claude schema + SSE)* | **Full Transcoding**<br>*(OpenAI &harr; Gemini schema + SSE)* |
+| **Embeddings SDK**<br>`POST /v1/embeddings` | **Native Passthrough**<br>*(OpenAI / vLLM `/v1/embeddings`)* | N/A | **Full Transcoding**<br>*(OpenAI &harr; Vertex `:predict`)* |
+| **Vertex AI / ADK SDK**<br>`POST /ai-gateway` | **Via OpenAI Endpoint**<br>*(Clients use `/v1/chat/completions`)* | **Native Passthrough**<br>*(Direct to Claude `:rawPredict`)* | **Native Passthrough**<br>*(Direct to Gemini `:generateContent`)* |
+| **Catalog Discovery**<br>`GET /v1/models` | **OpenAI Format** | **Anthropic Format** | **Dynamic Catalog** |
 
 ---
 

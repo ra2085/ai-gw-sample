@@ -1,4 +1,4 @@
-# 🧭 Choose Your Workflow: Template vs. Native Proxy
+# Choose Your Workflow: Template vs. Native Proxy
 
 This repository provides two distinct, fully supported ways to work with the Apigee AI Gateway depending on your use case and level of customization:
 
@@ -8,7 +8,7 @@ This repository provides two distinct, fully supported ways to work with the Api
 
 <div class="grid cards" markdown>
 
--   :material-tune: **Option 1: Declarative Template Workflow (`templates/ai-gateway`)**
+-   **Option 1: Declarative Template Workflow (`templates/ai-gateway`)**
 
     ---
 
@@ -19,21 +19,21 @@ This repository provides two distinct, fully supported ways to work with the Api
     * **Capabilities:** Toggle features (Monetization, Model Armor, Judge, Quotas), add custom model URLs, and compile clean bundles on the fly.
     * **Workflow:** `Edit values.yaml` → `apigee-go-gen render apiproxy` → `Deploy`.
 
-    [Explore Template Guide :octicons-arrow-right-24:](../template-guide/configuration.md)
+    [Explore Template Guide](../template-guide/configuration.md)
 
--   :material-code-json: **Option 2: Native Proxy Deep Dive (`apiproxy/`)**
+-   **Option 2: Native Proxy Deep Dive (`apiproxy/`)**
 
     ---
 
     **Best for:** Apigee Architects, Enterprise Gateway Developers, and engineers who need granular control over XML policies and JS scripts.
 
-    * **Configuration:** Direct access to **51 XML policies** (plus 4 opt-in rate-limit/quota policies in the template), **5 TargetEndpoints**, **5 ProxyEndpoints**, and **20 IIFE-encapsulated JavaScript callouts**.
+    * **Configuration:** Direct access to **51 XML policies** (plus 4 opt-in rate-limit/quota policies in the template), **5 TargetEndpoints**, **5 ProxyEndpoints**, and **20 JavaScript callouts**.
     * **Tooling:** Standard Apigee bundle tools, `apigeecli`, and source control.
     * **Capabilities:** Deep customization of EventFlow SSE streaming, custom error traps, custom Java/Python callouts, and low-level HTTPTargetConnection tuning.
     * **Workflow:** `Edit apiproxy/ XML/JS` → `Deploy with apigeecli`.
 
 
-    [Explore Native Proxy Deep Dive :octicons-arrow-right-24:](../proxy-deep-dive/bundle-structure.md)
+    [Explore Native Proxy Deep Dive](../proxy-deep-dive/bundle-structure.md)
 
 </div>
 
