@@ -78,27 +78,27 @@ markdown_extensions:
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
 
 nav:
-  - Overview: index.md
-  - 1. Getting Started:
+  - Getting Started:
+      - Overview: index.md
       - 5-Minute Quickstart: getting-started/quickstart-template.md
-      - Installation & Setup: getting-started/installation.md
-      - Choose Your Workflow: getting-started/choose-workflow.md
-      - End-to-End Walkthrough: getting-started/quickstart.md
-  - 2. Configuration & Models:
-      - values.yaml Schema Reference: template-guide/configuration.md
-      - Models, Providers & Custom URLs: template-guide/custom-urls.md
-      - Feature Toggles & Decision Matrix: template-guide/feature-flags.md
-  - 3. Enterprise Governance:
-      - Auth, Persona Tiers & Security: architecture/security.md
-      - Quotas, Rate Limits, Budgets & Cost: architecture/monetization.md
-      - Smart Routing & LLM Judge: architecture/routing.md
-  - 4. Architecture & Deep Dive:
-      - Protocol Normalization & Embeddings: architecture/protocols.md
-      - Bundle Structure & Execution Flow: proxy-deep-dive/bundle-structure.md
-      - Policies Reference Catalog: proxy-deep-dive/policies-reference.md
-      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
-      - Targets & Upstream Auth: proxy-deep-dive/targets-and-routing.md
-  - 5. Operations & Observability:
-      - Deployment & Testing Guide: operations/deployment.md
-      - Telemetry, Headers & Data Collectors: operations/telemetry.md
+      - Prerequisites & Setup: getting-started/installation.md
+  - Guides:
+      - AI Products, Tenancy & Auth: architecture/security.md
+      - Models & Providers: template-guide/custom-urls.md
+      - Quotas, Budgets & Cost Control: architecture/monetization.md
+      - Smart Routing & Content Safety: architecture/routing.md
+  - Reference:
+      - values.yaml Reference: template-guide/configuration.md
+      - Feature Toggles: template-guide/feature-flags.md
+      - Client Endpoints & Protocols: architecture/protocols.md
+      - Extending the Proxy (Advanced):
+          - Workflow Options: getting-started/choose-workflow.md
+          - Bundle Structure: proxy-deep-dive/bundle-structure.md
+          - Targets & Upstream Auth: proxy-deep-dive/targets-and-routing.md
+          - Policies Catalog: proxy-deep-dive/policies-reference.md
+          - JavaScript Callouts: proxy-deep-dive/javascript-callouts.md
+  - Analytics & Operations:
+      - Telemetry & Headers: operations/telemetry.md
       - Looker Studio Cost Dashboard: operations/looker-studio-dashboard.md
+      - Testing & CI/CD Validation: operations/deployment.md
+

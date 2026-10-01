@@ -3,69 +3,30 @@
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-A turnkey, production-ready **Enterprise AI Gateway** on Google Cloud Apigee. Start with a **15-line YAML file** in 5 minutes, and progressively enable **Persona-Based Enterprise Authentication (Okta / Ping / Entra / GCP Agent Identity)**, **Universal Protocol Transcoding (`/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, `/ai-gateway`)**, **Per-Model & Team Token Quotas**, **Cache-Aware Cost Attribution**, **Smart Routing**, and **GCP Model Armor Security**.
+A declarative **Enterprise AI Gateway framework** on Google Cloud Apigee. Define your models, **AI Products** (personas and tenant boundaries), authentication, token quotas, and routing rules in a single `values.yaml` file—without writing or maintaining raw Apigee XML policies.
+
+Full documentation is available at **[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**.
 
 ---
 
-## Documentation Site
+## Core Concept: The AI Product Model
 
-Full guides, decision matrices, architecture diagrams, and `values.yaml` references are available at:
+Instead of managing per-user rules or separate proxies for every model provider, the gateway organizes access around **AI Products** (Apigee API Products). An AI Product defines a consumer tier or tenant boundary:
 
-**[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**
-
----
-
-## Progressive Adoption: Start Simple, Layer Controls as You Grow
-
-You do not need to configure everything on Day 1. Every enterprise capability is modular and controlled via `values.yaml`:
-
-| Adoption Stage | What You Configure | Key Capabilities Unlocked | Guide |
+| AI Product Example | Target Consumers | Allowed Models | Default Token Quota |
 | :--- | :--- | :--- | :--- |
-| **Stage 1: 5-Minute Quickstart** | 15-line `values.quickstart.yaml` | Repoint Claude Code, Codex, OpenAI SDK, or Vertex ADK to Apigee with zero code changes and full SSE streaming. | **[5-Minute Quickstart](docs/getting-started/quickstart-template.md)** |
-| **Stage 2: Multi-Model & Multi-Host** | Add entries under `models:` | Route to Vertex Gemini & Claude, Vertex Model Garden MaaS (`meta/`, `mistralai/`), Direct OpenAI (`api.openai.com`), Azure, vLLM/Ollama, and `/v1/embeddings`. | **[Models & Custom URLs](docs/template-guide/custom-urls.md)** |
-| **Stage 3: API Products & Persona Auth** | Configure `features.auth` | Govern **10,000+ users and agents with just 3–5 Apigee API Products** (zero per-user provisioning in Apigee). Maps API Keys, OAuth, GCP Agent Identity (`ya29.*`), and Corporate SSO (Okta/Ping/Entra) to Persona API Products while enforcing isolated per-user quota buckets in `<1ms`. | **[API Products & Persona Auth](docs/architecture/security.md)** |
-| **Stage 4: Quotas, Budgets & Cost** | Configure `features.quotas`, `rate_limits`, `monetization` | Enforce Per-Model LLM Operation quotas, 4h/7d sliding windows, Shared Team Budgets, Time-Bound Individual Exceptions, Burst/Concurrency limits, and Cache/Reasoning-aware USD billing. | **[Quotas, Limits & Cost](docs/architecture/monetization.md)** |
-| **Stage 5: Smart Routing & Safety** | Enable `llm_judge` & `model_armor` | Dynamically classify prompt complexity with Gemini 2.5 Flash-Lite and sanitize prompts/responses with GCP Model Armor. | **[Smart Routing](docs/architecture/routing.md)** |
+| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Codex`) | All models (including `claude-opus-4-6` & `gemini-2.5-pro`) | 500,000 tokens / 4 hours |
+| **`power-developer`** | Senior Developers | `claude-sonnet-4-6`, `gemini-2.5-pro`, `gemini-2.5-flash` | 200,000 tokens / 4 hours |
+| **`developer-default`** | Standard Engineering Org | Fast / Economy models (`gemini-2.5-flash`, `claude-haiku-4-5`) | 50,000 tokens / 4 hours |
+| **`autonomous-agent`** | CI/CD Pipelines & Cloud Run Agents | Approved workflow models + shared department budget | 1,000,000 tokens / hour |
 
----
-
-## Architecture Overview
-
-```mermaid
-graph LR
-    subgraph Clients["Clients & Local Harnesses"]
-        C1["Claude Code / Anthropic SDK<br/>(/v1/messages)"]
-        C2["Codex / Copilot / OpenAI SDK<br/>(/v1/chat/completions & /v1/embeddings)"]
-        C3["Vertex AI SDK & ADK Agents<br/>(/ai-gateway)"]
-    end
-
-    subgraph Gateway["Apigee Enterprise AI Gateway"]
-        direction TB
-        G1["1. Zero-Passthrough Auth & Persona Token Import<br/>(API Key, OAuth, GCP Agent ya29.*, IdP Opaque & JWT)"]
-        G2["2. Governance, Quotas & Rate Limits<br/>(Per-Model, Per-User, Shared Team Budget & Time-Bound Exceptions)"]
-        G3["3. Smart Routing, LLM Judge & GCP Model Armor"]
-        G4["4. Universal 4x3 Protocol & SSE Streaming Transcoder"]
-        G5["5. Cache- & Reasoning-Aware Cost Attribution"]
-    end
-
-    subgraph Providers["Backend Model Providers"]
-        P1["Google Vertex AI<br/>(Gemini, Claude, Embeddings & MaaS)"]
-        P2["Direct OpenAI & Azure<br/>(Per-Client Key & Org Isolation)"]
-        P3["Self-Hosted Endpoints<br/>(vLLM, Ollama, TGI, LiteLLM)"]
-    end
-
-    Clients --> Gateway
-    Gateway --> Providers
-```
+With 3–5 AI Products, you can govern **10,000+ developers and autonomous agents** while enforcing isolated per-user token counters, shared team budgets, and per-department backend credentials (such as separate OpenAI API keys per business unit).
 
 ---
 
 ## Quickstart (5 Minutes)
 
-> **Prerequisites:**
-> 1. Install [`apigee-go-gen`](docs/getting-started/installation.md#install-apigee-go-gen-template-generator) and [`apigeecli`](docs/getting-started/installation.md#install-apigeecli-deployment-cli).
-> 2. Create the required telemetry Data Collectors in your Apigee org (one-time setup in the [Installation Guide](docs/getting-started/installation.md#5-create-data-collectors-required-one-time-organization-setup)).
-> 3. Have a Google Cloud Service Account with `roles/aiplatform.user` for Vertex AI IAM authentication (`-s "$SERVICE_ACCOUNT"`).
+> **Prerequisites:** Complete the one-time setup in **[Prerequisites & Setup](docs/getting-started/installation.md)** (`apigee-go-gen`, `apigeecli`, Google Cloud Service Account with `roles/aiplatform.user`, and telemetry Data Collectors).
 
 ### 1. Define Your Gateway (`values.quickstart.yaml`)
 
@@ -95,7 +56,7 @@ models:
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
 ```
 
-### 2. Render & Deploy
+### 2. Render, Validate & Deploy
 
 ```bash
 # 1. Compile the Apigee proxy bundle from YAML
@@ -104,7 +65,7 @@ apigee-go-gen render apiproxy \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
 
-# 2. Validate Locally (Runs all 8 template & runtime test suites)
+# 2. Validate locally
 ./tests/scripts/test_template.sh && ./tests/scripts/test_quickstart.sh
 
 # 3. Deploy to Apigee X / Hybrid
@@ -121,20 +82,13 @@ apigeecli apis create bundle \
 
 ---
 
-## Documentation Map
+## Documentation Navigation
 
-| Category | Guide | What You Will Learn |
+The documentation is organized into four task-oriented sections:
+
+| Section | Guides | What You Will Find |
 | :--- | :--- | :--- |
-| **1. Getting Started** | **[5-Minute Quickstart](docs/getting-started/quickstart-template.md)** | Render and deploy a working gateway from a minimal 15-line YAML file. |
-| | **[Installation & Setup](docs/getting-started/installation.md)** | Install `apigee-go-gen` & `apigeecli`, configure IAM, and register Data Collectors. |
-| | **[Choose Your Workflow](docs/getting-started/choose-workflow.md)** | When to use the declarative YAML template (`templates/ai-gateway/`) vs. raw XML (`apiproxy/`). |
-| **2. Configuration & Models** | **[`values.yaml` Reference](docs/template-guide/configuration.md)** | Complete schema reference with defaults for every gateway option. |
-| | **[Models, Providers & Custom URLs](docs/template-guide/custom-urls.md)** | Configure Vertex AI, Model Garden MaaS, Direct OpenAI, Azure, vLLM, and `/v1/embeddings`. |
-| | **[Feature Toggles & Decision Matrix](docs/template-guide/feature-flags.md)** | Which optional features to enable and what policies they compile into the bundle. |
-| **3. Enterprise Governance** | **[Authentication, Persona Tiers & Security](docs/architecture/security.md)** | 4-Option Auth (API Key, OAuth, Agent `ya29.*`, IdP Opaque/JWT Token Import), Persona-to-Product mapping, and GCP Model Armor. |
-| | **[Quotas, Rate Limits, Team Budgets & Cost](docs/architecture/monetization.md)** | Per-Model LLM Quotas, 4h/7d Windows, Shared Team Budgets, Time-Bound Exceptions, Burst/Concurrency Limits, and Cache-Aware Billing. |
-| | **[Smart Routing & LLM Judge](docs/architecture/routing.md)** | Cost tiers, model aliases, fallback chains, and real-time complexity classification. |
-| **4. Deep Dive** | **[Protocol Normalization & Embeddings](docs/architecture/protocols.md)** | How `/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, and `/ai-gateway` transcode across providers. |
-| | **[Bundle Structure & Execution Flow](docs/proxy-deep-dive/bundle-structure.md)** | End-to-end PreFlow, Target, EventFlow, and PostFlow execution order. |
-| | **[Policies & JS Callouts Reference](docs/proxy-deep-dive/policies-reference.md)** | Complete catalog of all XML policies and JavaScript callouts. |
-| **5. Operations** | **[Telemetry, Headers & Dashboards](docs/operations/telemetry.md)** | Response headers (`X-Gateway-*`, `X-RateLimit-*`), Data Collectors, and Looker Studio cost reporting. |
+| **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal 15-line YAML quickstart, and one-time CLI/IAM setup. |
+| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI multi-tenancy, token budgets, and Model Armor. |
+| **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md)<br>• [Extending the Proxy (Advanced)](docs/getting-started/choose-workflow.md) | Complete schema table, feature toggles, client SDK compatibility matrix, and advanced internal proxy reference. |
+| **4. Analytics & Operations** | • [Telemetry & Headers](docs/operations/telemetry.md)<br>• [Looker Studio Cost Dashboard](docs/operations/looker-studio-dashboard.md)<br>• [Testing & CI/CD Validation](docs/operations/deployment.md) | Response headers (`X-Gateway-*`, `X-RateLimit-*`), BigQuery / Looker Studio executive cost reporting, and automated test suites. |

@@ -1,79 +1,89 @@
-# Quotas, Rate Limits, Team Budgets & Monetization
+# Quotas, Budgets & Cost Control
 
-Controlling LLM spend and protecting backend capacity requires more than a single static rate limit. However, configuring multi-tier governance in Apigee shouldn't require dozens of redundant policies.
-
-The AI Gateway unifies **6 layers of token & traffic governance** and a **Cache- & Reasoning-Aware Cost Engine** using just **2 Quota policy pairs** (`LTQ-EnforceOnly`/`LTQ-CountOnly` and opt-in `LTQ-SecondaryEnforceOnly`/`LTQ-SecondaryCountOnly`) plus opt-in Burst/Concurrency policies.
+Once you have organized your consumers into **AI Products**, you can layer on token allowances, department budgets, traffic limits, and cost tracking—without managing per-user rules by hand.
 
 ---
 
-## 1. Decision Matrix: Which Quota or Rate Limit Do You Need?
+## 1. Choose Your Consumption Controls
 
-| Governance Goal | Mechanism Used | Where You Configure It | Diagnostic `429` `constraint` |
-| :--- | :--- | :--- | :--- |
-| **1. Standard Rolling Token Quota**<br>*(e.g., 500k tokens per 4 hours per user)* | Primary `LLMTokenQuota` (`LTQ-EnforceOnly` / `LTQ-CountOnly`) | Apigee **API Product** standard LLM Quota settings | `token_quota_primary` |
-| **2. Per-Model Token Quota**<br>*(e.g., cap `claude-opus-4-6` at 50k tokens; leave `gemini-2.5-flash` unlimited)* | Primary `LLMTokenQuota` with `<LLMModelSource>{model}</LLMModelSource>` | Apigee **API Product** *LLM Operations* per-model config | `per_model_quota` |
-| **3. Dual Rolling Windows**<br>*(e.g., 4-hour burst window + 7-day weekly cap)* | Secondary `Quota` (`LTQ-SecondaryEnforceOnly` / `CountOnly`) | `features.quotas.secondary_window.enabled: true` + Product attributes (`secondary_quota_*`) | `token_quota_secondary` |
-| **4. Shared Team Token Budget**<br>*(e.g., all engineers in `eng-ml` share 10M tokens/week)* | Secondary `Quota` keyed by `secondary_quota_identifier = "team:<dept>"` | Developer App / Product attribute `team_quota_limit` (or `X-Gateway-Team-Quota-Limit` header) | `team_budget_quota` |
-| **5. Time-Bound Individual Exception**<br>*(e.g., grant Alice 5M tokens until Friday 5pm UTC)* | Dynamic override in `resolve_model_location.js` + auto-expiry check | Developer App / Developer attributes `quota_override` + `quota_override_expires_at` | `individual_exception_quota` |
-| **6. Burst & Stream Concurrency**<br>*(e.g., max 10 req/sec & max 20 open SSE streams)* | Opt-in `SA-BurstRateLimit` (`SpikeArrest`) & `Q-ConcurrencyLimit` (`Quota` + `ResetQuota`) | `features.rate_limits.burst` & `features.rate_limits.concurrency` | `burst_rate_limit` / `concurrency_limit` |
+Click any tab below to see how to configure that control on your **AI Products** or in `values.yaml`:
+
+=== "1. Per-User & Per-Model Token Quotas"
+    **What it does:** Sets a rolling token allowance (for example, `500,000 tokens per 4 hours`) for each individual user belonging to an **AI Product**.
+
+    * **Standard AI Product Quota:** Set the LLM Token Quota directly on the Apigee API Product. Every user mapped to that product receives their own isolated rolling counter.
+    * **Per-Model Quota:** Want to cap expensive frontier models (such as `claude-opus-4-6` or `gpt-5.4` at `50,000 tokens / 4h`) while leaving fast models (`gemini-2.5-flash-lite`) unlimited? Add a model-specific **LLM Operation Quota** on the API Product. Unquoted models automatically run without throttling.
+
+    ```yaml
+    features:
+      quotas:
+        enabled: true
+    ```
+
+=== "2. Shared Team Budgets & Dual Windows"
+    **What it does:** Enforces a second rolling token window—either as a **7-day weekly cap per user** or as a **Shared Team Budget** across everyone in a department (such as `eng-ml`).
+
+    1. Enable the secondary window in `values.yaml`:
+       ```yaml
+       features:
+         quotas:
+           enabled: true
+           secondary_window:
+             enabled: true
+             allow_count: 10000000
+             interval: 7
+             time_unit: "day"
+       ```
+    2. **To pool tokens across a department/team:** Add custom attributes `team_quota_limit` (e.g., `10000000`), `team_quota_interval` (`7`), and `team_quota_unit` (`day`) on the AI Product or Developer App. All users in that department will draw from the shared team pool while also respecting their individual 4-hour primary quota.
+
+=== "3. Temporary Individual Exceptions"
+    **What it does:** Grants a specific engineer or application a temporary token boost (for example, `5,000,000 tokens` until Friday at 5:00 PM UTC) that **automatically expires** and reverts to their standard AI Product tier.
+
+    Set two custom attributes on the Developer or Developer App:
+    * `quota_override`: `"5000000"`
+    * `quota_override_expires_at`: `"2026-12-31T17:00:00Z"`
+
+    While the exception is active, the user gets the elevated limit and is not blocked if their team's shared pool is exhausted. Once the timestamp passes, the gateway automatically reverts them to their standard AI Product quota—no manual cleanup required.
+
+=== "4. Burst & Stream Concurrency Limits"
+    **What it does:** Protects backend capacity from sudden request spikes (`burst`) or runaway clients opening dozens of simultaneous streaming connections (`concurrency`). Both are opt-in in `values.yaml`:
+
+    ```yaml
+    features:
+      rate_limits:
+        burst:
+          enabled: true
+          rate: "600pm"        # Smooths request arrival spikes (e.g. 600 requests/minute per user)
+        concurrency:
+          enabled: true
+          limit: 20            # Max simultaneous open SSE streams per user
+          ttl_minutes: 1       # Auto-releases slot after 1 min if a client disconnects mid-stream
+    ```
+
+    You can also override these per **AI Product** using custom attributes `burst_rate` (e.g. `"1200pm"`) and `concurrency_limit` (e.g. `"50"`).
 
 ---
 
-## 2. How Multi-Tier Token Quotas Work Together
+## 2. Invoice-Accurate Cost Attribution & Monetization
 
-```mermaid
-graph LR
-    Req["Incoming Request<br/>(User: alice, Team: eng-ml, Model: claude-opus-4-6)"]
-    Resolve["JS-resolve-model-location<br/>1. Checks Time-Bound Exception (quota_override_expires_at)<br/>2. Bridges Product/Model Quota Limits<br/>3. Resolves Team Pool (team:eng-ml)"]
-    Primary["LTQ-EnforceOnly (Primary)<br/>Identifier: user:alice<br/>Enforces Per-Model Quota OR Individual Exception"]
-    Secondary["LTQ-SecondaryEnforceOnly (Opt-In)<br/>Identifier: team:eng-ml<br/>Enforces Shared Team Budget (Bypassed if active exception!)"]
-    LLM["Backend LLM Execution"]
+Modern LLMs bill differently for **standard input tokens**, **cached prompt reads**, **cache creation writes**, and **internal reasoning/thinking tokens**.
 
-    Req --> Resolve --> Primary --> Secondary --> LLM
+When `features.monetization.enabled: true` is set, the gateway automatically calculates the exact USD micro-cost of every request (both non-streaming and streaming) using the rates defined on each model in `values.yaml`:
+
+```yaml
+models:
+  - name: "claude-sonnet-4-5"
+    publisher: "anthropic"
+    format: "anthropic"
+    region: "us-east5"
+    pricing:
+      input_rate: 3.000           # USD per 1M uncached input tokens
+      output_rate: 15.000         # USD per 1M output & reasoning tokens
+      cache_read_rate: 0.300      # USD per 1M cached prompt read tokens (0.10x)
+      cache_write_rate: 3.750     # USD per 1M cache creation tokens (1.25x)
+      markup: 1.0                 # Optional markup multiplier
 ```
 
-### A. Per-Model Quotas Without Redundant Policies
-When you configure **LLM Operation Quotas** on an Apigee API Product for specific expensive models (such as `claude-opus-4-6` or `gpt-5.4`), `LTQ-EnforceOnly` inspects `<LLMModelSource>{model}</LLMModelSource>` and `<UseQuotaConfigInAPIProduct stepName="VA-ApiKey"/>`:
-* **Quoted Models:** Enforces the exact per-model token limit for that client (`rate_limit_client_id`).
-* **Unquoted Models:** If a client calls a model that has no specific operation quota on the API Product (and no global fallback limit), `quota_limit_primary` is absent and `LTQ-EnforceOnly` is conditionally skipped—allowing free/fast models like `gemini-2.5-flash-lite` to run unthrottled!
-* **Works Across All 4 Auth Options:** Even for OAuth and Persona-imported tokens (`OA-VerifyAccessToken`), `resolve_model_location.js` bridges `apiproduct.developer.llmQuota.{limit,interval,timeunit}` into the `verifyapikey.VA-ApiKey.*` namespace so a single `LTQ-EnforceOnly` policy handles API Keys, OAuth, Agent Identity, and IdP Tokens.
-
-### B. Shared Team Budgets (`team:<identity_team>`)
-When `features.quotas.secondary_window.enabled: true` is set and a team budget is configured (`team_quota_limit`, `team_quota_interval`, `team_quota_unit` on the API Product/App or via `X-Gateway-Team-Quota-Limit`):
-* `resolve_model_location.js` sets `secondary_quota_identifier = "team:" + identity_team` (e.g., `team:eng-ml`) and `quota_tier_mode = "team_budget"`.
-* Every member of `eng-ml` decrements from the same shared `team:eng-ml` counter in `LTQ-SecondaryCountOnly`, while still maintaining their individual per-user primary quota in `LTQ-CountOnly`.
-
-### C. Time-Bound Individual Exceptions (`quota_override_expires_at`)
-Need to grant an engineer a temporary quota boost for a production release or hackathon without permanently editing an API Product?
-Set two custom attributes on the Developer or Developer App (or pass via headers `X-Gateway-Quota-Override` and `X-Gateway-Quota-Override-Expires-At`):
-* `quota_override`: `"5000000"` (5M tokens)
-* `quota_override_expires_at`: `"2026-12-31T23:59:59Z"` (ISO-8601 timestamp or epoch ms)
-
-**What happens at runtime:**
-1. **While Active (`now < expires_at`):** `resolve_model_location.js` overrides the user's primary token limit to `5,000,000`, sets `individual_exception_active = "true"`, and **automatically bypasses the shared Team Budget (`LTQ-SecondaryEnforceOnly`)** so the user's approved exception is not blocked by a depleted team pool.
-2. **After Expiry (`now >= expires_at`):** The gateway automatically ignores the expired override (`quota_override_expired = "true"`) and seamlessly reverts the user back to their standard Persona/Product quota and Team Budget—zero manual cleanup required!
-
----
-
-## 3. Cache- & Reasoning-Aware Token Monetization
-
-Modern frontier models (Gemini 2.5, Claude 4.5/4.6, OpenAI GPT-5.4/o3) bill differently for **uncached input tokens**, **cached prompt reads**, **cache creation writes**, and **internal reasoning/thinking tokens**.
-
-### 1. Pre-Flight Credit Enforcement
-Before dispatching requests to Vertex AI or OpenAI, `MLC-EnforceMonetizationLimits` evaluates the developer's prepaid wallet balance and immediately rejects depleted accounts.
-
-### 2. Multi-Bucket Micro-Cost Formula (`calculate_monetization_cost.js`)
-Executed in `PostFlow` (non-streaming) and `EventFlow` (streaming SSE trailer), `JS-calculate-monetization-cost` extracts all 5 token buckets across Gemini, Anthropic, and OpenAI formats:
-
-* **Uncached Prompt Tokens (`usage_uncached_prompt_tokens`):** Billed at `input_rate_per_m`
-* **Cache Read Tokens (`usage_cache_read_tokens`):** Billed at `cache_read_rate_per_m` (defaults to `0.10x` for Anthropic/Gemini or `0.25x`/`0.50x` for OpenAI if not explicitly set in `monetization_rates.properties`)
-* **Cache Write Tokens (`usage_cache_write_tokens`):** Billed at `cache_write_rate_per_m` (defaults to `1.25x` input rate for Anthropic `cache_creation_input_tokens`)
-* **Completion + Reasoning/Thinking Tokens (`usage_completion_tokens + usage_Internal_thinking_tokens`):** Billed at `output_rate_per_m`
-
-$$
-\text{Total Cost (USD)} = \left[ \frac{\text{Uncached In} \times R_{\text{in}} + \text{Cache Read} \times R_{\text{read}} + \text{Cache Write} \times R_{\text{write}} + (\text{Out} + \text{Thinking}) \times R_{\text{out}}}{10^6} \right] \times \text{Markup}
-$$
-
-### 3. Real-Time Observability & Wallet Deduction
-Every response emits detailed cost and cache breakdown headers (`X-Gateway-Cache-Read-Tokens`, `X-Gateway-Reasoning-Tokens`, `X-Gateway-Prompt-Cost-USD`, `X-Gateway-Completion-Cost-USD`, `X-Gateway-Total-Cost-USD`) and captures `dc_tx_cost_usd` into Apigee Analytics and Monetization.
+* **Chargeback & Showback Analytics:** Every transaction records its USD cost (`dc_tx_cost_usd`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
+* **Prepaid Wallet Enforcement:** If you use Apigee Monetization prepaid wallets, accounts with depleted balances are automatically blocked before calling the upstream model provider.
 
