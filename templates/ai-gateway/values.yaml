@@ -143,11 +143,11 @@ routing:
   tiers:
     low: "gemini-3.1-flash-lite"
     medium: "gemini-3.5-flash"
-    high: "gemini-2.5-pro"
-    max: "claude-haiku-4-5"
+    high: "gemini-3.1-pro-preview"
+    max: "claude-sonnet-4-6"
   tasks:
-    coding: "gemini-2.5-pro"
-    reasoning: "gemini-2.5-pro"
+    coding: "gemini-3.1-pro-preview"
+    reasoning: "gemini-3.1-pro-preview"
     summarization: "gemini-3.1-flash-lite"
     simple_chat: "gemini-3.5-flash"
     classifier_model: "gemini-3.1-flash-lite"
@@ -155,15 +155,15 @@ routing:
     # Legacy Gemini Aliases
     "gemini-1.5-flash": "gemini-3.5-flash"
     "gemini-1.5-flash-001": "gemini-3.5-flash"
-    "gemini-1.5-pro": "gemini-2.5-pro"
-    "gemini-1.5-pro-001": "gemini-2.5-pro"
-    "gemini-3.1-pro": "gemini-2.5-pro"
+    "gemini-1.5-pro": "gemini-3.1-pro-preview"
+    "gemini-1.5-pro-001": "gemini-3.1-pro-preview"
+    "gemini-3.1-pro": "gemini-3.1-pro-preview"
     "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
     # Claude Aliases
-    "claude-3-5-sonnet": "claude-haiku-4-5"
+    "claude-3-5-sonnet": "claude-sonnet-4-6"
     "claude-3-5-haiku": "claude-haiku-4-5"
     # OpenAI & Embedding Aliases
-    "gpt-4o": "gemini-2.5-pro"
+    "gpt-4o": "gemini-3.1-pro-preview"
     "gpt-4o-mini": "gemini-3.1-flash-lite"
     "text-embedding-3-small": "text-embedding-005"
     "text-embedding-3-large": "text-embedding-005"
@@ -178,29 +178,29 @@ routing:
 # ------------------------------------------------------------------------------
 models:
   # --- Gemini 3.x Series ---
-  - name: "gemini-3.7-flash"
-    displayName: "Gemini 3.7 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2025-02-15T00:00:00Z"
-    pricing:
-      input_rate: 0.150
-      output_rate: 0.600
-      cache_read_rate: 0.0375
-
   - name: "gemini-3.5-flash"
     displayName: "Gemini 3.5 Flash"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2025-01-10T00:00:00Z"
+    created_at: "2026-03-01T00:00:00Z"
     pricing:
-      input_rate: 0.100
-      output_rate: 0.400
-      cache_read_rate: 0.025
+      input_rate: 1.500
+      output_rate: 9.000
+      cache_read_rate: 0.150
+
+  - name: "gemini-3.1-pro-preview"
+    displayName: "Gemini 3.1 Pro Preview"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-05-01T00:00:00Z"
+    pricing:
+      input_rate: 2.000
+      output_rate: 12.000
+      cache_read_rate: 0.200
 
   - name: "gemini-3.1-flash-lite"
     displayName: "Gemini 3.1 Flash-Lite"
@@ -210,42 +210,30 @@ models:
     region: "global"
     created_at: "2026-05-07T00:00:00Z"
     pricing:
-      input_rate: 0.075
-      output_rate: 0.300
-      cache_read_rate: 0.01875
-
-  # --- Gemini 2.5 Series ---
-  - name: "gemini-2.5-pro"
-    displayName: "Gemini 2.5 Pro"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2024-11-01T00:00:00Z"
-    pricing:
-      input_rate: 1.250
-      output_rate: 5.000
-      cache_read_rate: 0.3125
-
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2024-11-01T00:00:00Z"
-    pricing:
-      input_rate: 0.100
-      output_rate: 0.400
+      input_rate: 0.250
+      output_rate: 1.500
       cache_read_rate: 0.025
 
   # --- Anthropic Claude Models ---
-  - name: "claude-haiku-4-5"
-    displayName: "Claude 4.5 Haiku"
+  - name: "claude-sonnet-4-6"
+    displayName: "Claude Sonnet 4.6"
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
-    region: "us-east5"
+    region: "global"
+    created_at: "2026-04-01T00:00:00Z"
+    pricing:
+      input_rate: 3.000
+      output_rate: 15.000
+      cache_read_rate: 0.300
+      cache_write_rate: 3.750
+
+  - name: "claude-haiku-4-5"
+    displayName: "Claude Haiku 4.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"
     created_at: "2025-10-01T00:00:00Z"
     pricing:
       input_rate: 1.000
@@ -253,7 +241,7 @@ models:
       cache_read_rate: 0.100
       cache_write_rate: 1.250
 
-  # --- Vertex AI Text Embedding Models ---
+  # --- Vertex AI Text Embedding Models (No Prompt Caching) ---
   - name: "text-embedding-005"
     displayName: "Vertex Text Embedding 005"
     publisher: "google"
@@ -265,7 +253,7 @@ models:
       input_rate: 0.025
       output_rate: 0.000
 
-  # --- Example 1: Vertex AI Model Garden (MaaS - OpenAI Format) ---
+  # --- Example 1: Vertex AI Model Garden (MaaS - OpenAI Format, No Prompt Caching) ---
   # - name: "llama-3.3-70b-instruct-maas"
   #   displayName: "Llama 3.3 70B Instruct (Vertex MaaS)"
   #   publisher: "meta"
@@ -276,9 +264,9 @@ models:
   #     input_rate: 0.720
   #     output_rate: 0.720
 
-  # --- Example 2: Direct OpenAI (api.openai.com - Per-Client or Global Key) ---
-  # - name: "gpt-4.1"
-  #   displayName: "OpenAI GPT-4.1"
+  # --- Example 2: Direct OpenAI (api.openai.com - Supports Prompt Caching) ---
+  # - name: "gpt-5.4"
+  #   displayName: "OpenAI GPT-5.4"
   #   publisher: "openai"
   #   target: "openai-custom"
   #   format: "openai"
@@ -287,8 +275,9 @@ models:
   #     type: "bearer"
   #     token_ref: "propertyset.config.openai_api_key"
   #   pricing:
-  #     input_rate: 2.000
-  #     output_rate: 8.000
+  #     input_rate: 2.500
+  #     output_rate: 15.000
+  #     cache_read_rate: 0.250
 
   # --- Example 3: Self-Hosted / External Model (vLLM, Ollama, TGI, LiteLLM) ---
   # - name: "custom-llama-3"

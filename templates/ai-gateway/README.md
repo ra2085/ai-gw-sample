@@ -82,15 +82,16 @@ models:
       output_rate: 0.150
 
   # Regional Vertex AI Model
-  - name: "gemini-2.5-pro-eu"
-    displayName: "Gemini 2.5 Pro (Europe)"
+  - name: "gemini-3.1-pro-eu"
+    displayName: "Gemini 3.1 Pro (Europe)"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "europe-west1"                      # Automatically routes to europe-west1-aiplatform.googleapis.com
     pricing:
-      input_rate: 1.250
-      output_rate: 5.000
+      input_rate: 2.000
+      output_rate: 12.000
+      cache_read_rate: 0.200
 ```
 
 ---

@@ -68,7 +68,7 @@ Click any tab below to see how to configure that control on your **AI Products**
 
 Modern LLMs bill differently for **standard input tokens**, **cached prompt reads**, **cache creation writes**, and **internal reasoning/thinking tokens**.
 
-When `features.monetization.enabled: true` is set, the gateway automatically performs **Invoice-Accurate Cost Attribution** on every request (both non-streaming and streaming) using the rates defined on each model in `values.yaml`:
+When `features.monetization.enabled: true` is set, the gateway performs **Invoice-Accurate Cost Attribution** on every request (both non-streaming and streaming) using the exact rates declared on each model in `values.yaml`—with no hardcoded provider multipliers:
 
 ```yaml
 models:
@@ -83,6 +83,13 @@ models:
       cache_write_rate: 3.750     # $3.75 per 1M 5-minute cache write tokens (1.25x)
       markup: 1.0                 # Optional markup multiplier
 ```
+
+| Model Family / Provider | `input_rate` & `output_rate` | `cache_read_rate` | `cache_write_rate` | Why |
+| :--- | :---: | :---: | :---: | :--- |
+| **Google Gemini (`3.x`)** | Required | **Recommended** *(0.10x of `input_rate`)* | Not needed | Gemini bills cached prompt hits at `cache_read_rate`; cache storage is billed by Vertex AI per hour out-of-band rather than per-request write tokens. |
+| **Anthropic Claude (`4.5` / `4.6`)** | Required | **Recommended** *(0.10x of `input_rate`)* | **Recommended** *(1.25x of `input_rate`)* | Claude returns both `cache_read_input_tokens` and `cache_creation_input_tokens` on every response. |
+| **OpenAI (`gpt-5.4`, `gpt-5.4-mini`)** | Required | **Recommended** *(0.10x of `input_rate`)* | Not needed | OpenAI automatic prompt caching bills `cached_tokens` at `cache_read_rate` with no cache write surcharge. |
+| **Vertex MaaS (Llama, Mistral), Embeddings, & Self-Hosted (`vLLM`)** | Required | Not needed | Not needed | These endpoints do not bill separate cached token rates; if omitted, any reported cached tokens default to `input_rate`. |
 
 * **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
 * **Prepaid Balance Enforcement:** Accounts with depleted prepaid balances are automatically blocked before calling the upstream model provider.

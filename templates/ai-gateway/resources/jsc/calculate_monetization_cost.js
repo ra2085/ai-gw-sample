@@ -55,38 +55,21 @@ try {
     var cacheReadRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate_per_m") ||
                            context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate") ||
                            context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate_per_m") ||
-                           context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate");
+                           context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate") ||
+                           context.getVariable("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
+                           context.getVariable("propertyset.monetization_rates.default.cache_read_rate");
 
     var cacheWriteRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate_per_m") ||
                             context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate") ||
                             context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate_per_m") ||
-                            context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate");
+                            context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate") ||
+                            context.getVariable("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
+                            context.getVariable("propertyset.monetization_rates.default.cache_write_rate");
 
-    // Provider-aware default cache multipliers when explicit cache rates are not configured:
-    // - Anthropic Claude: 0.10x input rate for cache reads, 1.25x input rate for cache writes
-    // - Vertex Gemini:    0.25x input rate for cached content reads
-    // - OpenAI / other:   0.50x input rate for cached prompt tokens
-    var routeTarget = context.getVariable("route_target") || "";
-    var defaultCacheReadMultiplier = 0.50;
-    var defaultCacheWriteMultiplier = 1.00;
-    if (bareModel.indexOf("claude") === 0 || routeTarget === "claude") {
-        defaultCacheReadMultiplier = 0.10;
-        defaultCacheWriteMultiplier = 1.25;
-    } else if (bareModel.indexOf("gemini") === 0) {
-        defaultCacheReadMultiplier = 0.25;
-        defaultCacheWriteMultiplier = 1.00;
-    }
-
-    var cacheReadRate = cacheReadRateStr ? parseFloat(cacheReadRateStr) : (inputRate * defaultCacheReadMultiplier);
-    var cacheWriteRate = cacheWriteRateStr ? parseFloat(cacheWriteRateStr) : (inputRate * defaultCacheWriteMultiplier);
-
-    // 2. Long context tiering (> 128k prompt tokens doubles the rate on Gemini models)
-    if (promptTokens > 128000 && bareModel.indexOf("gemini") !== -1) {
-        inputRate = inputRate * 2.0;
-        outputRate = outputRate * 2.0;
-        cacheReadRate = cacheReadRate * 2.0;
-        cacheWriteRate = cacheWriteRate * 2.0;
-    }
+    // If cache_read_rate or cache_write_rate is not explicitly configured in values.yaml,
+    // default to the model's standard input_rate (no hardcoded provider multipliers in JS).
+    var cacheReadRate = cacheReadRateStr ? parseFloat(cacheReadRateStr) : inputRate;
+    var cacheWriteRate = cacheWriteRateStr ? parseFloat(cacheWriteRateStr) : inputRate;
 
     // 3. Fetch per-model or platform markup multiplier
     var markupStr = context.getVariable("propertyset.monetization_rates." + model + ".markup") ||

@@ -14,8 +14,8 @@
 models.catalog={{ $modelNames | join "," }}
 
 # Global defaults
-default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-2.5-flash{{ end }}
-default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-2.5-flash{{ end }}
+default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
+default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-3.1-flash-lite{{ end }}
 default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
 default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
 default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Values.defaults.format }}{{ else }}gemini{{ end }}
@@ -25,11 +25,11 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
 # ==============================================================================
 tier.low={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 tier.medium={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
-tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-haiku-4-5" }}{{ else }}claude-haiku-4-5{{ end }}
+tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
+tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-sonnet-4-6" }}{{ else }}claude-sonnet-4-6{{ end }}
 
-task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
-task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
+task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
+task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
 task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
 task.classifier_model={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
