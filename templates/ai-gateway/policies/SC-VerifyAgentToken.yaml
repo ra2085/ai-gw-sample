@@ -1,0 +1,23 @@
+ServiceCallout:
+  .continueOnError: true
+  .enabled: true
+  .name: SC-VerifyAgentToken
+  DisplayName: SC-VerifyAgentToken
+  Properties: {}
+  Request:
+    .clearPayload: true
+    .variable: agentTokenVerifyRequest
+    IgnoreUnresolvedVariables: false
+    Set:
+      QueryParams:
+        QueryParam:
+          .name: access_token
+          -Data: '{auth_bearer_token}'
+      Verb: GET
+  Response: agentTokenVerifyResponse
+  HTTPTargetConnection:
+    Properties:
+      Property:
+        .name: io.timeout.millis
+        -Data: 3000
+    URL: '{{ if and $.Values.auth $.Values.auth.agent_identity $.Values.auth.agent_identity.tokeninfo_url }}{{ $.Values.auth.agent_identity.tokeninfo_url }}{{ else if and $.Values.features $.Values.features.auth $.Values.features.auth.agent_identity $.Values.features.auth.agent_identity.tokeninfo_url }}{{ $.Values.features.auth.agent_identity.tokeninfo_url }}{{ else }}https://oauth2.googleapis.com/tokeninfo{{ end }}'

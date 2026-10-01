@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var bodyStr = context.getVariable("request.content") || "";
     var headerJudge = context.getVariable("request.header.X-Gateway-Judge") || 
@@ -93,3 +96,5 @@ try {
     print("Error in prepare_judge_request: " + e);
     context.setVariable("trigger_judge", "false");
 }
+
+})();

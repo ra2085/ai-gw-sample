@@ -6,6 +6,8 @@ LLMTokenQuota:
   DisplayName: LTQ-EnforceOnly
   SharedName: llm-token-counter
   EnforceOnly: true
+  Identifier:
+    .ref: rate_limit_client_id
   UseQuotaConfigInAPIProduct:
     .stepName: VA-ApiKey
   Distributed: true

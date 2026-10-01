@@ -3,7 +3,7 @@
   <DisplayName>OAS-VerifyOpenAI</DisplayName>
   <OASResource>oas://openai.yaml</OASResource>
   <Options>
-    <AllowUnspecifiedParameters>false</AllowUnspecifiedParameters>
+    <AllowUnspecifiedParameters>true</AllowUnspecifiedParameters>
   </Options>
   <Source>request</Source>
 </OASValidation>

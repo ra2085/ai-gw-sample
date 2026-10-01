@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     context.setVariable("original_host", context.getVariable("request.header.host"));
     var bodyStr = context.getVariable("request.content");
@@ -22,14 +25,25 @@ try {
         if (body.messages && Array.isArray(body.messages)) {
             for (var j = 0; j < body.messages.length; j++) {
                 var msg = body.messages[j];
-                if (msg.role === "user" || msg.role === "system") {
+                if (msg.role === "user" || msg.role === "system" || msg.role === "developer" || msg.role === "tool") {
                     if (typeof msg.content === "string") {
                         prompts.push(msg.content);
                     } else if (Array.isArray(msg.content)) {
                         for (var k = 0; k < msg.content.length; k++) {
                             var block = msg.content[k];
+                            if (!block) continue;
                             if (block.type === "text" && block.text) {
                                 prompts.push(block.text);
+                            } else if (block.type === "tool_result" && block.content) {
+                                if (typeof block.content === "string") {
+                                    prompts.push(block.content);
+                                } else if (Array.isArray(block.content)) {
+                                    for (var m = 0; m < block.content.length; m++) {
+                                        if (block.content[m] && block.content[m].text) {
+                                            prompts.push(block.content[m].text);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -44,3 +58,5 @@ try {
 } catch (e) {
     print("Error extracting prompt: " + e);
 }
+
+})();

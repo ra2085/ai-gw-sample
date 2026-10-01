@@ -14,12 +14,35 @@ AssignMessage:
       - Header:
           .name: x-quota-available
           -Data: '{ratelimit.LTQ-CountOnly.available.count}'
+      {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+      - Header:
+          .name: x-quota-secondary-allowed
+          -Data: '{ratelimit.LTQ-SecondaryCountOnly.allowed.count}'
+      - Header:
+          .name: x-quota-secondary-used
+          -Data: '{ratelimit.LTQ-SecondaryCountOnly.used.count}'
+      - Header:
+          .name: x-quota-secondary-available
+          -Data: '{ratelimit.LTQ-SecondaryCountOnly.available.count}'
+      {{- end }}
       - Header:
           .name: x-quota-ip-used
           -Data: '{ratelimit.LTQ-CountOnly-IP.used.count}'
       - Header:
           .name: x-quota-ip-available
           -Data: '{ratelimit.LTQ-CountOnly-IP.available.count}'
+      - Header:
+          .name: x-ratelimit-burst-rate
+          -Data: '{burst_rate_limit}'
+      - Header:
+          .name: x-ratelimit-concurrency-limit
+          -Data: '{ratelimit.Q-ConcurrencyLimit.allowed.count}'
+      - Header:
+          .name: x-ratelimit-concurrency-active
+          -Data: '{ratelimit.Q-ConcurrencyLimit.used.count}'
+      - Header:
+          .name: x-ratelimit-concurrency-available
+          -Data: '{ratelimit.Q-ConcurrencyLimit.available.count}'
       - Header:
           .name: X-Gateway-Requested-Model
           -Data: '{requested_model}'

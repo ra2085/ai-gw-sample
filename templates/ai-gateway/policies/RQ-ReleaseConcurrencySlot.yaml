@@ -1,0 +1,10 @@
+ResetQuota:
+  .continueOnError: true
+  .enabled: true
+  .name: RQ-ReleaseConcurrencySlot
+  DisplayName: RQ-ReleaseConcurrencySlot
+  Quota:
+    .name: Q-ConcurrencyLimit
+    Identifier:
+      .ref: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.identifier_ref }}{{ $.Values.features.rate_limits.concurrency.identifier_ref }}{{ else }}rate_limit_client_id{{ end }}
+      Allow: 1

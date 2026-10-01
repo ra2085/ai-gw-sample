@@ -28,11 +28,77 @@ features:
     classifier_model: "gemini-3.1-flash-lite"
   quotas:
     enabled: true
+    # Primary window uses native API Product Quota (<UseQuotaConfigInAPIProduct>).
+    # Enable secondary_window only when a dual rolling token window (e.g., 4h + 7d) is required.
+    # Limits are read dynamically from API Product / Developer App custom attributes with fallback defaults.
+    secondary_window:
+      enabled: false
+      shared_name: "llm-token-counter-secondary"
+      identifier_ref: "rate_limit_client_id"
+      allow_count: 1000000
+      allow_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit"
+      interval: 7
+      interval_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval"
+      time_unit: "day"
+      time_unit_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit"
+  rate_limits:
+    # Opt-in per-application burst and concurrency rate limits (both disabled by default).
+    # When enabled, limits can be overridden at runtime with zero proxy redeployment via
+    # API Product, Developer, or Developer App custom attributes (burst_rate / concurrency_limit).
+    burst:
+      enabled: false
+      rate: "600pm"                        # Fallback default (<N>ps or <N>pm) when no custom attribute is set
+      identifier_ref: "rate_limit_client_id"
+      use_effective_count: true
+    concurrency:
+      enabled: false
+      limit: 20                            # Fallback max simultaneous in-flight requests per application
+      identifier_ref: "rate_limit_client_id"
+      ttl_minutes: 1                       # Dead-man switch window (minutes) to auto-expire leaked slots on client disconnect
   cors:
     enabled: true
   auth:
     enabled: true
-    type: "apikey" # apikey | none
+    allow_bearer_api_key: true             # Option 1: Allow passing Apigee API Key inside Authorization: Bearer <api-key>
+    apigee_oauth:
+      enabled: true                        # Option 2: Native Apigee OAuth 2.0 Token verification (<1ms L1 cache)
+    agent_identity:
+      enabled: false                       # Option 3: GCP Agent Identity (ya29.*) 1st-request verification + OAuth token import
+      tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
+      allowed_email_suffix: ".iam.gserviceaccount.com"
+      persona: "agent"
+      token_ttl_ms: 3600000
+    idp_opaque:
+      enabled: false                       # Option 4a: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP Opaque Token
+      userinfo_url: "https://idp.example.com/oauth2/v1/userinfo"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    idp_jwt:
+      enabled: false                       # Option 4b: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP JWT
+      jwks_uri: "https://idp.example.com/oauth2/v1/keys"
+      issuer: "https://idp.example.com"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    default_persona: ""                    # Optional fallback persona if an authenticated user's role claim doesn't match
+    personas:
+      knowledge-worker:
+        match_claims: ["knowledge-worker", "general", "business"]
+        client_id: ""                      # Apigee Developer App client_id bound to the Knowledge Worker API Product
+      developer:
+        match_claims: ["developer", "engineering", "swe", "data-science"]
+        client_id: ""                      # Apigee Developer App client_id bound to the Developer API Product
+      it:
+        match_claims: ["it", "platform-admin", "sre", "devops", "secops"]
+        client_id: ""                      # Apigee Developer App client_id bound to the IT/Platform API Product
+      agent:
+        match_claims: ["agent", "service-account", "automation"]
+        client_id: ""                      # Apigee Developer App client_id bound to the Autonomous Agent API Product
 
 # ------------------------------------------------------------------------------
 # Proxy Endpoints / Supported Protocols
@@ -50,6 +116,10 @@ endpoints:
     enabled: true
     name: "openai-compat"
     base_path: "/v1/chat/completions"
+  openai_embeddings:
+    enabled: true
+    name: "openai-embeddings"
+    base_path: "/v1/embeddings"
   models_catalog:
     enabled: true
     name: "claude-models"
@@ -92,9 +162,12 @@ routing:
     # Claude Aliases
     "claude-3-5-sonnet": "claude-haiku-4-5"
     "claude-3-5-haiku": "claude-haiku-4-5"
-    # OpenAI & Auto Aliases
+    # OpenAI & Embedding Aliases
     "gpt-4o": "gemini-2.5-pro"
     "gpt-4o-mini": "gemini-3.1-flash-lite"
+    "text-embedding-3-small": "text-embedding-005"
+    "text-embedding-3-large": "text-embedding-005"
+    "text-embedding-ada-002": "text-embedding-005"
     "auto": "gemini-3.5-flash"
     "gateway/auto": "gemini-3.5-flash"
     "auto:judge": "gemini-3.5-flash"
@@ -115,6 +188,7 @@ models:
     pricing:
       input_rate: 0.150
       output_rate: 0.600
+      cache_read_rate: 0.0375
 
   - name: "gemini-3.5-flash"
     displayName: "Gemini 3.5 Flash"
@@ -126,6 +200,7 @@ models:
     pricing:
       input_rate: 0.100
       output_rate: 0.400
+      cache_read_rate: 0.025
 
   - name: "gemini-3.1-flash-lite"
     displayName: "Gemini 3.1 Flash-Lite"
@@ -137,6 +212,7 @@ models:
     pricing:
       input_rate: 0.075
       output_rate: 0.300
+      cache_read_rate: 0.01875
 
   # --- Gemini 2.5 Series ---
   - name: "gemini-2.5-pro"
@@ -149,6 +225,7 @@ models:
     pricing:
       input_rate: 1.250
       output_rate: 5.000
+      cache_read_rate: 0.3125
 
   - name: "gemini-2.5-flash"
     displayName: "Gemini 2.5 Flash"
@@ -160,6 +237,7 @@ models:
     pricing:
       input_rate: 0.100
       output_rate: 0.400
+      cache_read_rate: 0.025
 
   # --- Anthropic Claude Models ---
   - name: "claude-haiku-4-5"
@@ -172,12 +250,51 @@ models:
     pricing:
       input_rate: 1.000
       output_rate: 5.000
+      cache_read_rate: 0.100
+      cache_write_rate: 1.250
 
-  # --- Example Custom Model with Custom Target URL & Format ---
+  # --- Vertex AI Text Embedding Models ---
+  - name: "text-embedding-005"
+    displayName: "Vertex Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "gemini"
+    region: "us-central1"
+    created_at: "2024-11-01T00:00:00Z"
+    pricing:
+      input_rate: 0.025
+      output_rate: 0.000
+
+  # --- Example 1: Vertex AI Model Garden (MaaS - OpenAI Format) ---
+  # - name: "llama-3.3-70b-instruct-maas"
+  #   displayName: "Llama 3.3 70B Instruct (Vertex MaaS)"
+  #   publisher: "meta"
+  #   target: "gemini-openai-compat"
+  #   format: "openai"
+  #   region: "us-central1"
+  #   pricing:
+  #     input_rate: 0.720
+  #     output_rate: 0.720
+
+  # --- Example 2: Direct OpenAI (api.openai.com - Per-Client or Global Key) ---
+  # - name: "gpt-4.1"
+  #   displayName: "OpenAI GPT-4.1"
+  #   publisher: "openai"
+  #   target: "openai-custom"
+  #   format: "openai"
+  #   custom_url: "https://api.openai.com/v1/chat/completions"
+  #   auth:
+  #     type: "bearer"
+  #     token_ref: "propertyset.config.openai_api_key"
+  #   pricing:
+  #     input_rate: 2.000
+  #     output_rate: 8.000
+
+  # --- Example 3: Self-Hosted / External Model (vLLM, Ollama, TGI, LiteLLM) ---
   # - name: "custom-llama-3"
   #   displayName: "Llama 3 70B (vLLM)"
   #   publisher: "custom"
-  #   target: "gemini-openai-compat"
+  #   target: "openai-custom"
   #   format: "openai"
   #   custom_url: "https://vllm.internal.corp/v1/chat/completions"
   #   auth:

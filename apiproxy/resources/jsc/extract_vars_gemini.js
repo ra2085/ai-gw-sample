@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var path = context.getVariable("proxy.pathsuffix");
     var requestFormat = "gemini"; // default
@@ -21,9 +24,14 @@ try {
             requestFormat = "claude";
         }
 
-        // Determine if it is streaming
+        // Determine if it is streaming or embeddings
         if (path.indexOf(":streamGenerateContent") !== -1 || path.indexOf(":streamRawPredict") !== -1) {
             stream = true;
+        }
+        if ((path.indexOf(":predict") !== -1 && path.indexOf(":rawPredict") === -1 && path.indexOf(":streamRawPredict") === -1) ||
+            path.indexOf(":embedContent") !== -1 ||
+            path.indexOf(":batchEmbedContents") !== -1) {
+            context.setVariable("is_embeddings", "true");
         }
     }
     
@@ -73,20 +81,45 @@ try {
                 context.setVariable("extracted_prompt", prompts.join("\n"));
             }
         } else {
-            // Gemini format
+            // Gemini generateContent / Vertex embeddings format
+            var textParts = [];
             if (body.contents && body.contents.length > 0) {
                 var lastContent = body.contents[body.contents.length - 1];
                 if (lastContent.parts) {
-                    var textParts = [];
                     for (var i = 0; i < lastContent.parts.length; i++) {
                         if (lastContent.parts[i].text) {
                             textParts.push(lastContent.parts[i].text);
                         }
                     }
-                    if (textParts.length > 0) {
-                        context.setVariable("gemini_text_prompt", textParts.join("\n"));
+                }
+            } else if (Array.isArray(body.instances)) {
+                for (var idx = 0; idx < body.instances.length; idx++) {
+                    var inst = body.instances[idx];
+                    if (inst) {
+                        if (typeof inst.content === "string") textParts.push(inst.content);
+                        else if (typeof inst.text === "string") textParts.push(inst.text);
                     }
                 }
+            } else if (body.content && Array.isArray(body.content.parts)) {
+                for (var p = 0; p < body.content.parts.length; p++) {
+                    if (body.content.parts[p].text) {
+                        textParts.push(body.content.parts[p].text);
+                    }
+                }
+            } else if (Array.isArray(body.requests)) {
+                for (var r = 0; r < body.requests.length; r++) {
+                    var reqItem = body.requests[r];
+                    if (reqItem && reqItem.content && Array.isArray(reqItem.content.parts)) {
+                        for (var rp = 0; rp < reqItem.content.parts.length; rp++) {
+                            if (reqItem.content.parts[rp].text) {
+                                textParts.push(reqItem.content.parts[rp].text);
+                            }
+                        }
+                    }
+                }
+            }
+            if (textParts.length > 0) {
+                context.setVariable("gemini_text_prompt", textParts.join("\n"));
             }
         }
 
@@ -101,3 +134,5 @@ try {
 } catch (e) {
     print("Error extracting Gemini native/Claude vars: " + e);
 }
+
+})();

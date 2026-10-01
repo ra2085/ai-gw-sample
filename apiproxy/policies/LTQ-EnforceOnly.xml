@@ -3,6 +3,7 @@
   <DisplayName>LTQ-EnforceOnly</DisplayName>
   <SharedName>llm-token-counter</SharedName>
   <EnforceOnly>true</EnforceOnly>
+  <Identifier ref="rate_limit_client_id"/>
   <UseQuotaConfigInAPIProduct stepName="VA-ApiKey" />
   <Distributed>true</Distributed>
   <LLMModelSource>{model}</LLMModelSource>

@@ -7,6 +7,7 @@
   <BasePaths>/v1/messages</BasePaths>
   <BasePaths>/ai-gateway</BasePaths>
   <BasePaths>/v1/chat/completions</BasePaths>
+  <BasePaths>/v1/embeddings</BasePaths>
   <BasePaths>/v1/models</BasePaths>
   <Policies>
     <Policy>AM-CustomError</Policy>
@@ -47,18 +48,35 @@
     <Policy>MLC-EnforceMonetizationLimits</Policy>
     <Policy>JS-calculate-monetization-cost</Policy>
     <Policy>AM-SetMonetizationHeaders</Policy>
+    <Policy>JS-anthropic-to-openai-resp</Policy>
+    <Policy>JS-format-rate-limit-error</Policy>
+    <Policy>AM-RateLimitError</Policy>
+    <Policy>JS-extract-auth-credentials</Policy>
+    <Policy>OA-VerifyAccessToken</Policy>
+    <Policy>SC-VerifyAgentToken</Policy>
+    <Policy>SC-VerifyIdpOpaqueToken</Policy>
+    <Policy>VJ-VerifyIdpJwt</Policy>
+    <Policy>JS-resolve-auth-persona</Policy>
+    <Policy>OA-ImportExternalToken</Policy>
+    <Policy>OA-SaveTokenAttributes</Policy>
+    <Policy>JS-restore-request-payload</Policy>
+    <Policy>RF-Unauthorized</Policy>
   </Policies>
   <ProxyEndpoints>
     <ProxyEndpoint>claude-messages</ProxyEndpoint>
     <ProxyEndpoint>gemini-native</ProxyEndpoint>
     <ProxyEndpoint>openai-compat</ProxyEndpoint>
+    <ProxyEndpoint>openai-embeddings</ProxyEndpoint>
     <ProxyEndpoint>claude-models</ProxyEndpoint>
   </ProxyEndpoints>
   <Resources>
     <Resource>jsc://anthropic_to_gemini.js</Resource>
+    <Resource>jsc://anthropic_to_openai_resp.js</Resource>
     <Resource>jsc://calculate_tokens_non_streaming.js</Resource>
     <Resource>jsc://calculate_monetization_cost.js</Resource>
+    <Resource>jsc://extract_auth_credentials.js</Resource>
     <Resource>jsc://extract_prompt.js</Resource>
+    <Resource>jsc://format_rate_limit_error.js</Resource>
     <Resource>jsc://gemini_to_anthropic_resp.js</Resource>
     <Resource>jsc://inject_anthropic_version.js</Resource>
     <Resource>jsc://inject_deidentified_finding.js</Resource>
@@ -66,7 +84,9 @@
     <Resource>jsc://combine_resp.js</Resource>
     <Resource>jsc://extract_vars_openai.js</Resource>
     <Resource>jsc://restore_model_openai.js</Resource>
+    <Resource>jsc://resolve_auth_persona.js</Resource>
     <Resource>jsc://resolve_model_location.js</Resource>
+    <Resource>jsc://restore_request_payload.js</Resource>
     <Resource>jsc://models_endpoint.js</Resource>
     <Resource>jsc://prepare_judge_request.js</Resource>
     <Resource>jsc://process_judge_response.js</Resource>
@@ -83,5 +103,6 @@
     <TargetEndpoint>gemini</TargetEndpoint>
     <TargetEndpoint>gemini-native-target</TargetEndpoint>
     <TargetEndpoint>gemini-openai-compat</TargetEndpoint>
+    <TargetEndpoint>openai-custom</TargetEndpoint>
   </TargetEndpoints>
 </APIProxy>

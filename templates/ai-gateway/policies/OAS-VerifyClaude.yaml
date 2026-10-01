@@ -5,5 +5,5 @@ OASValidation:
   DisplayName: OAS-VerifyClaude
   OASResource: oas://claude.yaml
   Options:
-    AllowUnspecifiedParameters: false
+    AllowUnspecifiedParameters: true
   Source: request

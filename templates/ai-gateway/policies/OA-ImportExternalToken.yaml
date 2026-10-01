@@ -1,0 +1,19 @@
+OAuthV2:
+  .continueOnError: true
+  .enabled: true
+  .name: OA-ImportExternalToken
+  DisplayName: OA-ImportExternalToken
+  Properties: {}
+  Attributes: {}
+  ExpiresIn:
+    .ref: auth_token_ttl_ms
+    -Data: 3600000
+  ExternalAccessToken: auth_bearer_token
+  ExternalAuthorization: true
+  Operation: GenerateAccessToken
+  StoreToken: true
+  SupportedGrantTypes:
+    GrantType: client_credentials
+  GenerateResponse:
+    .enabled: false
+  Tokens: {}

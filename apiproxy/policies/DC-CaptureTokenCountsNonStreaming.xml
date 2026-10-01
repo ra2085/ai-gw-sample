@@ -28,6 +28,18 @@
     <DataCollector>dc_tx_cost_usd</DataCollector>
   </Capture>
   <Capture>
+    <Collect ref="identity_user_id" default="anonymous"/>
+    <DataCollector>dc_identity_user_id</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="identity_persona" default="default"/>
+    <DataCollector>dc_identity_persona</DataCollector>
+  </Capture>
+  <Capture>
+    <Collect ref="identity_team" default="default"/>
+    <DataCollector>dc_identity_team</DataCollector>
+  </Capture>
+  <Capture>
     <Collect ref="perUnitPriceMultiplier" default="1.0"/>
     <DataCollector scope="monetization">perUnitPriceMultiplier</DataCollector>
   </Capture>

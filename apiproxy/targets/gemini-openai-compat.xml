@@ -25,7 +25,12 @@
   </PreFlow>
   <PostFlow name="PostFlow">
     <Request/>
-    <Response/>
+    <Response>
+      <Step>
+        <Condition>!(stream = true) and (request_format != "openai")</Condition>
+        <Name>JS-gemini-to-anthropic-resp</Name>
+      </Step>
+    </Response>
   </PostFlow>
   <Flows/>
   <EventFlow name="EventFlow" content-type="text/event-stream">

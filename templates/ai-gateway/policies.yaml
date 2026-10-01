@@ -7,8 +7,18 @@
 - {{ include "./policies/JS-resolve-model-location.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-extract-prompt.yaml" . | indent 2 | trim }}
 
-# Authentication Policy
+# Authentication & Persona Token Import Policies
+- {{ include "./policies/JS-extract-auth-credentials.yaml" . | indent 2 | trim }}
 - {{ include "./policies/VA-ApiKey.yaml" . | indent 2 | trim }}
+- {{ include "./policies/OA-VerifyAccessToken.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SC-VerifyAgentToken.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SC-VerifyIdpOpaqueToken.yaml" . | indent 2 | trim }}
+- {{ include "./policies/VJ-VerifyIdpJwt.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-resolve-auth-persona.yaml" . | indent 2 | trim }}
+- {{ include "./policies/OA-ImportExternalToken.yaml" . | indent 2 | trim }}
+- {{ include "./policies/OA-SaveTokenAttributes.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-restore-request-payload.yaml" . | indent 2 | trim }}
+- {{ include "./policies/RF-Unauthorized.yaml" . | indent 2 | trim }}
 
 # Translation & Variable Extractors
 - {{ include "./policies/JS-anthropic-to-gemini.yaml" . | indent 2 | trim }}
@@ -41,7 +51,20 @@
 - {{ include "./policies/AM-SetMonetizationHeaders.yaml" . | indent 2 | trim }}
 - {{ include "./policies/LTQ-EnforceOnly.yaml" . | indent 2 | trim }}
 - {{ include "./policies/LTQ-CountOnly.yaml" . | indent 2 | trim }}
+{{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+- {{ include "./policies/LTQ-SecondaryEnforceOnly.yaml" . | indent 2 | trim }}
+- {{ include "./policies/LTQ-SecondaryCountOnly.yaml" . | indent 2 | trim }}
+{{- end }}
 - {{ include "./policies/AM-SetQuotaHeaders.yaml" . | indent 2 | trim }}
+{{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
+- {{ include "./policies/SA-BurstRateLimit.yaml" . | indent 2 | trim }}
+{{- end }}
+{{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+- {{ include "./policies/Q-ConcurrencyLimit.yaml" . | indent 2 | trim }}
+- {{ include "./policies/RQ-ReleaseConcurrencySlot.yaml" . | indent 2 | trim }}
+{{- end }}
+- {{ include "./policies/JS-format-rate-limit-error.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-RateLimitError.yaml" . | indent 2 | trim }}
 
 # Telemetry & Token Data Collectors
 - {{ include "./policies/DC-CaptureTokenCountsNonStreaming.yaml" . | indent 2 | trim }}

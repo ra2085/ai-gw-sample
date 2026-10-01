@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var extractedModel = context.getVariable("model");
     var bodyStr = context.getVariable("request.content") || "";
@@ -13,20 +16,63 @@ try {
     var fallbackModel = null;
     var costTier = null;
     var allowFallbacks = true;
+    var explicitPublisher = context.getVariable("input_publisher_prefix") || null;
+
+    // Normalize slash-prefixed extractedModel (e.g. meta/llama-3.3-70b-instruct-maas)
+    var bareExtractedModel = extractedModel;
+    if (extractedModel && extractedModel.indexOf("/") !== -1) {
+        var extSlashIdx = extractedModel.indexOf("/");
+        var extPrefix = extractedModel.substring(0, extSlashIdx);
+        if (extPrefix !== "gateway" && extPrefix !== "auto") {
+            explicitPublisher = explicitPublisher || extPrefix;
+            bareExtractedModel = extractedModel.substring(extSlashIdx + 1);
+        }
+    }
+
+    function isOpenAiModelName(m) {
+        if (!m) return false;
+        return m.indexOf("gpt-") === 0 ||
+               m.indexOf("o1") === 0 ||
+               m.indexOf("o3") === 0 ||
+               m.indexOf("o4") === 0 ||
+               m.indexOf("text-embedding-3-") === 0 ||
+               m.indexOf("text-embedding-ada-") === 0;
+    }
+
+    var hasClientOpenAiKey = !!(
+        context.getVariable("verifyapikey.VA-ApiKey.openai_api_key") ||
+        context.getVariable("verifyapikey.VA-ApiKey.openai_api_key_ref") ||
+        context.getVariable("apiproduct.openai_api_key") ||
+        context.getVariable("apiproduct.openai_api_key_ref") ||
+        context.getVariable("request.header.X-Upstream-Provider") === "openai"
+    );
+
+    function shouldBypassAlias(m, pubPrefix) {
+        if (!m) return false;
+        if (pubPrefix === "openai") return true;
+        if (context.getVariable("propertyset.model_locations." + m + ".publisher")) return true;
+        if (context.getVariable("verifyapikey.VA-ApiKey." + m + "_api_key") ||
+            context.getVariable("verifyapikey.VA-ApiKey." + m + "_api_key_ref")) return true;
+        if (hasClientOpenAiKey && isOpenAiModelName(m)) return true;
+        return false;
+    }
 
     // -------------------------------------------------------------------------
     // 1. Fast Path: Standard Direct Single-Model Requests (Zero JSON Parse)
     // -------------------------------------------------------------------------
-    var directAlias = extractedModel ? context.getVariable("propertyset.model_locations.alias." + extractedModel) : null;
+    var directAlias = (bareExtractedModel && !shouldBypassAlias(bareExtractedModel, explicitPublisher))
+        ? context.getVariable("propertyset.model_locations.alias." + bareExtractedModel)
+        : null;
     var hasAdvancedFeatures = (bodyStr.indexOf('"models"') !== -1 || 
                                bodyStr.indexOf('"plugins"') !== -1 || 
                                bodyStr.indexOf('"auto"') !== -1 ||
+                               (extractedModel && (extractedModel.indexOf("auto") === 0 || extractedModel.indexOf("gateway/") === 0)) ||
                                directAlias !== null);
 
-    if (!hasAdvancedFeatures && extractedModel) {
-        // Fast-path: Direct model already extracted by EV-Model
+    if (!hasAdvancedFeatures && bareExtractedModel) {
+        // Fast-path: Direct model already extracted by EV-Model / JS-extract-vars
         requestedModel = extractedModel;
-        primaryModel = extractedModel;
+        primaryModel = bareExtractedModel;
     } else {
         // ---------------------------------------------------------------------
         // 2. Deep Path: Multi-Model Fallback Arrays, Auto-Router & Cost Tiers
@@ -81,9 +127,18 @@ try {
             var rawModel = requestedCandidates[c];
             if (!rawModel) continue;
             var slashIdx = rawModel.indexOf('/');
+            var candPrefix = null;
+            if (slashIdx !== -1) {
+                candPrefix = rawModel.substring(0, slashIdx);
+                if (c === 0 && candPrefix !== "gateway" && candPrefix !== "auto") {
+                    explicitPublisher = explicitPublisher || candPrefix;
+                }
+            }
             var normalized = (slashIdx !== -1) ? rawModel.substring(slashIdx + 1) : rawModel;
             
-            var alias = context.getVariable("propertyset.model_locations.alias." + normalized);
+            var alias = shouldBypassAlias(normalized, candPrefix || (c === 0 ? explicitPublisher : null))
+                ? null
+                : context.getVariable("propertyset.model_locations.alias." + normalized);
             resolvedCandidates.push(alias || normalized);
         }
 
@@ -109,12 +164,58 @@ try {
     // -------------------------------------------------------------------------
     // 3. Dynamic Target, Publisher, Region & Custom URL Resolution
     // -------------------------------------------------------------------------
-    var publisher = context.getVariable("propertyset.model_locations." + primaryModel + ".publisher") || defaultPublisher;
-    var targetName = context.getVariable("propertyset.model_locations." + primaryModel + ".target") || defaultTarget;
-    var endpointLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".endpoint") || "global";
-    var modelLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".model") || "global";
-    var modelFormat = context.getVariable("propertyset.model_locations." + primaryModel + ".format") || defaultFormat;
-    var customUrl = context.getVariable("propertyset.model_locations." + primaryModel + ".url");
+    var isEmbeddings = context.getVariable("is_embeddings") === "true" || primaryModel.indexOf("embedding") !== -1;
+    var defaultLoc = isEmbeddings ? "us-central1" : "global";
+
+    var configuredPublisher = context.getVariable("propertyset.model_locations." + primaryModel + ".publisher");
+    var publisher = configuredPublisher || explicitPublisher || (isOpenAiModelName(primaryModel) ? "openai" : defaultPublisher);
+
+    var customUrl = context.getVariable("verifyapikey.VA-ApiKey." + primaryModel + "_url") ||
+                    context.getVariable("verifyapikey.VA-ApiKey.upstream_custom_url") ||
+                    context.getVariable("propertyset.model_locations." + primaryModel + ".url");
+
+    if (publisher === "openai" && !customUrl) {
+        var openAiBaseUrl = context.getVariable("verifyapikey.VA-ApiKey.openai_base_url") ||
+                            context.getVariable("propertyset.config.openai_base_url") ||
+                            "https://api.openai.com/v1";
+        openAiBaseUrl = openAiBaseUrl.replace(/\/+$/, "");
+        customUrl = openAiBaseUrl + (isEmbeddings ? "/embeddings" : "/chat/completions");
+    }
+
+    var configuredFormat = context.getVariable("propertyset.model_locations." + primaryModel + ".format");
+    var modelFormat = configuredFormat || (publisher === "anthropic" ? "anthropic" : ((publisher !== "google" || customUrl) ? "openai" : defaultFormat));
+
+    var fallbackEndpointLoc = defaultLoc;
+    var fallbackModelLoc = defaultLoc;
+    if (publisher === "anthropic") {
+        fallbackEndpointLoc = context.getVariable("propertyset.model_locations.default_claude.endpoint") || "us-east5";
+        fallbackModelLoc = context.getVariable("propertyset.model_locations.default_claude.model") || "us-east5";
+    } else if (modelFormat === "openai" && publisher !== "google" && !customUrl) {
+        fallbackEndpointLoc = context.getVariable("propertyset.model_locations.default_openai.endpoint") || defaultLoc;
+        fallbackModelLoc = context.getVariable("propertyset.model_locations.default_openai.model") || defaultLoc;
+    }
+
+    var endpointLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".endpoint") || fallbackEndpointLoc;
+    var modelLocation = context.getVariable("propertyset.model_locations." + primaryModel + ".model") || fallbackModelLoc;
+
+    var authType = context.getVariable("verifyapikey.VA-ApiKey." + primaryModel + "_auth_type") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.upstream_auth_type") ||
+                   context.getVariable("propertyset.model_locations." + primaryModel + ".auth_type");
+
+    var isGoogleUrl = !customUrl || customUrl.indexOf("googleapis.com") !== -1;
+    var useExternalTarget = (publisher === "openai" || (customUrl && !isGoogleUrl && authType !== "google_iam"));
+
+    var configuredTarget = context.getVariable("propertyset.model_locations." + primaryModel + ".target");
+    var targetName = defaultTarget;
+    if (useExternalTarget) {
+        targetName = "openai-custom";
+    } else if (configuredTarget) {
+        targetName = configuredTarget;
+    } else if (publisher === "anthropic" || modelFormat === "anthropic") {
+        targetName = "claude";
+    } else if (modelFormat === "openai") {
+        targetName = "gemini-openai-compat";
+    }
 
     var endpointHost = (endpointLocation && endpointLocation !== "global") ? (endpointLocation + "-aiplatform.googleapis.com") : "aiplatform.googleapis.com";
 
@@ -129,32 +230,307 @@ try {
 
     context.setVariable("model_publisher", publisher);
     context.setVariable("model_format", modelFormat);
+    context.setVariable("route_format", modelFormat);
     context.setVariable("route_target", targetName);
     context.setVariable("endpoint_host", endpointHost);
     context.setVariable("endpoint_location", endpointLocation);
     context.setVariable("model_location", modelLocation);
 
-    if (customUrl) {
-        context.setVariable("model_custom_url", customUrl);
-        context.setVariable("target.url", customUrl);
-    }
-
-    // Optional Custom Auth Configuration per Model
-    var authType = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_type");
-    var authHeader = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_header");
-    var authTokenRef = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token_ref");
-    var authTokenDirect = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token");
-
-    var tokenVal = (authTokenRef ? context.getVariable(authTokenRef) : null) || authTokenDirect;
-
-    if (authType && tokenVal) {
-        if (authType === "bearer") {
-            context.setVariable("request.header.Authorization", "Bearer " + tokenVal);
-        } else if ((authType === "header" || authType === "apikey") && authHeader) {
-            context.setVariable("request.header." + authHeader, tokenVal);
+    if (context.getVariable("request_format") === "openai") {
+        if (useExternalTarget) {
+            context.setVariable("original_model", primaryModel);
+        } else {
+            context.setVariable("original_model", publisher + "/" + primaryModel);
         }
     }
 
+    if (customUrl) {
+        context.setVariable("model_custom_url", customUrl);
+        context.setVariable("target.url", customUrl);
+    } else if (isEmbeddings && context.getVariable("request_format") === "gemini") {
+        var pathSuffix = context.getVariable("proxy.pathsuffix") || "";
+        if (pathSuffix) {
+            var locMatch = pathSuffix.match(/\/locations\/([^\/]+)\//);
+            var pathLoc = (locMatch && locMatch[1]) ? locMatch[1] : endpointLocation;
+            var embHost = (pathLoc && pathLoc !== "global") ? (pathLoc + "-aiplatform.googleapis.com") : endpointHost;
+            context.setVariable("target.copy.pathsuffix", false);
+            context.setVariable("target.url", "https://" + embHost + pathSuffix);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. Per-Client Provider Account Isolation & Upstream Auth Resolution
+    // -------------------------------------------------------------------------
+    var authHeader = context.getVariable("verifyapikey.VA-ApiKey." + primaryModel + "_auth_header") ||
+                     context.getVariable("verifyapikey.VA-ApiKey.upstream_auth_header") ||
+                     context.getVariable("propertyset.model_locations." + primaryModel + ".auth_header");
+
+    var clientKeyRef = context.getVariable("verifyapikey.VA-ApiKey." + primaryModel + "_api_key_ref") ||
+                       context.getVariable("verifyapikey.VA-ApiKey." + publisher + "_api_key_ref") ||
+                       (publisher === "openai" ? context.getVariable("verifyapikey.VA-ApiKey.openai_api_key_ref") : null) ||
+                       context.getVariable("verifyapikey.VA-ApiKey.upstream_api_key_ref");
+    var clientKeyDirect = (clientKeyRef ? context.getVariable(clientKeyRef) : null) ||
+                          context.getVariable("verifyapikey.VA-ApiKey." + primaryModel + "_api_key") ||
+                          context.getVariable("verifyapikey.VA-ApiKey." + publisher + "_api_key") ||
+                          (publisher === "openai" ? context.getVariable("verifyapikey.VA-ApiKey.openai_api_key") : null) ||
+                          context.getVariable("verifyapikey.VA-ApiKey.upstream_api_key");
+
+    var productKeyRef = context.getVariable("apiproduct." + primaryModel + "_api_key_ref") ||
+                        context.getVariable("apiproduct." + publisher + "_api_key_ref") ||
+                        (publisher === "openai" ? context.getVariable("apiproduct.openai_api_key_ref") : null) ||
+                        context.getVariable("apiproduct.upstream_api_key_ref");
+    var productKeyDirect = (productKeyRef ? context.getVariable(productKeyRef) : null) ||
+                           context.getVariable("apiproduct." + primaryModel + "_api_key") ||
+                           context.getVariable("apiproduct." + publisher + "_api_key") ||
+                           (publisher === "openai" ? context.getVariable("apiproduct.openai_api_key") : null) ||
+                           context.getVariable("apiproduct.upstream_api_key");
+
+    var authTokenRef = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token_ref");
+    var authTokenDirect = context.getVariable("propertyset.model_locations." + primaryModel + ".auth_token");
+    var modelKeyVal = (authTokenRef ? context.getVariable(authTokenRef) : null) || authTokenDirect;
+
+    var globalKeyVal = context.getVariable("propertyset.config." + publisher + "_api_key") ||
+                       (publisher === "openai" ? context.getVariable("propertyset.config.openai_api_key") : null);
+
+    var tokenVal = null;
+    var authSource = null;
+    if (clientKeyDirect) {
+        tokenVal = clientKeyDirect;
+        authSource = "client_app";
+    } else if (productKeyDirect) {
+        tokenVal = productKeyDirect;
+        authSource = "api_product";
+    } else if (modelKeyVal) {
+        tokenVal = modelKeyVal;
+        authSource = "model_config";
+    } else if (globalKeyVal) {
+        tokenVal = globalKeyVal;
+        authSource = "global_config";
+    }
+
+    if (tokenVal) {
+        var effAuthType = authType || (authHeader ? "header" : "bearer");
+        if (effAuthType === "bearer") {
+            context.setVariable("request.header.Authorization", "Bearer " + tokenVal);
+        } else if ((effAuthType === "header" || effAuthType === "apikey") && authHeader) {
+            context.setVariable("request.header." + authHeader, tokenVal);
+        }
+        context.setVariable("upstream_auth_source", authSource);
+        context.setVariable("response.header.X-Gateway-Auth-Source", authSource);
+    }
+
+    if (useExternalTarget) {
+        if (!authHeader || authHeader.toLowerCase() !== "x-apikey") {
+            context.setVariable("request.header.x-apikey", "");
+        }
+    }
+
+    // Per-Client OpenAI Organization & Project Header Isolation
+    var openaiOrgId = context.getVariable("verifyapikey.VA-ApiKey.openai_org_id") ||
+                      context.getVariable("apiproduct.openai_org_id") ||
+                      context.getVariable("propertyset.model_locations." + primaryModel + ".openai_org_id") ||
+                      context.getVariable("propertyset.config.openai_org_id");
+    if (openaiOrgId) {
+        context.setVariable("request.header.OpenAI-Organization", openaiOrgId);
+        context.setVariable("response.header.X-Gateway-Provider-Account", openaiOrgId);
+    }
+
+    var openaiProjectId = context.getVariable("verifyapikey.VA-ApiKey.openai_project_id") ||
+                          context.getVariable("apiproduct.openai_project_id") ||
+                          context.getVariable("propertyset.model_locations." + primaryModel + ".openai_project_id") ||
+                          context.getVariable("propertyset.config.openai_project_id");
+    if (openaiProjectId) {
+        context.setVariable("request.header.OpenAI-Project", openaiProjectId);
+    }
+
+    // Identity & Persona Normalization (API Key / OAuth / Imported Agent & IdP Tokens)
+    var oauthUserId = context.getVariable("accesstoken.user_id") || context.getVariable("auth_user_id");
+    var identityUserId = oauthUserId ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.email") ||
+                         context.getVariable("developer.email") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.client_id") ||
+                         context.getVariable("client_id") ||
+                         "anonymous";
+    var identityPersona = context.getVariable("accesstoken.persona") ||
+                          context.getVariable("auth_persona") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.persona") ||
+                          context.getVariable("apiproduct.persona") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.apiproduct.name") ||
+                          context.getVariable("apiproduct.name") ||
+                          "default";
+    var identityTeam = context.getVariable("accesstoken.team") ||
+                       context.getVariable("auth_team") ||
+                       context.getVariable("verifyapikey.VA-ApiKey.team") ||
+                       context.getVariable("apiproduct.team") ||
+                       "default";
+    var identityAuthType = context.getVariable("accesstoken.auth_source") ||
+                           context.getVariable("auth_token_type") ||
+                           (context.getVariable("verifyapikey.VA-ApiKey.client_id") ? "apikey" : (context.getVariable("client_id") ? "oauth" : "none"));
+
+    context.setVariable("identity_user_id", identityUserId);
+    context.setVariable("identity_persona", identityPersona);
+    context.setVariable("identity_team", identityTeam);
+    context.setVariable("identity_auth_type", identityAuthType);
+    context.setVariable("response.header.X-Gateway-Identity-Persona", identityPersona);
+
+    // Bridge OAuth / Imported Token identity & API Product quotas to VA-ApiKey variables
+    // so LLMTokenQuota (which references stepName="VA-ApiKey") enforces per-user buckets under the Persona product
+    if (oauthUserId || !context.getVariable("verifyapikey.VA-ApiKey.client_id")) {
+        var effectiveQuotaClientId = oauthUserId ||
+                                     context.getVariable("verifyapikey.VA-ApiKey.client_id") ||
+                                     context.getVariable("client_id") ||
+                                     context.getVariable("developer.app.name");
+        if (effectiveQuotaClientId) {
+            context.setVariable("verifyapikey.VA-ApiKey.client_id", effectiveQuotaClientId);
+        }
+    }
+
+    var rawQuotaOverride = context.getVariable("accesstoken.quota_override") ||
+                           context.getVariable("auth_quota_override") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.quota_override") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.quota_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_limit");
+    var quotaOverrideExpiresAt = context.getVariable("accesstoken.quota_override_expires_at") ||
+                                 context.getVariable("auth_quota_override_expires_at") ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.quota_override_expires_at") ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override_expires_at");
+    var primaryQuotaOverride = "";
+    var quotaExceptionActive = false;
+    if (rawQuotaOverride) {
+        var isExpired = false;
+        if (quotaOverrideExpiresAt && String(quotaOverrideExpiresAt).trim() !== "") {
+            var expStr = String(quotaOverrideExpiresAt).trim();
+            var expMs = /^[0-9]+$/.test(expStr) ? parseInt(expStr, 10) : Date.parse(expStr);
+            if (!isNaN(expMs) && expMs < 100000000000) {
+                expMs = expMs * 1000; // Convert Unix seconds to milliseconds if needed
+            }
+            if (!isNaN(expMs) && Date.now() >= expMs) {
+                isExpired = true;
+            }
+        }
+        if (!isExpired) {
+            primaryQuotaOverride = String(rawQuotaOverride);
+            quotaExceptionActive = true;
+        }
+    }
+    context.setVariable("quota_exception_active", quotaExceptionActive ? "true" : "false");
+
+    var oauthProductQuotaLimit = context.getVariable("apiproduct.developer.quota.limit");
+    var oauthLlmQuotaLimit = context.getVariable("apiproduct.developer.llmQuota.limit");
+    if (primaryQuotaOverride) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(primaryQuotaOverride));
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(primaryQuotaOverride));
+    } else {
+        if (oauthProductQuotaLimit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit")) {
+            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(oauthProductQuotaLimit));
+        }
+        if (oauthLlmQuotaLimit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit")) {
+            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(oauthLlmQuotaLimit));
+        }
+    }
+    var oauthProductQuotaInterval = context.getVariable("apiproduct.developer.quota.interval");
+    if (oauthProductQuotaInterval && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval")) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval", String(oauthProductQuotaInterval));
+    }
+    var oauthLlmQuotaInterval = context.getVariable("apiproduct.developer.llmQuota.interval");
+    if (oauthLlmQuotaInterval && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval")) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval", String(oauthLlmQuotaInterval));
+    }
+    var oauthProductQuotaTimeunit = context.getVariable("apiproduct.developer.quota.timeunit");
+    if (oauthProductQuotaTimeunit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit")) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit", String(oauthProductQuotaTimeunit));
+    }
+    var oauthLlmQuotaTimeunit = context.getVariable("apiproduct.developer.llmQuota.timeunit");
+    if (oauthLlmQuotaTimeunit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit")) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit", String(oauthLlmQuotaTimeunit));
+    }
+
+    // Burst Rate & Concurrency Client Identifier Resolution
+    var rateLimitClientId = oauthUserId ||
+                            context.getVariable("verifyapikey.VA-ApiKey.client_id") ||
+                            context.getVariable("client_id") ||
+                            context.getVariable("developer.app.name") ||
+                            context.getVariable("client.ip") ||
+                            "default_client";
+    context.setVariable("rate_limit_client_id", rateLimitClientId);
+
+    // Secondary Quota Window / Shared Team Budget Resolution (Token Claim -> App -> Developer -> API Product)
+    var teamQuotaLimit = context.getVariable("verifyapikey.VA-ApiKey.team_quota_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.team_quota_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_limit") ||
+                         context.getVariable("apiproduct.team_quota_limit");
+    var secScope = context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_scope") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_scope") ||
+                   context.getVariable("apiproduct.secondary_quota_scope") ||
+                   (teamQuotaLimit ? "team" : "user");
+    context.setVariable("secondary_quota_scope", secScope);
+
+    // If configured as a shared Team Budget (secScope === "team"), all team members share bucket "team:<identity_team>"
+    // unless the user has an active individual exception (quotaExceptionActive), which isolates their bucket so they
+    // can continue working even when the shared team budget is exhausted.
+    var secondaryQuotaIdentifier = (secScope === "team" && !quotaExceptionActive)
+                                   ? ("team:" + identityTeam)
+                                   : rateLimitClientId;
+    context.setVariable("secondary_quota_identifier", secondaryQuotaIdentifier);
+
+    var secLimit = (quotaExceptionActive ? primaryQuotaOverride : "") ||
+                   context.getVariable("accesstoken.secondary_quota_limit") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_limit") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_limit") ||
+                   teamQuotaLimit ||
+                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit") ||
+                   context.getVariable("apiproduct.secondary_quota_limit");
+    if (secLimit) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit", String(secLimit));
+        context.setVariable("secondary_quota_limit", String(secLimit));
+    }
+    var secInterval = context.getVariable("accesstoken.secondary_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_interval") ||
+                      context.getVariable("apiproduct.team_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval") ||
+                      context.getVariable("apiproduct.secondary_quota_interval");
+    if (secInterval) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval", String(secInterval));
+        context.setVariable("secondary_quota_interval", String(secInterval));
+    }
+    var secUnit = context.getVariable("accesstoken.secondary_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_unit") ||
+                  context.getVariable("apiproduct.team_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit") ||
+                  context.getVariable("apiproduct.secondary_quota_unit");
+    if (secUnit) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit", String(secUnit));
+        context.setVariable("secondary_quota_unit", String(secUnit));
+    }
+
+    var burstRateLimit = context.getVariable("request.header.X-Gateway-Burst-Rate") ||
+                         context.getVariable("accesstoken.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate_limit") ||
+                         context.getVariable("apiproduct.burst_rate") ||
+                         context.getVariable("apiproduct.burst_rate_limit") ||
+                         context.getVariable("propertyset.config.default_burst_rate") ||
+                         "600pm";
+    context.setVariable("burst_rate_limit", burstRateLimit);
+
+    var concurrencyLimit = context.getVariable("request.header.X-Gateway-Concurrency-Limit") ||
+                           context.getVariable("accesstoken.concurrency_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.concurrency_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.concurrency_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.apiproduct.concurrency_limit") ||
+                           context.getVariable("apiproduct.concurrency_limit") ||
+                           context.getVariable("propertyset.config.default_concurrency_limit") ||
+                           "20";
+    context.setVariable("concurrency_limit", String(concurrencyLimit));
 
     context.setVariable("response.header.X-Gateway-Requested-Model", requestedModel);
     context.setVariable("response.header.X-Gateway-Routed-Model", primaryModel);
@@ -170,4 +546,9 @@ try {
     context.setVariable("endpoint_host", "aiplatform.googleapis.com");
     context.setVariable("endpoint_location", "global");
     context.setVariable("model_location", "global");
+    context.setVariable("rate_limit_client_id", context.getVariable("verifyapikey.VA-ApiKey.client_id") || "default_client");
+    context.setVariable("burst_rate_limit", context.getVariable("propertyset.config.default_burst_rate") || "600pm");
+    context.setVariable("concurrency_limit", context.getVariable("propertyset.config.default_concurrency_limit") || "20");
 }
+
+})();

@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 var error = context.getVariable("error.content");
 error = JSON.parse(error);
 
@@ -15,3 +18,5 @@ if (responseMatchState === "MATCH_FOUND") {
 
 error = JSON.stringify(error);
 context.setVariable("error.content", error);
+
+})();

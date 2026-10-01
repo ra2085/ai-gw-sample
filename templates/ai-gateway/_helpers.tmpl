@@ -49,8 +49,8 @@ alias.{{ $alias }}={{ $target }}
 {{- range $.Values.models }}
 # --- {{ .displayName | default .name }} ---
 {{ .name }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
-{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
-{{ .name }}.endpoint={{ .region | default "global" }}
+{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
+{{ .name }}.endpoint={{ .endpoint | default .region | default "global" }}
 {{ .name }}.model={{ .region | default "global" }}
 {{ .name }}.format={{ .format | default "gemini" }}
 {{ .name }}.display_name={{ .displayName | default .name }}
@@ -60,6 +60,15 @@ alias.{{ $alias }}={{ $target }}
 {{- end }}
 {{- if .custom_url }}
 {{ .name }}.url={{ .custom_url }}
+{{- end }}
+{{- if .upstream_model }}
+{{ .name }}.upstream_model={{ .upstream_model }}
+{{- end }}
+{{- if .openai_org_id }}
+{{ .name }}.openai_org_id={{ .openai_org_id }}
+{{- end }}
+{{- if .openai_project_id }}
+{{ .name }}.openai_project_id={{ .openai_project_id }}
 {{- end }}
 {{- if .auth }}
 {{- if .auth.type }}
@@ -94,13 +103,27 @@ default_openai.model=us
 {{- define "generate_monetization_rates_properties" -}}
 # Default fallback pricing parameters
 default.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
+platform.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
 default.markup={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
+platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
+default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_input_rate }}{{ $.Values.features.monetization.default_input_rate }}{{ else }}0.10{{ end }}
+default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_output_rate }}{{ $.Values.features.monetization.default_output_rate }}{{ else }}0.40{{ end }}
 
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
 {{- if .pricing }}
+{{ .name }}.input_rate_per_m={{ .pricing.input_rate }}
+{{ .name }}.output_rate_per_m={{ .pricing.output_rate }}
 {{ .name }}.input_rate={{ .pricing.input_rate }}
 {{ .name }}.output_rate={{ .pricing.output_rate }}
+{{- if .pricing.cache_read_rate }}
+{{ .name }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
+{{ .name }}.cache_read_rate={{ .pricing.cache_read_rate }}
+{{- end }}
+{{- if .pricing.cache_write_rate }}
+{{ .name }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
+{{ .name }}.cache_write_rate={{ .pricing.cache_write_rate }}
+{{- end }}
 {{- if .pricing.markup }}
 {{ .name }}.markup={{ .pricing.markup }}
 {{- end }}
@@ -117,6 +140,71 @@ project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.
 model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
 model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
+default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
+default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_api_key }}
+openai_api_key={{ $.Values.gateway.openai_api_key }}
+{{- end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_org_id }}
+openai_org_id={{ $.Values.gateway.openai_org_id }}
+{{- end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_project_id }}
+openai_project_id={{ $.Values.gateway.openai_project_id }}
+{{- end }}
+{{- $auth := dict }}
+{{- if $.Values.auth }}
+{{- $auth = $.Values.auth }}
+{{- else if and $.Values.features $.Values.features.auth }}
+{{- $auth = $.Values.features.auth }}
+{{- end }}
+
+# Authentication & Persona-Based Token Import Configuration
+auth_allow_bearer_api_key={{ if hasKey $auth "allow_bearer_api_key" }}{{ $auth.allow_bearer_api_key }}{{ else }}true{{ end }}
+auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
+auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix }}{{ else }}.iam.gserviceaccount.com{{ end }}
+auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
+auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+auth_idp_opaque_enabled={{ if and $auth.idp_opaque (hasKey $auth.idp_opaque "enabled") }}{{ $auth.idp_opaque.enabled }}{{ else }}false{{ end }}
+auth_idp_opaque_userinfo_url={{ if and $auth.idp_opaque $auth.idp_opaque.userinfo_url }}{{ $auth.idp_opaque.userinfo_url }}{{ else }}https://idp.example.com/oauth2/v1/userinfo{{ end }}
+auth_idp_opaque_user_claim={{ if and $auth.idp_opaque $auth.idp_opaque.user_claim }}{{ $auth.idp_opaque.user_claim }}{{ else }}email{{ end }}
+auth_idp_opaque_persona_claim={{ if and $auth.idp_opaque $auth.idp_opaque.persona_claim }}{{ $auth.idp_opaque.persona_claim }}{{ else }}role{{ end }}
+auth_idp_opaque_team_claim={{ if and $auth.idp_opaque $auth.idp_opaque.team_claim }}{{ $auth.idp_opaque.team_claim }}{{ else }}department{{ end }}
+auth_idp_opaque_quota_override_claim={{ if and $auth.idp_opaque $auth.idp_opaque.quota_override_claim }}{{ $auth.idp_opaque.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
+auth_idp_opaque_token_ttl_ms={{ if and $auth.idp_opaque $auth.idp_opaque.token_ttl_ms }}{{ $auth.idp_opaque.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+auth_idp_jwt_enabled={{ if and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") }}{{ $auth.idp_jwt.enabled }}{{ else }}false{{ end }}
+auth_idp_jwt_jwks_uri={{ if and $auth.idp_jwt $auth.idp_jwt.jwks_uri }}{{ $auth.idp_jwt.jwks_uri }}{{ else }}https://idp.example.com/oauth2/v1/keys{{ end }}
+auth_idp_jwt_issuer={{ if and $auth.idp_jwt $auth.idp_jwt.issuer }}{{ $auth.idp_jwt.issuer }}{{ else }}https://idp.example.com{{ end }}
+auth_idp_jwt_user_claim={{ if and $auth.idp_jwt $auth.idp_jwt.user_claim }}{{ $auth.idp_jwt.user_claim }}{{ else }}email{{ end }}
+auth_idp_jwt_persona_claim={{ if and $auth.idp_jwt $auth.idp_jwt.persona_claim }}{{ $auth.idp_jwt.persona_claim }}{{ else }}role{{ end }}
+auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $auth.idp_jwt.team_claim }}{{ else }}department{{ end }}
+auth_idp_jwt_quota_override_claim={{ if and $auth.idp_jwt $auth.idp_jwt.quota_override_claim }}{{ $auth.idp_jwt.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
+auth_idp_jwt_token_ttl_ms={{ if and $auth.idp_jwt $auth.idp_jwt.token_ttl_ms }}{{ $auth.idp_jwt.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+{{- if $auth.personas }}
+{{- $pNames := list -}}
+{{- range $pName, $_ := $auth.personas -}}
+  {{- $pNames = append $pNames $pName -}}
+{{- end }}
+auth_personas_list={{ $pNames | sortAlpha | join "," }}
+auth_persona_default={{ $auth.default_persona | default "" }}
+{{- range $pName, $pCfg := $auth.personas }}
+persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
+persona.{{ $pName }}.client_id={{ $pCfg.client_id | default "" }}
+{{- end }}
+{{- else }}
+auth_personas_list=knowledge-worker,developer,it,agent
+auth_persona_default={{ $auth.default_persona | default "" }}
+persona.knowledge-worker.match_claims=knowledge-worker,general,business
+persona.knowledge-worker.client_id=
+persona.developer.match_claims=developer,engineering,swe,data-science
+persona.developer.client_id=
+persona.it.match_claims=it,platform-admin,sre,devops,secops
+persona.it.client_id=
+persona.agent.match_claims=agent,service-account,automation
+persona.agent.client_id=
+{{- end }}
 {{- end -}}
 
 
@@ -126,6 +214,48 @@ model_armor_template={{ if and $.Values.features $.Values.features.model_armor }
 {{- define "generate_extract_expressions_properties" -}}
 prompt_exp=$.messages[?(@.role=='user')].content
 buffer_size=50
+{{- end -}}
+
+{{/*
+  Helper: auth_preflow_steps
+  Renders the unified 4-option Auth & Persona Token Import PreFlow steps
+*/}}
+{{- define "auth_preflow_steps" -}}
+- Step:
+    Name: JS-extract-auth-credentials
+- Step:
+    Condition: '(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")'
+    Name: VA-ApiKey
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")'
+    Name: OA-VerifyAccessToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
+    Name: SC-VerifyAgentToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
+    Name: SC-VerifyIdpOpaqueToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
+    Name: VJ-VerifyIdpJwt
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")'
+    Name: JS-resolve-auth-persona
+- Step:
+    Condition: 'auth_ready_to_import = "true"'
+    Name: OA-ImportExternalToken
+- Step:
+    Condition: '(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")'
+    Name: OA-SaveTokenAttributes
+- Step:
+    Condition: 'auth_ready_to_import = "true"'
+    Name: JS-restore-request-payload
+- Step:
+    Condition: '(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")'
+    Name: OA-VerifyAccessToken
+- Step:
+    Condition: '(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")'
+    Name: RF-Unauthorized
 {{- end -}}
 
 {{- define "blank" -}}{{- end -}}

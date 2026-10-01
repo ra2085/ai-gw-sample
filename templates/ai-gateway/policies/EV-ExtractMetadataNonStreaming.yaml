@@ -1,5 +1,5 @@
 ExtractVariables:
-  .continueOnError: false
+  .continueOnError: true
   .enabled: true
   .name: EV-ExtractMetadataNonStreaming
   DisplayName: EV-ExtractMetadataNonStreaming
@@ -14,6 +14,14 @@ ExtractVariables:
         .name: completion_tokens
         .type: integer
         JSONPath: $.usage.output_tokens
+    - Variable:
+        .name: cache_read_input_tokens
+        .type: integer
+        JSONPath: $.usage.cache_read_input_tokens
+    - Variable:
+        .name: cache_creation_input_tokens
+        .type: integer
+        JSONPath: $.usage.cache_creation_input_tokens
   Source:
     .clearPayload: false
     -Data: response

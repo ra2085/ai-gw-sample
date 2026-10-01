@@ -3,6 +3,7 @@
   <DisplayName>LTQ-CountOnly</DisplayName>
   <SharedName>llm-token-counter</SharedName>
   <CountOnly>true</CountOnly>
+  <Identifier ref="rate_limit_client_id"/>
   <UseQuotaConfigInAPIProduct stepName="VA-ApiKey" />
   <Distributed>true</Distributed>
   <LLMTokenUsageSource>{usage_total_tokens}</LLMTokenUsageSource>

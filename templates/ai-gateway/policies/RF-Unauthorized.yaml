@@ -1,0 +1,17 @@
+RaiseFault:
+  .continueOnError: false
+  .enabled: true
+  .name: RF-Unauthorized
+  DisplayName: RF-Unauthorized
+  Properties: {}
+  FaultResponse:
+    Set:
+      Headers:
+        Header:
+          .name: Content-Type
+          -Data: application/json
+      Payload:
+        .contentType: application/json
+        -Data: '{auth_error_payload}'
+      StatusCode: '{auth_error_status}'
+  IgnoreUnresolvedVariables: true

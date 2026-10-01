@@ -1,7 +1,123 @@
+(function () {
+'use strict';
+
 try {
     var promptTokens = parseInt(context.getVariable("prompt_tokens") || 0, 10);
     var completionTokens = parseInt(context.getVariable("completion_tokens") || 0, 10);
-    context.setVariable("usage_total_tokens", (promptTokens + completionTokens).toFixed(0));
+
+    var isEmbeddings = context.getVariable("is_embeddings") === "true";
+    var isVertexPredict = context.getVariable("vertex_predict_embeddings") === "true";
+
+    if ((isEmbeddings || isVertexPredict || (promptTokens === 0 && completionTokens === 0)) && context.getVariable("response.content")) {
+        var respStr = context.getVariable("response.content");
+        if (respStr && respStr.indexOf('"predictions"') !== -1) {
+            var respBody = JSON.parse(respStr);
+            if (Array.isArray(respBody.predictions)) {
+                var embTokens = 0;
+                var dataList = [];
+                for (var i = 0; i < respBody.predictions.length; i++) {
+                    var pred = respBody.predictions[i] || {};
+                    var emb = pred.embeddings || pred;
+                    if (emb.statistics && typeof emb.statistics.token_count === "number") {
+                        embTokens += emb.statistics.token_count;
+                    }
+                    if (isVertexPredict || context.getVariable("request_format") === "openai") {
+                        dataList.push({
+                            object: "embedding",
+                            index: i,
+                            embedding: emb.values || []
+                        });
+                    }
+                }
+                promptTokens = embTokens;
+                context.setVariable("prompt_tokens", promptTokens.toFixed(0));
+                context.setVariable("completion_tokens", "0");
+
+                if (isVertexPredict || context.getVariable("request_format") === "openai") {
+                    var openaiEmbResp = {
+                        object: "list",
+                        data: dataList,
+                        model: context.getVariable("model") || "text-embedding-005",
+                        usage: {
+                            prompt_tokens: promptTokens,
+                            total_tokens: promptTokens
+                        }
+                    };
+                    context.setVariable("response.content", JSON.stringify(openaiEmbResp));
+                }
+            }
+        }
+    }
+
+    if (isNaN(promptTokens) || promptTokens < 0) promptTokens = 0;
+    if (isNaN(completionTokens) || completionTokens < 0) completionTokens = 0;
+
+    var cacheReadInputStr = context.getVariable("cache_read_input_tokens");
+    var cacheCreationInputStr = context.getVariable("cache_creation_input_tokens");
+    var cachedContentStr = context.getVariable("cached_content_tokens");
+    var thoughtsTokensStr = context.getVariable("thoughts_tokens");
+    var cachedPromptStr = context.getVariable("cached_prompt_tokens");
+    var reasoningTokensStr = context.getVariable("reasoning_tokens");
+    var existingThinkingStr = context.getVariable("thinking_tokens");
+    var requestFormat = (context.getVariable("request_format") || "").toLowerCase();
+
+    function toNonNegInt(val) {
+        var n = parseInt(val, 10);
+        return (isNaN(n) || n < 0) ? 0 : n;
+    }
+
+    var uncachedPromptTokens = promptTokens;
+    var cacheReadTokens = 0;
+    var cacheWriteTokens = 0;
+    var thinkingTokens = toNonNegInt(existingThinkingStr);
+    var totalCompletionTokens = completionTokens;
+
+    if (cachedContentStr !== null || thoughtsTokensStr !== null || requestFormat === "gemini") {
+        // Vertex AI Gemini native format:
+        // promptTokenCount includes cachedContentTokenCount; candidatesTokenCount excludes thoughtsTokenCount
+        cacheReadTokens = toNonNegInt(cachedContentStr);
+        uncachedPromptTokens = Math.max(0, promptTokens - cacheReadTokens);
+        thinkingTokens = toNonNegInt(thoughtsTokensStr);
+        totalCompletionTokens = completionTokens + thinkingTokens;
+    } else if (cachedPromptStr !== null || reasoningTokensStr !== null || requestFormat === "openai") {
+        // OpenAI / Codex format:
+        // prompt_tokens includes prompt_tokens_details.cached_tokens (and cache_creation_input_tokens when transcoded from Claude);
+        // completion_tokens already includes completion_tokens_details.reasoning_tokens
+        cacheReadTokens = toNonNegInt(cachedPromptStr);
+        cacheWriteTokens = toNonNegInt(cacheCreationInputStr);
+        uncachedPromptTokens = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
+        if (reasoningTokensStr !== null) {
+            thinkingTokens = toNonNegInt(reasoningTokensStr);
+        }
+        totalCompletionTokens = completionTokens;
+    } else {
+        // Anthropic Claude format (default):
+        // input_tokens is uncached input tokens only; cache_read_input_tokens and cache_creation_input_tokens are additive;
+        // output_tokens already includes thinking tokens
+        cacheReadTokens = toNonNegInt(cacheReadInputStr);
+        cacheWriteTokens = toNonNegInt(cacheCreationInputStr);
+        uncachedPromptTokens = promptTokens;
+        totalCompletionTokens = completionTokens;
+    }
+
+    var totalPromptTokens = uncachedPromptTokens + cacheReadTokens + cacheWriteTokens;
+    var totalTokens = totalPromptTokens + totalCompletionTokens;
+
+    context.setVariable("prompt_tokens", totalPromptTokens.toFixed(0));
+    context.setVariable("usage_prompt_tokens", totalPromptTokens.toFixed(0));
+    context.setVariable("uncached_prompt_tokens", uncachedPromptTokens.toFixed(0));
+    context.setVariable("usage_uncached_prompt_tokens", uncachedPromptTokens.toFixed(0));
+    context.setVariable("cache_read_tokens", cacheReadTokens.toFixed(0));
+    context.setVariable("usage_cache_read_tokens", cacheReadTokens.toFixed(0));
+    context.setVariable("cache_write_tokens", cacheWriteTokens.toFixed(0));
+    context.setVariable("usage_cache_write_tokens", cacheWriteTokens.toFixed(0));
+    context.setVariable("thinking_tokens", thinkingTokens.toFixed(0));
+    context.setVariable("usage_thinking_tokens", thinkingTokens.toFixed(0));
+    context.setVariable("completion_tokens", totalCompletionTokens.toFixed(0));
+    context.setVariable("usage_completion_tokens", totalCompletionTokens.toFixed(0));
+    context.setVariable("usage_total_tokens", totalTokens.toFixed(0));
 } catch (e) {
     print("Error calculating non-streaming tokens: " + e);
 }
+
+})();

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ServiceCallout continueOnError="true" enabled="true" name="SC-VerifyIdpOpaqueToken">
+  <DisplayName>SC-VerifyIdpOpaqueToken</DisplayName>
+  <Properties/>
+  <Request clearPayload="true" variable="idpOpaqueVerifyRequest">
+    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+    <Set>
+      <Headers>
+        <Header name="Authorization">Bearer {auth_bearer_token}</Header>
+        <Header name="Accept">application/json</Header>
+      </Headers>
+      <Verb>GET</Verb>
+    </Set>
+  </Request>
+  <Response>idpOpaqueVerifyResponse</Response>
+  <HTTPTargetConnection>
+    <Properties>
+      <Property name="io.timeout.millis">3000</Property>
+    </Properties>
+    <URL>{propertyset.config.auth_idp_opaque_userinfo_url}</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

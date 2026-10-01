@@ -128,9 +128,9 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ## 5. Create Data Collectors (Required One-Time Organization Setup)
 
-Apigee captures real-time token metrics and transaction costs into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
+Apigee captures real-time token metrics, micro-transaction costs, and identity attribution (`user_id`, `persona`, `team`) into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
 
-Run this loop once per organization to create all 6 required Data Collectors:
+Run this loop once per organization to create all **9 required Data Collectors**:
 
 ```bash
 for dc in \
@@ -139,11 +139,11 @@ for dc in \
   "dc_total_token_count:INTEGER" \
   "dc_model:STRING" \
   "dc_requested_model:STRING" \
-  "dc_tx_cost_usd:FLOAT"; do
+  "dc_tx_cost_usd:FLOAT" \
+  "dc_identity_user_id:STRING" \
+  "dc_identity_persona:STRING" \
+  "dc_identity_team:STRING"; do
   IFS=":" read -r name type <<< "$dc"
   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
 done
 ```
-
-
-

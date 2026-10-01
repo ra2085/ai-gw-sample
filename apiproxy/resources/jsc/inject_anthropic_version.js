@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var customUrl = context.getVariable("model_custom_url");
     if (customUrl) {
@@ -118,4 +121,4 @@ try {
     print("Error in inject_anthropic_version: " + e);
 }
 
-
+})();

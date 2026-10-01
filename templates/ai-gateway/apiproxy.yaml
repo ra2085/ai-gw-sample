@@ -13,25 +13,36 @@ ProxyEndpoints:
       .name: {{ if and $.Values.endpoints $.Values.endpoints.claude }}{{ $.Values.endpoints.claude.name | default "claude-messages" }}{{ else }}claude-messages{{ end }}
       -Data:
         - Description: Anthropic Claude Messages Proxy Endpoint
-        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
-            FaultRule:
-              .name: sanitize
-              -Data:
-                - Step:
-                    Name: JS-inject-deidentified-finding
-                - Step:
-                    Name: AM-CustomError
-                - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
-        {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+            {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+            - FaultRule:
+                .name: sanitize
+                -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
+                  - Step:
+                      Name: JS-inject-deidentified-finding
+                  - Step:
+                      Name: AM-CustomError
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            {{- end }}
 
         - PreFlow:
             .name: PreFlow
             Request:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
-              - Step:
-                  Condition: '!(request.header.Authorization Matches "Bearer *")'
-                  Name: VA-ApiKey
+              {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
@@ -56,15 +67,29 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: SA-BurstRateLimit
+              {{- end }}
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-SecondaryEnforceOnly
+              {{- end }}
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: Q-ConcurrencyLimit
               {{- end }}
               - Step:
                   Name: JS-extract-prompt
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
+                  Condition: extracted_prompt != null and extracted_prompt != ""
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
             Response: {}
@@ -72,6 +97,11 @@ ProxyEndpoints:
             .name: PostFlow
             Request: {}
             Response:
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: RQ-ReleaseConcurrencySlot
+              {{- end }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: EV-ExtractMetadataNonStreaming
@@ -90,6 +120,11 @@ ProxyEndpoints:
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-SecondaryCountOnly
+              {{- end }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
@@ -115,6 +150,14 @@ ProxyEndpoints:
             Condition: route_target = "claude"
             TargetEndpoint: claude
         - RouteRule:
+            .name: openai-custom
+            Condition: route_target = "openai-custom"
+            TargetEndpoint: openai-custom
+        - RouteRule:
+            .name: gemini-openai-compat
+            Condition: (route_target = "gemini-openai-compat") or (model_format = "openai")
+            TargetEndpoint: gemini-openai-compat
+        - RouteRule:
             .name: gemini
             TargetEndpoint: gemini
   {{- end }}
@@ -124,25 +167,36 @@ ProxyEndpoints:
       .name: {{ if and $.Values.endpoints $.Values.endpoints.gemini_native }}{{ $.Values.endpoints.gemini_native.name | default "gemini-native" }}{{ else }}gemini-native{{ end }}
       -Data:
         - Description: Native Gemini API Proxy Endpoint compatible with ADK
-        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
-            FaultRule:
-              .name: sanitize
-              -Data:
-                - Step:
-                    Name: JS-inject-deidentified-finding
-                - Step:
-                    Name: AM-CustomError
-                - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
-        {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+            {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+            - FaultRule:
+                .name: sanitize
+                -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
+                  - Step:
+                      Name: JS-inject-deidentified-finding
+                  - Step:
+                      Name: AM-CustomError
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            {{- end }}
 
         - PreFlow:
             .name: PreFlow
             Request:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
-              - Step:
-                  Condition: '!(request.header.Authorization Matches "Bearer *")'
-                  Name: VA-ApiKey
+              {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
@@ -165,10 +219,23 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: SA-BurstRateLimit
+              {{- end }}
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-SecondaryEnforceOnly
+              {{- end }}
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: Q-ConcurrencyLimit
               {{- end }}
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
@@ -183,6 +250,11 @@ ProxyEndpoints:
             .name: PostFlow
             Request: {}
             Response:
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: RQ-ReleaseConcurrencySlot
+              {{- end }}
               - Step:
                   Condition: '!(stream = true) and request_format = "gemini"'
                   Name: EV-ExtractMetadataNonStreamingGemini
@@ -204,6 +276,11 @@ ProxyEndpoints:
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-SecondaryCountOnly
+              {{- end }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
@@ -237,25 +314,36 @@ ProxyEndpoints:
       .name: {{ if and $.Values.endpoints $.Values.endpoints.openai_compat }}{{ $.Values.endpoints.openai_compat.name | default "openai-compat" }}{{ else }}openai-compat{{ end }}
       -Data:
         - Description: OpenAI Compatibility API Proxy Endpoint for Gemini
-        {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
         - FaultRules:
-            FaultRule:
-              .name: sanitize
-              -Data:
-                - Step:
-                    Name: JS-inject-deidentified-finding
-                - Step:
-                    Name: AM-CustomError
-                - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
-        {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+            {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+            - FaultRule:
+                .name: sanitize
+                -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
+                  - Step:
+                      Name: JS-inject-deidentified-finding
+                  - Step:
+                      Name: AM-CustomError
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            {{- end }}
 
         - PreFlow:
             .name: PreFlow
             Request:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
-              - Step:
-                  Condition: '!(request.header.Authorization Matches "Bearer *")'
-                  Name: VA-ApiKey
+              {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
@@ -280,10 +368,23 @@ ProxyEndpoints:
               {{- end }}
               - Step:
                   Name: JS-resolve-model-location
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: SA-BurstRateLimit
+              {{- end }}
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
                   Condition: apiproduct.name != null
                   Name: LTQ-EnforceOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-SecondaryEnforceOnly
+              {{- end }}
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: Q-ConcurrencyLimit
               {{- end }}
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
@@ -295,6 +396,11 @@ ProxyEndpoints:
             .name: PostFlow
             Request: {}
             Response:
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: RQ-ReleaseConcurrencySlot
+              {{- end }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: EV-ExtractMetadataNonStreamingOpenAI
@@ -313,6 +419,11 @@ ProxyEndpoints:
               - Step:
                   Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-SecondaryCountOnly
+              {{- end }}
               - Step:
                   Condition: '!(stream = true)'
                   Name: AM-SetQuotaHeaders
@@ -337,6 +448,142 @@ ProxyEndpoints:
             Condition: (route_target = "claude") or (route_format = "anthropic")
             TargetEndpoint: claude
         - RouteRule:
+            .name: openai-custom
+            Condition: route_target = "openai-custom"
+            TargetEndpoint: openai-custom
+        - RouteRule:
+            .name: gemini-openai-compat
+            TargetEndpoint: gemini-openai-compat
+  {{- end }}
+
+  {{- if or (not $.Values.endpoints) (not $.Values.endpoints.openai_embeddings) (and $.Values.endpoints.openai_embeddings (ne $.Values.endpoints.openai_embeddings.enabled false)) }}
+  - ProxyEndpoint:
+      .name: {{ if and $.Values.endpoints $.Values.endpoints.openai_embeddings }}{{ $.Values.endpoints.openai_embeddings.name | default "openai-embeddings" }}{{ else }}openai-embeddings{{ end }}
+      -Data:
+        - Description: OpenAI Embeddings API Proxy Endpoint for Vertex AI and BYO Models
+        - FaultRules:
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+            {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+            - FaultRule:
+                .name: sanitize
+                -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
+                  - Step:
+                      Name: JS-inject-deidentified-finding
+                  - Step:
+                      Name: AM-CustomError
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            {{- end }}
+
+        - PreFlow:
+            .name: PreFlow
+            Request:
+              {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
+              {{- include "auth_preflow_steps" . | nindent 14 }}
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              - Step:
+                  Name: MLC-EnforceMonetizationLimits
+              {{- end }}
+              - Step:
+                  Name: AM-NormalizePathSuffix
+              - Step:
+                  Name: OAS-VerifyOpenAI
+              - Step:
+                  Name: JS-extract-vars-openai
+              - Step:
+                  Name: JS-resolve-model-location
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: SA-BurstRateLimit
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-EnforceOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: apiproduct.name != null
+                  Name: LTQ-SecondaryEnforceOnly
+              {{- end }}
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Name: Q-ConcurrencyLimit
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+              - Step:
+                  Condition: extracted_prompt != null and extracted_prompt != ""
+                  Name: SUP-SanitizeUserPrompt
+              {{- end }}
+            Response: {}
+        - PostFlow:
+            .name: PostFlow
+            Request: {}
+            Response:
+              {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: RQ-ReleaseConcurrencySlot
+              {{- end }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: EV-ExtractMetadataNonStreamingOpenAI
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-tokens-non-streaming
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: JS-calculate-monetization-cost
+              {{- end }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: DC-CaptureTokenCountsNonStreaming
+              {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-CountOnly
+              {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+              - Step:
+                  Condition: (!(stream = true)) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Name: LTQ-SecondaryCountOnly
+              {{- end }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetQuotaHeaders
+              {{- end }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              - Step:
+                  Condition: '!(stream = true)'
+                  Name: AM-SetMonetizationHeaders
+              {{- end }}
+        - Flows: {}
+        - HTTPProxyConnection:
+            BasePath: {{ if and $.Values.endpoints $.Values.endpoints.openai_embeddings }}{{ $.Values.endpoints.openai_embeddings.base_path | default "/v1/embeddings" }}{{ else }}/v1/embeddings{{ end }}
+            Properties:
+              - Property:
+                  .name: response.streaming.enabled
+                  -Data: false
+              - Property:
+                  .name: api.timeout
+                  -Data: 300000
+        - RouteRule:
+            .name: openai-custom
+            Condition: route_target = "openai-custom"
+            TargetEndpoint: openai-custom
+        - RouteRule:
             .name: gemini-openai-compat
             TargetEndpoint: gemini-openai-compat
   {{- end }}
@@ -351,9 +598,7 @@ ProxyEndpoints:
         .name: PreFlow
         Request:
           {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
-          - Step:
-              Condition: '!(request.header.Authorization Matches "Bearer *")'
-              Name: VA-ApiKey
+          {{- include "auth_preflow_steps" . | nindent 10 }}
           {{- end }}
           {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
           - Step:
@@ -399,6 +644,11 @@ TargetEndpoints:
         FaultRule:
           .name: sanitize
           -Data:
+            {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+            - Step:
+                Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                Name: RQ-ReleaseConcurrencySlot
+            {{- end }}
             - Step:
                 Name: JS-inject-deidentified-finding
             - Step:
@@ -429,6 +679,11 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          - Step:
+              Condition: release_concurrency_slot = "true"
+              Name: RQ-ReleaseConcurrencySlot
+          {{- end }}
           {{- if $.Values.features.monetization.enabled }}
           - Step:
               Condition: usage_total_tokens != null
@@ -441,6 +696,11 @@ TargetEndpoints:
           - Step:
               Condition: usage_total_tokens != null and apiproduct.name != null
               Name: LTQ-CountOnly
+          {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-SecondaryCountOnly
+          {{- end }}
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
@@ -466,6 +726,11 @@ TargetEndpoints:
         FaultRule:
           .name: sanitize
           -Data:
+            {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+            - Step:
+                Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                Name: RQ-ReleaseConcurrencySlot
+            {{- end }}
             - Step:
                 Name: JS-inject-deidentified-finding
             - Step:
@@ -487,6 +752,11 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          - Step:
+              Condition: release_concurrency_slot = "true"
+              Name: RQ-ReleaseConcurrencySlot
+          {{- end }}
           {{- if $.Values.features.monetization.enabled }}
           - Step:
               Condition: usage_total_tokens != null
@@ -499,6 +769,11 @@ TargetEndpoints:
           - Step:
               Condition: usage_total_tokens != null and apiproduct.name != null
               Name: LTQ-CountOnly
+          {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-SecondaryCountOnly
+          {{- end }}
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
@@ -524,6 +799,11 @@ TargetEndpoints:
         FaultRule:
           .name: sanitize
           -Data:
+            {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+            - Step:
+                Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                Name: RQ-ReleaseConcurrencySlot
+            {{- end }}
             - Step:
                 Name: JS-inject-deidentified-finding
             - Step:
@@ -541,7 +821,10 @@ TargetEndpoints:
       PostFlow:
         .name: PostFlow
         Request: {}
-        Response: {}
+        Response:
+          - Step:
+              Condition: '!(stream = true) and (request_format != "openai")'
+              Name: JS-gemini-to-anthropic-resp
       Flows: {}
       EventFlow:
         .name: EventFlow
@@ -549,6 +832,11 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          - Step:
+              Condition: release_concurrency_slot = "true"
+              Name: RQ-ReleaseConcurrencySlot
+          {{- end }}
           {{- if $.Values.features.monetization.enabled }}
           - Step:
               Condition: usage_total_tokens != null
@@ -561,6 +849,11 @@ TargetEndpoints:
           - Step:
               Condition: usage_total_tokens != null and apiproduct.name != null
               Name: LTQ-CountOnly
+          {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-SecondaryCountOnly
+          {{- end }}
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
@@ -579,6 +872,82 @@ TargetEndpoints:
         URL: https://{endpoint_host}/v1/projects/{propertyset.config.project_id}/locations/{model_location}/endpoints/openapi/chat/completions
 
   - TargetEndpoint:
+      .name: openai-custom
+      Description: Target Endpoint for Direct OpenAI and External OpenAI-Compatible Endpoints
+      {{- if $.Values.features.model_armor.enabled }}
+      FaultRules:
+        FaultRule:
+          .name: sanitize
+          -Data:
+            {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+            - Step:
+                Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                Name: RQ-ReleaseConcurrencySlot
+            {{- end }}
+            - Step:
+                Name: JS-inject-deidentified-finding
+            - Step:
+                Name: AM-CustomError
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+      {{- end }}
+      PreFlow:
+        .name: PreFlow
+        Request:
+          - Step:
+              Name: AM-DisablePathSuffixCopy
+          - Step:
+              Name: JS-restore-model-openai
+        Response: {}
+      PostFlow:
+        .name: PostFlow
+        Request: {}
+        Response:
+          - Step:
+              Condition: '!(stream = true) and (request_format != "openai")'
+              Name: JS-gemini-to-anthropic-resp
+      Flows: {}
+      EventFlow:
+        .name: EventFlow
+        .content-type: text/event-stream
+        Response:
+          - Step:
+              Name: JS-combine-resp
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          - Step:
+              Condition: release_concurrency_slot = "true"
+              Name: RQ-ReleaseConcurrencySlot
+          {{- end }}
+          {{- if $.Values.features.monetization.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: JS-calculate-monetization-cost
+          {{- end }}
+          - Step:
+              Condition: usage_total_tokens != null
+              Name: DC-CaptureTokenCountsStreaming
+          {{- if $.Values.features.quotas.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-CountOnly
+          {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-SecondaryCountOnly
+          {{- end }}
+          {{- end }}
+          {{- if $.Values.features.model_armor.enabled }}
+          - Step:
+              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Name: SMR-SanitizeModelResponse
+          {{- end }}
+      HTTPTargetConnection:
+        Properties:
+          Property:
+            .name: io.timeout.millis
+            -Data: 300000
+        URL: https://api.openai.com/v1/chat/completions
+
+  - TargetEndpoint:
       .name: gemini
       Description: Target Endpoint for translated Gemini requests
       {{- if $.Values.features.model_armor.enabled }}
@@ -586,6 +955,11 @@ TargetEndpoints:
         FaultRule:
           .name: sanitize
           -Data:
+            {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+            - Step:
+                Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                Name: RQ-ReleaseConcurrencySlot
+            {{- end }}
             - Step:
                 Name: JS-inject-deidentified-finding
             - Step:
@@ -615,6 +989,11 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          - Step:
+              Condition: release_concurrency_slot = "true"
+              Name: RQ-ReleaseConcurrencySlot
+          {{- end }}
           {{- if $.Values.features.monetization.enabled }}
           - Step:
               Condition: usage_total_tokens != null
@@ -627,6 +1006,11 @@ TargetEndpoints:
           - Step:
               Condition: usage_total_tokens != null and apiproduct.name != null
               Name: LTQ-CountOnly
+          {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+          - Step:
+              Condition: usage_total_tokens != null and apiproduct.name != null
+              Name: LTQ-SecondaryCountOnly
+          {{- end }}
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
@@ -678,6 +1062,9 @@ Resources:
       Path: ./resources/jsc/combine_resp.js
   - Resource:
       Type: jsc
+      Path: ./resources/jsc/extract_auth_credentials.js
+  - Resource:
+      Type: jsc
       Path: ./resources/jsc/extract_prompt.js
   - Resource:
       Type: jsc
@@ -685,6 +1072,9 @@ Resources:
   - Resource:
       Type: jsc
       Path: ./resources/jsc/extract_vars_openai.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/format_rate_limit_error.js
   - Resource:
       Type: jsc
       Path: ./resources/jsc/gemini_to_anthropic_resp.js
@@ -705,7 +1095,13 @@ Resources:
       Path: ./resources/jsc/process_judge_response.js
   - Resource:
       Type: jsc
+      Path: ./resources/jsc/resolve_auth_persona.js
+  - Resource:
+      Type: jsc
       Path: ./resources/jsc/resolve_model_location.js
+  - Resource:
+      Type: jsc
+      Path: ./resources/jsc/restore_request_payload.js
   - Resource:
       Type: jsc
       Path: ./resources/jsc/anthropic_to_openai_resp.js

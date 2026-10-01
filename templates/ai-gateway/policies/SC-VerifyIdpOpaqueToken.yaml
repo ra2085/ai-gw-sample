@@ -1,0 +1,26 @@
+ServiceCallout:
+  .continueOnError: true
+  .enabled: true
+  .name: SC-VerifyIdpOpaqueToken
+  DisplayName: SC-VerifyIdpOpaqueToken
+  Properties: {}
+  Request:
+    .clearPayload: true
+    .variable: idpOpaqueVerifyRequest
+    IgnoreUnresolvedVariables: false
+    Set:
+      Headers:
+        - Header:
+            .name: Authorization
+            -Data: 'Bearer {auth_bearer_token}'
+        - Header:
+            .name: Accept
+            -Data: application/json
+      Verb: GET
+  Response: idpOpaqueVerifyResponse
+  HTTPTargetConnection:
+    Properties:
+      Property:
+        .name: io.timeout.millis
+        -Data: 3000
+    URL: '{propertyset.config.auth_idp_opaque_userinfo_url}'

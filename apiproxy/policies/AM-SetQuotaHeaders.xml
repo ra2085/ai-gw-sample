@@ -8,6 +8,10 @@
       <Header name="x-quota-available">{ratelimit.LTQ-CountOnly.available.count}</Header>
       <Header name="x-quota-ip-used">{ratelimit.LTQ-CountOnly-IP.used.count}</Header>
       <Header name="x-quota-ip-available">{ratelimit.LTQ-CountOnly-IP.available.count}</Header>
+      <Header name="x-ratelimit-burst-rate">{burst_rate_limit}</Header>
+      <Header name="x-ratelimit-concurrency-limit">{ratelimit.Q-ConcurrencyLimit.allowed.count}</Header>
+      <Header name="x-ratelimit-concurrency-active">{ratelimit.Q-ConcurrencyLimit.used.count}</Header>
+      <Header name="x-ratelimit-concurrency-available">{ratelimit.Q-ConcurrencyLimit.available.count}</Header>
       <Header name="X-Gateway-Requested-Model">{requested_model}</Header>
       <Header name="X-Gateway-Routed-Model">{primary_model}</Header>
       <Header name="X-Gateway-Cost-Tier">{cost_tier}</Header>

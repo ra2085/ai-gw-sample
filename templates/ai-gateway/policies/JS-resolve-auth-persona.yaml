@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-resolve-auth-persona
+  DisplayName: JS-resolve-auth-persona
+  Properties: {}
+  ResourceURL: jsc://resolve_auth_persona.js

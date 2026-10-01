@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ServiceCallout continueOnError="true" enabled="true" name="SC-VerifyAgentToken">
+  <DisplayName>SC-VerifyAgentToken</DisplayName>
+  <Properties/>
+  <Request clearPayload="true" variable="agentTokenVerifyRequest">
+    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+    <Set>
+      <QueryParams>
+        <QueryParam name="access_token">{auth_bearer_token}</QueryParam>
+      </QueryParams>
+      <Verb>GET</Verb>
+    </Set>
+  </Request>
+  <Response>agentTokenVerifyResponse</Response>
+  <HTTPTargetConnection>
+    <Properties>
+      <Property name="io.timeout.millis">3000</Property>
+    </Properties>
+    <URL>https://oauth2.googleapis.com/tokeninfo</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

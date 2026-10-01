@@ -344,6 +344,202 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Generate text embeddings (:predict)
+      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VertexPredictEmbeddingRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VertexPredictEmbeddingResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Generate text embeddings (:predict)
+      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VertexPredictEmbeddingRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VertexPredictEmbeddingResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:embedContent:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Embed content (:embedContent)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiEmbedContentRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:embedContent:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Embed content (:embedContent)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiEmbedContentRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:batchEmbedContents:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Batch embed contents (:batchEmbedContents)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiBatchEmbedContentsRequest'
+      responses:
+        '200':
+          description: Successful batch embedding response.
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:batchEmbedContents:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Batch embed contents (:batchEmbedContents)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiBatchEmbedContentsRequest'
+      responses:
+        '200':
+          description: Successful batch embedding response.
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -353,29 +549,78 @@ components:
   schemas:
     GeminiRequest:
       type: object
+      additionalProperties: true
       required:
         - contents
       properties:
+        systemInstruction:
+          type: object
+          additionalProperties: true
+        system_instruction:
+          type: object
+          additionalProperties: true
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        toolConfig:
+          type: object
+          additionalProperties: true
+        tool_config:
+          type: object
+          additionalProperties: true
+        generationConfig:
+          type: object
+          additionalProperties: true
+        generation_config:
+          type: object
+          additionalProperties: true
+        safetySettings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        cachedContent:
+          type: string
+        labels:
+          type: object
+          additionalProperties: true
         contents:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
-              - role
               - parts
             properties:
               role:
                 type: string
-                enum: [user, model]
+                enum: [user, model, function, tool]
                 example: user
               parts:
                 type: array
                 items:
                   type: object
+                  additionalProperties: true
                   properties:
                     text:
                       type: string
                       example: Describe gravity in one sentence.
+                    inlineData:
+                      type: object
+                      additionalProperties: true
+                    fileData:
+                      type: object
+                      additionalProperties: true
+                    functionCall:
+                      type: object
+                      additionalProperties: true
+                    functionResponse:
+                      type: object
+                      additionalProperties: true
+                    thought:
+                      type: boolean
     GeminiResponse:
       type: object
       properties:
@@ -411,15 +656,18 @@ components:
               type: integer
     ClaudeRequest:
       type: object
+      additionalProperties: true
       required:
-        - model
         - max_tokens
         - messages
       properties:
         model:
           type: string
-          description: Target model identifier.
+          description: Target model identifier (optional when passed in Vertex URL path).
           example: claude-haiku-4-5
+        anthropic_version:
+          type: string
+          example: vertex-2023-10-16
         max_tokens:
           type: integer
           description: Maximum tokens to generate.
@@ -428,10 +676,42 @@ components:
           type: boolean
           description: Enable SSE streaming response.
           default: false
+        system:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+        temperature:
+          type: number
+        top_p:
+          type: number
+        top_k:
+          type: integer
+        stop_sequences:
+          type: array
+          items:
+            type: string
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tool_choice:
+          type: object
+          additionalProperties: true
+        thinking:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
         messages:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
               - role
               - content
@@ -441,8 +721,13 @@ components:
                 enum: [user, assistant]
                 example: user
               content:
-                type: string
-                example: Explain gravity in one sentence.
+                oneOf:
+                  - type: string
+                    example: Explain gravity in one sentence.
+                  - type: array
+                    items:
+                      type: object
+                      additionalProperties: true
     ClaudeResponse:
       type: object
       properties:
@@ -476,6 +761,73 @@ components:
               type: integer
             output_tokens:
               type: integer
+    VertexPredictEmbeddingRequest:
+      type: object
+      required:
+        - instances
+      properties:
+        instances:
+          type: array
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+              text:
+                type: string
+              task_type:
+                type: string
+              title:
+                type: string
+        parameters:
+          type: object
+          properties:
+            outputDimensionality:
+              type: integer
+            autoTruncate:
+              type: boolean
+    VertexPredictEmbeddingResponse:
+      type: object
+      properties:
+        predictions:
+          type: array
+          items:
+            type: object
+            properties:
+              embeddings:
+                type: object
+                properties:
+                  values:
+                    type: array
+                    items:
+                      type: number
+                  statistics:
+                    type: object
+                    properties:
+                      truncated:
+                        type: boolean
+                      token_count:
+                        type: integer
+    GeminiEmbedContentRequest:
+      type: object
+      properties:
+        model:
+          type: string
+        content:
+          type: object
+        taskType:
+          type: string
+        title:
+          type: string
+        outputDimensionality:
+          type: integer
+    GeminiBatchEmbedContentsRequest:
+      type: object
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeminiEmbedContentRequest'
     ErrorResponse:
       type: object
       properties:

@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var pathSuffix = context.getVariable("proxy.pathsuffix") || "";
     
@@ -105,3 +108,5 @@ try {
     context.setVariable("response.header.Content-Type", "application/json");
     context.setVariable("response.status.code", 500);
 }
+
+})();

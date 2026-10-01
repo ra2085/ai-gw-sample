@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<ExtractVariables continueOnError="false" enabled="true" name="EV-ExtractMetadataNonStreamingGemini">
+<ExtractVariables continueOnError="true" enabled="true" name="EV-ExtractMetadataNonStreamingGemini">
   <DisplayName>EV-ExtractMetadataNonStreamingGemini</DisplayName>
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
   <JSONPayload>
@@ -8,6 +8,12 @@
     </Variable>
     <Variable name="completion_tokens" type="integer">
       <JSONPath>$.usageMetadata.candidatesTokenCount</JSONPath>
+    </Variable>
+    <Variable name="cached_content_tokens" type="integer">
+      <JSONPath>$.usageMetadata.cachedContentTokenCount</JSONPath>
+    </Variable>
+    <Variable name="thoughts_tokens" type="integer">
+      <JSONPath>$.usageMetadata.thoughtsTokenCount</JSONPath>
     </Variable>
   </JSONPayload>
   <Source clearPayload="false">response</Source>

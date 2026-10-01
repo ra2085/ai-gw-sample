@@ -145,6 +145,60 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /v1/embeddings:
+    post:
+      tags:
+        - OpenAI Completions Format
+      summary: Create embeddings (OpenAI format)
+      description: Creates an embedding vector representing the input text using Vertex AI or OpenAI-compatible embedding models.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAIRequest'
+            example:
+              model: text-embedding-005
+              input: "Explain gravity in one sentence."
+      responses:
+        '200':
+          description: Successful embedding response.
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
+    post:
+      tags:
+        - Native Gemini Format
+      summary: Generate text embeddings (Vertex :predict)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successful Vertex embedding response.
+
   /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
     post:
       tags:

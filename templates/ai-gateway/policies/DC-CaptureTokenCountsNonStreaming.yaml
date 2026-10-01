@@ -38,6 +38,21 @@ DataCapture:
         DataCollector: dc_tx_cost_usd
     - Capture:
         Collect:
+          .ref: identity_user_id
+          .default: anonymous
+        DataCollector: dc_identity_user_id
+    - Capture:
+        Collect:
+          .ref: identity_persona
+          .default: default
+        DataCollector: dc_identity_persona
+    - Capture:
+        Collect:
+          .ref: identity_team
+          .default: default
+        DataCollector: dc_identity_team
+    - Capture:
+        Collect:
           .ref: perUnitPriceMultiplier
           .default: 1.0
         DataCollector:

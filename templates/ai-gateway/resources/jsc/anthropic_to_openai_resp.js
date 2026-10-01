@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var rawContent = context.getVariable("response.content");
     if (rawContent) {
@@ -26,7 +29,10 @@ try {
             }
         }
 
-        var inTokens = (anthropicResp.usage && anthropicResp.usage.input_tokens) || 0;
+        var uncachedInTokens = (anthropicResp.usage && anthropicResp.usage.input_tokens) || 0;
+        var cacheReadTokens = (anthropicResp.usage && anthropicResp.usage.cache_read_input_tokens) || 0;
+        var cacheWriteTokens = (anthropicResp.usage && anthropicResp.usage.cache_creation_input_tokens) || 0;
+        var inTokens = uncachedInTokens + cacheReadTokens + cacheWriteTokens;
         var outTokens = (anthropicResp.usage && anthropicResp.usage.output_tokens) || 0;
         var totalTokens = inTokens + outTokens;
 
@@ -62,12 +68,20 @@ try {
             usage: {
                 prompt_tokens: inTokens,
                 completion_tokens: outTokens,
-                total_tokens: totalTokens
+                total_tokens: totalTokens,
+                prompt_tokens_details: {
+                    cached_tokens: cacheReadTokens
+                },
+                cache_creation_input_tokens: cacheWriteTokens
             }
         };
 
         // Populate token counts for downstream monetization & quota policies
         context.setVariable("usage_prompt_tokens", inTokens);
+        context.setVariable("usage_uncached_prompt_tokens", uncachedInTokens);
+        context.setVariable("usage_cache_read_tokens", cacheReadTokens);
+        context.setVariable("usage_cache_write_tokens", cacheWriteTokens);
+        context.setVariable("cache_creation_input_tokens", cacheWriteTokens);
         context.setVariable("usage_completion_tokens", outTokens);
         context.setVariable("usage_total_tokens", totalTokens.toFixed(0));
 
@@ -76,3 +90,5 @@ try {
 } catch (e) {
     print("Error in anthropic_to_openai_resp: " + e);
 }
+
+})();

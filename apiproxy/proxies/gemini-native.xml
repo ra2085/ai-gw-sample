@@ -2,6 +2,15 @@
 <ProxyEndpoint name="gemini-native">
   <Description>Native Gemini API Proxy Endpoint compatible with ADK</Description>
   <FaultRules>
+    <FaultRule name="rate-limit">
+      <Step>
+        <Name>JS-format-rate-limit-error</Name>
+      </Step>
+      <Step>
+        <Name>AM-RateLimitError</Name>
+      </Step>
+      <Condition>(fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.LTQ-EnforceOnly.failed = true)</Condition>
+    </FaultRule>
     <FaultRule name="sanitize">
       <Step>
         <Name>JS-inject-deidentified-finding</Name>
@@ -15,8 +24,51 @@
   <PreFlow name="PreFlow">
     <Request>
       <Step>
-        <Condition>!(request.header.Authorization Matches "Bearer *")</Condition>
+        <Name>JS-extract-auth-credentials</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")</Condition>
         <Name>VA-ApiKey</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")</Condition>
+        <Name>OA-VerifyAccessToken</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")</Condition>
+        <Name>SC-VerifyAgentToken</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")</Condition>
+        <Name>SC-VerifyIdpOpaqueToken</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")</Condition>
+        <Name>VJ-VerifyIdpJwt</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")</Condition>
+        <Name>JS-resolve-auth-persona</Name>
+      </Step>
+      <Step>
+        <Condition>auth_ready_to_import = "true"</Condition>
+        <Name>OA-ImportExternalToken</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
+        <Name>OA-SaveTokenAttributes</Name>
+      </Step>
+      <Step>
+        <Condition>auth_ready_to_import = "true"</Condition>
+        <Name>JS-restore-request-payload</Name>
+      </Step>
+      <Step>
+        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
+        <Name>OA-VerifyAccessToken</Name>
+      </Step>
+      <Step>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")</Condition>
+        <Name>RF-Unauthorized</Name>
       </Step>
       <Step>
         <Name>MLC-EnforceMonetizationLimits</Name>

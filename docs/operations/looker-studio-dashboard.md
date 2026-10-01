@@ -32,21 +32,25 @@ Across standard enterprise traffic:
 
 ## 2. Apigee Telemetry Data Source
 
-The AI Gateway emits metrics captured by the 6 standard Data Collectors on every non-streaming and streaming transaction:
+The AI Gateway emits metrics captured by the **9 standard Data Collectors** on every non-streaming and streaming transaction:
 
 | Data Collector / Dimension | Type | Description |
 | :--- | :--- | :--- |
-| **`dc_requested_model`** | `STRING` | Original consumer request intent (`auto:judge`, `auto:low`, `auto:medium`, `gpt-4o`, etc.) |
-| **`dc_model`** | `STRING` | Effective model that processed the request (`gemini-3.1-flash-lite`, `gemini-3.5-flash`, etc.) |
-| **`dc_tx_cost_usd`** | `FLOAT` | Micro-transaction cost in USD calculated by the gateway |
-| **`dc_total_token_count`** | `INTEGER` | Total token consumption (Prompt + Completion) |
+| **`dc_requested_model`** | `STRING` | Original consumer request intent (`auto:judge`, `auto:low`, `auto:medium`, `gpt-5.4`, etc.) |
+| **`dc_model`** | `STRING` | Effective model that processed the request (`gemini-2.5-flash-lite`, `gemini-2.5-flash`, etc.) |
+| **`dc_tx_cost_usd`** | `FLOAT` | Micro-transaction cost in USD calculated by the gateway (cache- & reasoning-aware) |
+| **`dc_total_token_count`** | `INTEGER` | Total token consumption (Prompt + Completion + Reasoning) |
 | **`dc_prompt_token_count`** | `INTEGER` | Billed prompt input token count |
 | **`dc_completion_token_count`**| `INTEGER` | Billed completion output token count |
+| **`dc_identity_user_id`** | `STRING` | Authenticated user ID (`sub`/`email`), GCP Service Account, or App ID |
+| **`dc_identity_persona`** | `STRING` | Mapped enterprise persona (`lead-ai-engineer`, `power-developer`, `developer-default`) |
+| **`dc_identity_team`** | `STRING` | Department / cost-center / team (`eng-ml`, `platform`, etc.) |
 | **`developer_app`** | `STRING` | Consumer developer application name |
 | **`developer_email`** | `STRING` | Consumer developer contact email |
 | **`apiproxy`** | `STRING` | Proxy name (`ai-gateway`) |
 | **`response_status_code`** | `INTEGER` | HTTP status code (200, 4xx, 5xx) |
 | **`total_response_time`** | `INTEGER` | Round-trip latency in milliseconds |
+
 
 ---
 

@@ -1,6 +1,6 @@
 site_name: Apigee AI Gateway
 site_url: https://ra2085.github.io/ai-gw-sample/
-site_description: Enterprise AI Gateway with Smart Routing, LLM Judge, Model Armor Security, and Token Monetization on Google Cloud Apigee.
+site_description: Enterprise AI Gateway with Persona-Based Auth, Universal Protocol Transcoding, Per-Model & Team Quotas, Model Armor Security, and Cache-Aware Monetization on Google Cloud Apigee.
 site_author: Apigee AI Team
 repo_name: ra2085/ai-gw-sample
 repo_url: https://github.com/ra2085/ai-gw-sample
@@ -10,7 +10,6 @@ theme:
   logo: img/Apigee-512-color.png
   favicon: img/Apigee-512-color.png
   palette:
-    # Palette toggle for light mode (Google Cloud White Header & Light Surface)
     - media: "(prefers-color-scheme: light)"
       scheme: default
       primary: white
@@ -18,7 +17,6 @@ theme:
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Palette toggle for dark mode (True Neutral Obsidian & Black Header)
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
       primary: black
@@ -26,8 +24,6 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-
-
 
   font:
     text: Google Sans Text
@@ -51,7 +47,6 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
-
 markdown_extensions:
   - admonition
   - abbr
@@ -63,7 +58,6 @@ markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.details
-
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -88,26 +82,23 @@ nav:
   - 1. Getting Started:
       - 5-Minute Quickstart: getting-started/quickstart-template.md
       - Installation & Setup: getting-started/installation.md
-      - End-to-End Walkthrough: getting-started/quickstart.md
       - Choose Your Workflow: getting-started/choose-workflow.md
-  - 2. Model Configuration:
-      - Custom Providers & URLs: template-guide/custom-urls.md
-      - Configuration Reference: template-guide/configuration.md
-      - Feature Toggles: template-guide/feature-flags.md
-  - 3. Enterprise Features:
+      - End-to-End Walkthrough: getting-started/quickstart.md
+  - 2. Configuration & Models:
+      - values.yaml Schema Reference: template-guide/configuration.md
+      - Models, Providers & Custom URLs: template-guide/custom-urls.md
+      - Feature Toggles & Decision Matrix: template-guide/feature-flags.md
+  - 3. Enterprise Governance:
+      - Auth, Persona Tiers & Security: architecture/security.md
+      - Quotas, Rate Limits, Budgets & Cost: architecture/monetization.md
       - Smart Routing & LLM Judge: architecture/routing.md
-      - Security & Model Armor: architecture/security.md
-      - Token Monetization & Quotas: architecture/monetization.md
   - 4. Architecture & Deep Dive:
-      - Protocol Normalization: architecture/protocols.md
-      - Proxy & Policies Catalog: proxy-deep-dive/policies-reference.md
-      - JavaScript Callouts & Streaming: proxy-deep-dive/javascript-callouts.md
-      - Targets & Cloud Auth: proxy-deep-dive/targets-and-routing.md
-      - Bundle & PropertySets: proxy-deep-dive/bundle-structure.md
+      - Protocol Normalization & Embeddings: architecture/protocols.md
+      - Bundle Structure & Execution Flow: proxy-deep-dive/bundle-structure.md
+      - Policies Reference Catalog: proxy-deep-dive/policies-reference.md
+      - JavaScript Callouts & Memory Safety: proxy-deep-dive/javascript-callouts.md
+      - Targets & Upstream Auth: proxy-deep-dive/targets-and-routing.md
   - 5. Operations & Observability:
-      - Deployment Guide: operations/deployment.md
-      - Telemetry & Data Collectors: operations/telemetry.md
+      - Deployment & Testing Guide: operations/deployment.md
+      - Telemetry, Headers & Data Collectors: operations/telemetry.md
       - Looker Studio Cost Dashboard: operations/looker-studio-dashboard.md
-
-
-

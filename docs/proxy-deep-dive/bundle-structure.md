@@ -9,29 +9,38 @@ For users who want to work directly with the raw Apigee API proxy, the `apiproxy
 ```text
 apiproxy/
 ├── ai-gateway.xml                 # Master Proxy Manifest & Descriptor
-├── proxies/                       # Ingress Proxy Endpoints (4 files)
-│   ├── claude-messages.xml        # /v1/messages (Anthropic format)
-│   ├── gemini-native.xml          # /ai-gateway (Native Gemini & ADK)
-│   ├── openai-compat.xml          # /v1/chat/completions (OpenAI format)
-│   └── claude-models.xml          # /v1/models (Catalog discovery)
-├── targets/                       # Backend Target Endpoints (4 files)
-│   ├── claude.xml                 # Vertex Claude (streamRawPredict)
-│   ├── gemini.xml                 # Vertex Gemini generateContent (Translated)
-│   ├── gemini-native-target.xml   # Vertex Gemini predict (Native)
-│   └── gemini-openai-compat.xml   # Vertex OpenAI chat/completions
-├── policies/                      # XML Policy Definitions (38 policies)
-│   ├── VA-ApiKey.xml              # VerifyAPIKey
-│   ├── MLC-EnforceMonetizationLimits.xml # Monetization Pre-flight
-│   ├── SC-LLMJudge.xml            # ServiceCallout (Gemini Judge)
-│   ├── SUP-SanitizeUserPrompt.xml # Model Armor Ingress Filter
-│   ├── SMR-SanitizeModelResponse.xml # Model Armor Egress Filter
-│   ├── LTQ-EnforceOnly.xml        # Token Quota Enforcement
-│   ├── LTQ-CountOnly.xml          # Token Quota Accumulation
+├── proxies/                       # Ingress Proxy Endpoints (5 files)
+│   ├── claude-messages.xml        # /v1/messages (Anthropic Messages & Claude Code)
+│   ├── openai-compat.xml          # /v1/chat/completions (OpenAI Chat & Codex)
+│   ├── openai-embeddings.xml      # /v1/embeddings (OpenAI & Vertex AI Embeddings)
+│   ├── gemini-native.xml          # /ai-gateway (Native Vertex Gemini & ADK)
+│   └── claude-models.xml          # /v1/models (Dynamic Catalog Discovery)
+├── targets/                       # Backend Target Endpoints (5 files)
+│   ├── claude.xml                 # Vertex Claude (streamRawPredict) & Custom Anthropic
+│   ├── gemini.xml                 # Vertex Gemini (generateContent / predict)
+│   ├── gemini-native-target.xml   # Vertex Gemini Native Predict / ADK
+│   ├── gemini-openai-compat.xml   # Vertex OpenAI Chat & Model Garden MaaS (Llama/Mistral)
+│   └── openai-custom.xml          # Direct OpenAI (api.openai.com), Azure, DeepSeek & vLLM
+├── policies/                      # XML Policy Definitions (51 default + 4 opt-in in template)
+│   ├── JS-extract-auth-credentials.xml   # 4-Option Auth Credential Extractor
+│   ├── VA-ApiKey.xml                     # Option 1: VerifyAPIKey
+│   ├── OA-VerifyAccessToken.xml          # Option 2 & 4 Fast-Path: OAuthV2 VerifyAccessToken
+│   ├── SC-VerifyGoogleTokenInfo.xml      # Option 3: GCP Agent Identity TokenInfo
+│   ├── SC-IntrospectOpaqueToken.xml      # Option 4A: Enterprise IdP Opaque RFC 7662
+│   ├── VJ-VerifyIdpJwt.xml               # Option 4B: Enterprise IdP JWT (JWKS)
+│   ├── OA-SaveTokenAttributes.xml        # Option 4: External Token Import (<1ms L1 Cache)
+│   ├── RF-Unauthorized.xml               # Zero-Passthrough 401 Reject
+│   ├── MLC-EnforceMonetizationLimits.xml # Monetization Pre-flight Check
+│   ├── SC-LLMJudge.xml                   # ServiceCallout (Gemini Classifier)
+│   ├── SUP-SanitizeUserPrompt.xml        # Model Armor Ingress Filter
+│   ├── SMR-SanitizeModelResponse.xml     # Model Armor Egress & SSE Filter
+│   ├── LTQ-EnforceOnly.xml               # Primary & Per-Model Token Quota Enforcement
+│   ├── LTQ-CountOnly.xml                 # Primary & Per-Model Token Quota Accumulation
 │   └── ...
 └── resources/
-    ├── jsc/                       # JavaScript Resources (17 scripts)
-    ├── oas/                       # OpenAPI 3.0 Specs for OASValidation
-    └── properties/                # PropertySets (Model routing, pricing, config)
+    ├── jsc/                       # JavaScript Resources (20 IIFE-encapsulated scripts)
+    ├── oas/                       # OpenAPI 3.0 Specs for Request Validation (4 files)
+    └── properties/                # PropertySets (Model routing, pricing, auth, config)
         ├── model_locations.properties
         ├── monetization_rates.properties
         ├── config.properties
@@ -52,6 +61,7 @@ Defines proxy metadata, base paths, and references to all child policies, proxy 
   <Basepaths>/v1/messages</Basepaths>
   <Basepaths>/ai-gateway</Basepaths>
   <Basepaths>/v1/chat/completions</Basepaths>
+  <Basepaths>/v1/embeddings</Basepaths>
   <Basepaths>/v1/models</Basepaths>
   ...
 </APIProxy>

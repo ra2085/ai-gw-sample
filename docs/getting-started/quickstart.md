@@ -7,7 +7,7 @@ Deploy the complete Apigee AI Gateway in 3 simple steps using declarative templa
 > 1. Installed CLI tools (`apigee-go-gen` and `apigeecli`).
 > 2. Authenticated with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
 > 3. Created the deployment Service Account (`roles/aiplatform.user`).
-> 4. Created the 6 required telemetry Data Collectors in your Apigee organization.
+> 4. Created the **9 required telemetry Data Collectors** in your Apigee organization.
 
 
 ---
@@ -28,7 +28,8 @@ features:
     enabled: true
   model_armor:
     enabled: true
-    template_id: "projects/your-gcp-project-id/locations/global/templates/ai-gateway-filter"
+    project_id: "your-gcp-project-id"
+    template_id: "filter"
   llm_judge:
     enabled: true
   quotas:
@@ -62,9 +63,9 @@ apigee-go-gen render apiproxy \
 ## Step 3: Deploy to Apigee
 
 > [!TIP]
-> **First-time deployment in this organization?** Create the 6 required telemetry Data Collectors:
+> **First-time deployment in this organization?** Create the 9 required telemetry Data Collectors:
 > ```bash
-> for dc in "dc_prompt_token_count:INTEGER" "dc_completion_token_count:INTEGER" "dc_total_token_count:INTEGER" "dc_model:STRING" "dc_requested_model:STRING" "dc_tx_cost_usd:FLOAT"; do
+> for dc in "dc_prompt_token_count:INTEGER" "dc_completion_token_count:INTEGER" "dc_total_token_count:INTEGER" "dc_model:STRING" "dc_requested_model:STRING" "dc_tx_cost_usd:FLOAT" "dc_identity_user_id:STRING" "dc_identity_persona:STRING" "dc_identity_team:STRING"; do
 >   IFS=":" read -r name type <<< "$dc"
 >   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
 > done
@@ -86,8 +87,6 @@ apigeecli apis create bundle \
     --default-token
 ```
 
-
-
 ---
 
 ## Step 4: Test Your Gateway
@@ -97,12 +96,34 @@ Send a request using your favorite SDK or `curl`:
 === "Claude Messages (/v1/messages)"
     ```bash
     curl -X POST "https://$APIGEE_HOSTNAME/v1/messages" \
-      -H "x-apikey: $API_KEY" \
+      -H "x-api-key: $API_KEY" \
       -H "Content-Type: application/json" \
       -d '{
         "model": "claude-haiku-4-5",
         "max_tokens": 1024,
         "messages": [{"role": "user", "content": "Explain quantum computing in one sentence."}]
+      }'
+    ```
+
+=== "OpenAI Chat (/v1/chat/completions)"
+    ```bash
+    curl -X POST "https://$APIGEE_HOSTNAME/v1/chat/completions" \
+      -H "x-apikey: $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "gpt-5.4",
+        "messages": [{"role": "user", "content": "Hello!"}]
+      }'
+    ```
+
+=== "Embeddings (/v1/embeddings)"
+    ```bash
+    curl -X POST "https://$APIGEE_HOSTNAME/v1/embeddings" \
+      -H "x-apikey: $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "text-embedding-005",
+        "input": ["Apigee Enterprise AI Gateway"]
       }'
     ```
 
@@ -116,13 +137,3 @@ Send a request using your favorite SDK or `curl`:
       }'
     ```
 
-=== "OpenAI Compatibility (/v1/chat/completions)"
-    ```bash
-    curl -X POST "https://$APIGEE_HOSTNAME/v1/chat/completions" \
-      -H "x-apikey: $API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "model": "gpt-4o",
-        "messages": [{"role": "user", "content": "Hello!"}]
-      }'
-    ```

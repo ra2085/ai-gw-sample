@@ -1,35 +1,68 @@
-# 📊 Telemetry & Observability
+# 📊 Telemetry, Analytics & Runtime Tuning
 
-Every API transaction processed by the AI Gateway emits standardized observability response headers and records metrics in Apigee Analytics.
+Every API transaction processed by the AI Gateway emits standardized observability response headers and records token, cost, and identity attribution metrics in **Apigee Analytics**.
 
 ---
 
-## 1. Observability Response Headers
+## 1. Observability & Rate-Limit Response Headers
 
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
+# 1. Routing & Identity Attribution
 X-Gateway-Requested-Model: auto:judge
-X-Gateway-Routed-Model: gemini-3.5-flash
-X-Gateway-Cost-Tier: medium
-X-Gateway-Prompt-Tokens: 1500
+X-Gateway-Routed-Model: gemini-2.5-pro
+X-Gateway-Cost-Tier: high
+X-Gateway-Auth-Method: idp_jwt
+X-Gateway-User-Id: alice@corp.com
+X-Gateway-Persona: lead-ai-engineer
+X-Gateway-Team: eng-ml
+
+# 2. Multi-Bucket Token & Micro-Cost Telemetry
+X-Gateway-Prompt-Tokens: 2000
+X-Gateway-Uncached-Prompt-Tokens: 500
+X-Gateway-Cache-Read-Tokens: 1500
+X-Gateway-Cache-Write-Tokens: 0
 X-Gateway-Completion-Tokens: 350
-X-Gateway-Total-Tokens: 1850
-X-Gateway-Prompt-Cost-USD: 0.000150
-X-Gateway-Completion-Cost-USD: 0.000140
-X-Gateway-Total-Cost-USD: 0.000290
+X-Gateway-Reasoning-Tokens: 150
+X-Gateway-Total-Tokens: 2500
+X-Gateway-Prompt-Cost-USD: 0.001094
+X-Gateway-Completion-Cost-USD: 0.005000
+X-Gateway-Total-Cost-USD: 0.006094
 X-Gateway-Cost-Currency: USD
+
+# 3. Quota & Rate Limit Headers
+X-RateLimit-Tier-Mode: team_budget
+X-RateLimit-Limit-Tokens: 500000
+X-RateLimit-Remaining-Tokens: 497500
+X-RateLimit-Limit-Tokens-Secondary: 10000000
+X-RateLimit-Remaining-Tokens-Secondary: 9842000
 ```
 
 ---
 
-## 2. Apigee Analytics Data Collectors
+## 2. Apigee Analytics Data Collectors (All 9 Required)
 
-| Data Collector | Type | Description |
-| :--- | :--- | :--- |
-| **`dc_prompt_token_count`** | `INTEGER` | Billed prompt input token count. |
-| **`dc_completion_token_count`** | `INTEGER` | Billed completion output token count. |
-| **`dc_total_token_count`** | `INTEGER` | Total token consumption count. |
-| **`dc_model`** | `STRING` | Effective model that processed the request. |
-| **`dc_requested_model`** | `STRING` | Original consumer request intent. |
-| **`dc_tx_cost_usd`** | `FLOAT` | Micro-transaction cost in USD. |
+Both `DC-CaptureTokenCountsNonStreaming` (`PostFlow`) and `DC-CaptureTokenCountsStreaming` (`EventFlow`) populate **9 Data Collectors** on every request so you can build custom Apigee Analytics reports grouped by **Model**, **Developer**, **User (`dc_identity_user_id`)**, **Persona (`dc_identity_persona`)**, or **Team/Department (`dc_identity_team`)**:
+
+| Data Collector | Type | Flow Variable Source | Description |
+| :--- | :---: | :--- | :--- |
+| **`dc_prompt_token_count`** | `INTEGER` | `usage_prompt_tokens` | Total prompt input tokens (including cached tokens). |
+| **`dc_completion_token_count`** | `INTEGER` | `usage_completion_tokens` | Completion output tokens. |
+| **`dc_total_token_count`** | `INTEGER` | `usage_total_tokens` | Total tokens consumed (`prompt + completion + reasoning`). |
+| **`dc_model`** | `STRING` | `model` | Effective backend model that processed the request. |
+| **`dc_requested_model`** | `STRING` | `requested_model` | Original client-requested model, alias, or `auto:judge`. |
+| **`dc_tx_cost_usd`** | `FLOAT` | `tx_cost_usd` | Exact micro-transaction cost in USD (cache- & reasoning-aware). |
+| **`dc_identity_user_id`** | `STRING` | `identity_user_id` | Authenticated human user (`sub`/`email`), GCP Service Account, or App ID. |
+| **`dc_identity_persona`** | `STRING` | `identity_persona` | Mapped enterprise persona (`lead-ai-engineer`, `power-developer`, etc.). |
+| **`dc_identity_team`** | `STRING` | `identity_team` | Department / cost-center / team attribute (`eng-ml`, `platform`, etc.). |
+
+---
+
+## 3. Production Apigee Hybrid Runtime & Prometheus Tuning
+
+When running high-concurrency SSE streaming workloads on **Apigee Hybrid** (`apigee-runtime`), we recommend two operational best practices validated in production:
+
+1. **JavaScript `TopLevelScope` Memory Safety (Built-In):** All 20 JavaScript callouts in this repository are wrapped in strict IIFEs (`(function () { 'use strict'; ... })();`) and `combine_resp.js` avoids intermediate `context.removeVariable` churn during SSE streaming. If you add custom `.js` scripts to the proxy, always wrap them in an IIFE so Rhino does not accumulate `ScriptableObject$Slot` objects in the shared `TopLevelScope`.
+2. **Prometheus Scrape Filtering for High-Cardinality Proxy Metrics:** On Apigee Hybrid clusters with many proxy revisions, configure `metric_relabel_configs` on your Prometheus scrape job for `apigee-runtime` to drop unused per-policy latency histograms or limit label cardinality, keeping pod shallow heap and Prometheus TSDB memory flat.
+

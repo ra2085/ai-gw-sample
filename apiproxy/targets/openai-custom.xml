@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<TargetEndpoint name="openai-custom">
+  <Description>Target Endpoint for Direct OpenAI and External OpenAI-Compatible Endpoints</Description>
+  <FaultRules>
+    <FaultRule name="sanitize">
+      <Step>
+        <Name>JS-inject-deidentified-finding</Name>
+      </Step>
+      <Step>
+        <Name>AM-CustomError</Name>
+      </Step>
+      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
+    </FaultRule>
+  </FaultRules>
+  <PreFlow name="PreFlow">
+    <Request>
+      <Step>
+        <Name>AM-DisablePathSuffixCopy</Name>
+      </Step>
+      <Step>
+        <Name>JS-restore-model-openai</Name>
+      </Step>
+    </Request>
+    <Response/>
+  </PreFlow>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <Condition>!(stream = true) and (request_format != "openai")</Condition>
+        <Name>JS-gemini-to-anthropic-resp</Name>
+      </Step>
+    </Response>
+  </PostFlow>
+  <Flows/>
+  <EventFlow name="EventFlow" content-type="text/event-stream">
+    <Response>
+      <Step>
+        <Name>JS-combine-resp</Name>
+      </Step>
+      <Step>
+        <Condition>usage_total_tokens != null</Condition>
+        <Name>JS-calculate-monetization-cost</Name>
+      </Step>
+      <Step>
+        <Condition>usage_total_tokens != null</Condition>
+        <Name>DC-CaptureTokenCountsStreaming</Name>
+      </Step>
+      <Step>
+        <Condition>usage_total_tokens != null and apiproduct.name != null</Condition>
+        <Name>LTQ-CountOnly</Name>
+      </Step>
+      <Step>
+        <Condition>buff_ready = "true" and response_partial != null and response_partial != ""</Condition>
+        <Name>SMR-SanitizeModelResponse</Name>
+      </Step>
+    </Response>
+  </EventFlow>
+  <HTTPTargetConnection>
+    <Properties>
+      <Property name="io.timeout.millis">300000</Property>
+    </Properties>
+    <URL>https://api.openai.com/v1/chat/completions</URL>
+  </HTTPTargetConnection>
+</TargetEndpoint>

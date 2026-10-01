@@ -3,7 +3,7 @@
   <DisplayName>OAS-VerifyClaude</DisplayName>
   <OASResource>oas://claude.yaml</OASResource>
   <Options>
-    <AllowUnspecifiedParameters>false</AllowUnspecifiedParameters>
+    <AllowUnspecifiedParameters>true</AllowUnspecifiedParameters>
   </Options>
   <Source>request</Source>
 </OASValidation>

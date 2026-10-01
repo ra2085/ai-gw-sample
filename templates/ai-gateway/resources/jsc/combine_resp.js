@@ -1,19 +1,29 @@
+(function () {
+'use strict';
+
 var rawContent = context.getVariable("response.event.current.content");
-var targetName = context.getVariable("route.target") || context.getVariable("target.name");
+var targetName = context.getVariable("route.target") || context.getVariable("target.name") || context.getVariable("route_target");
 var bufferSize = context.getVariable("buffer_size");
 if (!bufferSize) {
     bufferSize = parseInt(context.getVariable("propertyset.extract_expressions.buffer_size")) || 10;
     context.setVariable("buffer_size", bufferSize);
 }
 
-// Clear per-chunk export variables at the start of each event chunk processing
-context.removeVariable("usage_prompt_tokens");
-context.removeVariable("usage_completion_tokens");
-context.removeVariable("usage_total_tokens");
-context.removeVariable("tx_cost_usd");
-context.removeVariable("perUnitPriceMultiplier");
-context.removeVariable("buff_ready");
-context.removeVariable("response_partial");
+// Clear per-chunk export variables only if they were populated on the previous chunk
+if (context.getVariable("usage_total_tokens") !== null) {
+    context.removeVariable("usage_prompt_tokens");
+    context.removeVariable("usage_completion_tokens");
+    context.removeVariable("usage_total_tokens");
+    context.removeVariable("tx_cost_usd");
+    context.removeVariable("perUnitPriceMultiplier");
+}
+if (context.getVariable("buff_ready") === "true") {
+    context.removeVariable("buff_ready");
+    context.removeVariable("response_partial");
+}
+if (context.getVariable("release_concurrency_slot") === "true") {
+    context.removeVariable("release_concurrency_slot");
+}
 
 var dataIdx = rawContent ? rawContent.indexOf("data:") : -1;
 if (rawContent && dataIdx !== -1) {
@@ -31,16 +41,41 @@ if (rawContent && dataIdx !== -1) {
             var finishReason = null;
             var eventText = "";
 
+            function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, thinkingTokens) {
+                var totalIn = uncachedIn + cacheRead + cacheWrite;
+                var totalT = totalIn + outTokens;
+                if (totalT > 0) {
+                    context.setVariable("prompt_tokens", totalIn);
+                    context.setVariable("usage_prompt_tokens", totalIn);
+                    context.setVariable("uncached_prompt_tokens", uncachedIn);
+                    context.setVariable("usage_uncached_prompt_tokens", uncachedIn);
+                    context.setVariable("cache_read_tokens", cacheRead);
+                    context.setVariable("usage_cache_read_tokens", cacheRead);
+                    context.setVariable("cache_write_tokens", cacheWrite);
+                    context.setVariable("usage_cache_write_tokens", cacheWrite);
+                    context.setVariable("thinking_tokens", thinkingTokens);
+                    context.setVariable("usage_thinking_tokens", thinkingTokens);
+                    context.setVariable("completion_tokens", outTokens);
+                    context.setVariable("usage_completion_tokens", outTokens);
+                    context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                    context.setVariable("stream_tokens_already_counted", "true");
+                }
+            }
+
             if (requestFormat === "gemini") {
                 // -------------------------------------------------------------
                 // Branch 1: Native Gemini Request Format (/ai-gateway)
                 // -------------------------------------------------------------
                 if (parsedEvent.usageMetadata) {
                     var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+                    var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
                     var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
-                    if (inT > 0 || outT > 0) {
+                    var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+                    if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
                         context.setVariable("saved_stream_prompt_tokens", inT);
+                        context.setVariable("saved_stream_cached_tokens", cachedT);
                         context.setVariable("saved_stream_completion_tokens", outT);
+                        context.setVariable("saved_stream_thinking_tokens", thoughtsT);
                     }
                 }
 
@@ -68,14 +103,12 @@ if (rawContent && dataIdx !== -1) {
                 // Emit tokens ONCE upon stream completion
                 if (isFinished && !tokensAlreadyCounted) {
                     promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.promptTokenCount : 0) || 0, 10);
-                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.candidatesTokenCount : 0) || 0, 10);
-                    var totalT = promptTokens + completionTokens;
-                    if (totalT > 0) {
-                        context.setVariable("usage_prompt_tokens", promptTokens);
-                        context.setVariable("usage_completion_tokens", completionTokens);
-                        context.setVariable("usage_total_tokens", totalT.toFixed(0));
-                        context.setVariable("stream_tokens_already_counted", "true");
-                    }
+                    var geminiCachedTokens = parseInt(context.getVariable("saved_stream_cached_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.cachedContentTokenCount : 0) || 0, 10);
+                    var geminiUncachedPrompt = Math.max(0, promptTokens - geminiCachedTokens);
+                    var geminiCandidateTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.candidatesTokenCount : 0) || 0, 10);
+                    var geminiThinkingTokens = parseInt(context.getVariable("saved_stream_thinking_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.thoughtsTokenCount : 0) || 0, 10);
+                    completionTokens = geminiCandidateTokens + geminiThinkingTokens;
+                    emitStreamTokenVariables(geminiUncachedPrompt, geminiCachedTokens, 0, completionTokens, geminiThinkingTokens);
                 }
 
             } else if (requestFormat === "openai") {
@@ -87,9 +120,15 @@ if (rawContent && dataIdx !== -1) {
                 if (targetName === "claude" || parsedEvent.type) {
                     // Target is Anthropic Claude -> Translate Anthropic SSE chunk to OpenAI SSE!
                     if (parsedEvent.type === "message_start") {
-                        var inT = (parsedEvent.message && parsedEvent.message.usage && parsedEvent.message.usage.input_tokens) || 0;
-                        if (inT > 0) {
-                            context.setVariable("saved_stream_prompt_tokens", inT);
+                        var msgStartUsage = (parsedEvent.message && parsedEvent.message.usage) ? parsedEvent.message.usage : {};
+                        if (msgStartUsage.input_tokens !== undefined) {
+                            context.setVariable("saved_stream_uncached_prompt_tokens", msgStartUsage.input_tokens);
+                        }
+                        if (msgStartUsage.cache_read_input_tokens !== undefined) {
+                            context.setVariable("saved_stream_cached_tokens", msgStartUsage.cache_read_input_tokens);
+                        }
+                        if (msgStartUsage.cache_creation_input_tokens !== undefined) {
+                            context.setVariable("saved_stream_cache_write_tokens", msgStartUsage.cache_creation_input_tokens);
                         }
                         if (parsedEvent.message && parsedEvent.message.id) {
                             context.setVariable("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
@@ -97,8 +136,19 @@ if (rawContent && dataIdx !== -1) {
                     } else if (parsedEvent.type === "content_block_delta") {
                         eventText = (parsedEvent.delta && parsedEvent.delta.text) ? parsedEvent.delta.text : "";
                     } else if (parsedEvent.type === "message_delta") {
-                        if (parsedEvent.usage && parsedEvent.usage.output_tokens) {
-                            context.setVariable("saved_stream_completion_tokens", parsedEvent.usage.output_tokens);
+                        if (parsedEvent.usage) {
+                            if (parsedEvent.usage.input_tokens !== undefined) {
+                                context.setVariable("saved_stream_uncached_prompt_tokens", parsedEvent.usage.input_tokens);
+                            }
+                            if (parsedEvent.usage.cache_read_input_tokens !== undefined) {
+                                context.setVariable("saved_stream_cached_tokens", parsedEvent.usage.cache_read_input_tokens);
+                            }
+                            if (parsedEvent.usage.cache_creation_input_tokens !== undefined) {
+                                context.setVariable("saved_stream_cache_write_tokens", parsedEvent.usage.cache_creation_input_tokens);
+                            }
+                            if (parsedEvent.usage.output_tokens !== undefined) {
+                                context.setVariable("saved_stream_completion_tokens", parsedEvent.usage.output_tokens);
+                            }
                         }
                         finishReason = "stop";
                         isFinished = true;
@@ -155,10 +205,15 @@ if (rawContent && dataIdx !== -1) {
                 } else {
                     if (parsedEvent.usage) {
                         var inT = parsedEvent.usage.prompt_tokens || 0;
+                        var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
                         var outT = parsedEvent.usage.completion_tokens || 0;
-                        if (inT > 0 || outT > 0) {
+                        var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+                        if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
                             context.setVariable("saved_stream_prompt_tokens", inT);
+                            context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
+                            context.setVariable("saved_stream_cached_tokens", cachedT);
                             context.setVariable("saved_stream_completion_tokens", outT);
+                            context.setVariable("saved_stream_thinking_tokens", reasoningT);
                         }
                     }
 
@@ -186,15 +241,15 @@ if (rawContent && dataIdx !== -1) {
 
                 // Emit tokens ONCE upon stream completion
                 if (isFinished && !tokensAlreadyCounted) {
-                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.prompt_tokens : 0) || 0, 10);
+                    var oaiCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || 0, 10);
+                    var oaiCacheWrite = parseInt(context.getVariable("saved_stream_cache_write_tokens") || 0, 10);
+                    var savedUncachedStr = context.getVariable("saved_stream_uncached_prompt_tokens");
+                    var oaiUncachedIn = savedUncachedStr !== null
+                        ? parseInt(savedUncachedStr, 10)
+                        : Math.max(0, parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.prompt_tokens : 0) || 0, 10) - oaiCacheRead - oaiCacheWrite);
+                    var oaiThinking = parseInt(context.getVariable("saved_stream_thinking_tokens") || 0, 10);
                     completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.completion_tokens : 0) || 0, 10);
-                    var totalT = promptTokens + completionTokens;
-                    if (totalT > 0) {
-                        context.setVariable("usage_prompt_tokens", promptTokens);
-                        context.setVariable("usage_completion_tokens", completionTokens);
-                        context.setVariable("usage_total_tokens", totalT.toFixed(0));
-                        context.setVariable("stream_tokens_already_counted", "true");
-                    }
+                    emitStreamTokenVariables(oaiUncachedIn, oaiCacheRead, oaiCacheWrite, completionTokens, oaiThinking);
                 }
 
 
@@ -214,12 +269,19 @@ if (rawContent && dataIdx !== -1) {
                         }
                     }
 
-                    if (parsedEvent.usage) {
-                        var outT = parsedEvent.usage.output_tokens || 0;
-                        var inT = parsedEvent.usage.input_tokens || 0;
-                        if (outT > 0 || inT > 0) {
-                            context.setVariable("saved_stream_prompt_tokens", inT);
-                            context.setVariable("saved_stream_completion_tokens", outT);
+                    var claudeUsage = parsedEvent.usage || (parsedEvent.message && parsedEvent.message.usage);
+                    if (claudeUsage) {
+                        if (claudeUsage.input_tokens !== undefined) {
+                            context.setVariable("saved_stream_uncached_prompt_tokens", claudeUsage.input_tokens);
+                        }
+                        if (claudeUsage.cache_read_input_tokens !== undefined) {
+                            context.setVariable("saved_stream_cached_tokens", claudeUsage.cache_read_input_tokens);
+                        }
+                        if (claudeUsage.cache_creation_input_tokens !== undefined) {
+                            context.setVariable("saved_stream_cache_write_tokens", claudeUsage.cache_creation_input_tokens);
+                        }
+                        if (claudeUsage.output_tokens !== undefined) {
+                            context.setVariable("saved_stream_completion_tokens", claudeUsage.output_tokens);
                         }
                     }
 
@@ -228,15 +290,11 @@ if (rawContent && dataIdx !== -1) {
                     }
 
                     if (isFinished && !tokensAlreadyCounted) {
-                        promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.input_tokens : 0) || 0, 10);
-                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.output_tokens : 0) || 0, 10);
-                        var totalT = promptTokens + completionTokens;
-                        if (totalT > 0) {
-                            context.setVariable("usage_prompt_tokens", promptTokens);
-                            context.setVariable("usage_completion_tokens", completionTokens);
-                            context.setVariable("usage_total_tokens", totalT.toFixed(0));
-                            context.setVariable("stream_tokens_already_counted", "true");
-                        }
+                        var claudeUncachedIn = parseInt(context.getVariable("saved_stream_uncached_prompt_tokens") || (claudeUsage ? claudeUsage.input_tokens : 0) || 0, 10);
+                        var claudeCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || (claudeUsage ? claudeUsage.cache_read_input_tokens : 0) || 0, 10);
+                        var claudeCacheWrite = parseInt(context.getVariable("saved_stream_cache_write_tokens") || (claudeUsage ? claudeUsage.cache_creation_input_tokens : 0) || 0, 10);
+                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (claudeUsage ? claudeUsage.output_tokens : 0) || 0, 10);
+                        emitStreamTokenVariables(claudeUncachedIn, claudeCacheRead, claudeCacheWrite, completionTokens, 0);
                     }
 
                 } else {
@@ -249,10 +307,15 @@ if (rawContent && dataIdx !== -1) {
 
                         if (parsedEvent.usageMetadata) {
                             var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+                            var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
                             var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
-                            if (inT > 0 || outT > 0) {
+                            var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+                            if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
                                 context.setVariable("saved_stream_prompt_tokens", inT);
-                                context.setVariable("saved_stream_completion_tokens", outT);
+                                context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
+                                context.setVariable("saved_stream_cached_tokens", cachedT);
+                                context.setVariable("saved_stream_completion_tokens", outT + thoughtsT);
+                                context.setVariable("saved_stream_thinking_tokens", thoughtsT);
                             }
                         }
                         if (finishReason) {
@@ -266,10 +329,15 @@ if (rawContent && dataIdx !== -1) {
 
                         if (parsedEvent.usage) {
                             var inT = parsedEvent.usage.prompt_tokens || 0;
+                            var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
                             var outT = parsedEvent.usage.completion_tokens || 0;
-                            if (inT > 0 || outT > 0) {
+                            var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+                            if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
                                 context.setVariable("saved_stream_prompt_tokens", inT);
+                                context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
+                                context.setVariable("saved_stream_cached_tokens", cachedT);
                                 context.setVariable("saved_stream_completion_tokens", outT);
+                                context.setVariable("saved_stream_thinking_tokens", reasoningT);
                             }
                         }
                         if (finishReason) {
@@ -278,15 +346,27 @@ if (rawContent && dataIdx !== -1) {
                         modelName = parsedEvent.model || modelName;
                     }
 
-                    // Retrieve latest token counts for SSE translation headers
-                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || 0, 10);
-                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || 0, 10);
+                    // Retrieve latest token counts only on start/finish/usage chunks to avoid per-delta Rhino bridge overhead
+                    var sentStart = context.getVariable("sent_message_start");
+                    var isTrailingUsageChunk = Boolean(parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage);
+                    var transCacheRead = 0;
+                    var transUncachedIn = 0;
+                    var transThinking = 0;
+                    if (!sentStart || isFinished || isTrailingUsageChunk) {
+                        transCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || 0, 10);
+                        var transUncachedInStr = context.getVariable("saved_stream_uncached_prompt_tokens");
+                        transUncachedIn = transUncachedInStr !== null
+                            ? parseInt(transUncachedInStr, 10)
+                            : Math.max(0, parseInt(context.getVariable("saved_stream_prompt_tokens") || 0, 10) - transCacheRead);
+                        transThinking = parseInt(context.getVariable("saved_stream_thinking_tokens") || 0, 10);
+                        promptTokens = transUncachedIn + transCacheRead;
+                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || 0, 10);
+                    }
 
                     // Translate chunk to Claude SSE format
                     var outputChunks = [];
                     var msgId = parsedEvent.id ? parsedEvent.id.replace("chatcmpl-", "msg_") : "msg_stream";
                     
-                    var sentStart = context.getVariable("sent_message_start");
                     if (!sentStart) {
                         context.setVariable("sent_message_start", true);
                         
@@ -302,7 +382,9 @@ if (rawContent && dataIdx !== -1) {
                                 "stop_reason": null,
                                 "stop_sequence": null,
                                 "usage": {
-                                    "input_tokens": promptTokens,
+                                    "input_tokens": transUncachedIn,
+                                    "cache_read_input_tokens": transCacheRead,
+                                    "cache_creation_input_tokens": 0,
                                     "output_tokens": 0
                                 }
                             }
@@ -334,10 +416,13 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(blockDelta));
                     }
 
-                    // 4. Handle streaming functionCall from Gemini
+                    // 4. Handle streaming functionCall from Gemini or tool_calls from OpenAI
                     var streamFuncCall = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) 
                                          ? candidate.content.parts[0].functionCall 
                                          : null;
+                    var openAiToolCalls = (typeof choice !== "undefined" && choice && choice.delta && Array.isArray(choice.delta.tool_calls))
+                                          ? choice.delta.tool_calls
+                                          : null;
                     if (streamFuncCall) {
                         var toolCallId = "call_" + Math.random().toString(36).substring(2, 12);
                         var toolBlockStart = {
@@ -364,10 +449,46 @@ if (rawContent && dataIdx !== -1) {
 
                         outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 1 }));
                         finishReason = "tool_use";
+                    } else if (openAiToolCalls && openAiToolCalls.length > 0) {
+                        for (var tcIdx = 0; tcIdx < openAiToolCalls.length; tcIdx++) {
+                            var oaiTc = openAiToolCalls[tcIdx];
+                            var blockIndex = (oaiTc.index !== undefined ? oaiTc.index : tcIdx) + 1;
+                            if (oaiTc.function && oaiTc.function.name) {
+                                var oaiToolStart = {
+                                    "type": "content_block_start",
+                                    "index": blockIndex,
+                                    "content_block": {
+                                        "type": "tool_use",
+                                        "id": oaiTc.id || ("toolu_" + Math.random().toString(36).substring(2, 12)),
+                                        "name": oaiTc.function.name,
+                                        "input": {}
+                                    }
+                                };
+                                outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(oaiToolStart));
+                                context.setVariable("open_tool_block_idx", String(blockIndex));
+                            }
+                            if (oaiTc.function && oaiTc.function.arguments) {
+                                var oaiToolDelta = {
+                                    "type": "content_block_delta",
+                                    "index": blockIndex,
+                                    "delta": {
+                                        "type": "input_json_delta",
+                                        "partial_json": oaiTc.function.arguments
+                                    }
+                                };
+                                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(oaiToolDelta));
+                            }
+                        }
                     }
                     
                     // 5. content_block_stop & message_delta & message_stop (if finished)
-                    if (isFinished) {
+                    var sentStop = context.getVariable("sent_message_stop") === "true";
+                    if (isFinished && !sentStop) {
+                        context.setVariable("sent_message_stop", "true");
+                        var openToolIdx = context.getVariable("open_tool_block_idx");
+                        if (openToolIdx) {
+                            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openToolIdx, 10) }));
+                        }
                         var blockStop = {
                             "type": "content_block_stop",
                             "index": 0
@@ -375,9 +496,9 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify(blockStop));
                         
                         var stopReasonMapped = "end_turn";
-                        if (finishReason === "tool_use" || streamFuncCall) {
+                        if (finishReason === "tool_use" || finishReason === "tool_calls" || streamFuncCall || openToolIdx) {
                             stopReasonMapped = "tool_use";
-                        } else if (finishReason === "MAX_TOKENS") {
+                        } else if (finishReason === "MAX_TOKENS" || finishReason === "length") {
                             stopReasonMapped = "max_tokens";
                         } else if (finishReason === "STOP" || finishReason === "stop") {
                             stopReasonMapped = "end_turn";
@@ -390,6 +511,9 @@ if (rawContent && dataIdx !== -1) {
                                 "stop_sequence": null
                             },
                             "usage": {
+                                "input_tokens": transUncachedIn,
+                                "cache_read_input_tokens": transCacheRead,
+                                "cache_creation_input_tokens": 0,
                                 "output_tokens": completionTokens
                             }
                         };
@@ -399,17 +523,11 @@ if (rawContent && dataIdx !== -1) {
                             "type": "message_stop"
                         };
                         outputChunks.push("event: message_stop\ndata: " + JSON.stringify(msgStop));
+                    }
 
-                        // Emit tokens ONCE upon stream completion
-                        if (!tokensAlreadyCounted) {
-                            var totalT = promptTokens + completionTokens;
-                            if (totalT > 0) {
-                                context.setVariable("usage_prompt_tokens", promptTokens);
-                                context.setVariable("usage_completion_tokens", completionTokens);
-                                context.setVariable("usage_total_tokens", totalT.toFixed(0));
-                                context.setVariable("stream_tokens_already_counted", "true");
-                            }
-                        }
+                    // Emit tokens ONCE upon stream completion or trailing usage chunk
+                    if ((isFinished || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) && !tokensAlreadyCounted) {
+                        emitStreamTokenVariables(transUncachedIn, transCacheRead, 0, completionTokens, transThinking);
                     }
                     
                     if (outputChunks.length > 0) {
@@ -433,14 +551,26 @@ if (rawContent && dataIdx !== -1) {
                     context.setVariable("tmp_buffer_pre", newBuffer);
                 }
             }
+
+            if (isFinished && context.getVariable("concurrency_slot_released") !== "true") {
+                context.setVariable("release_concurrency_slot", "true");
+                context.setVariable("concurrency_slot_released", "true");
+            }
             
         } catch (e) {
             print("JSON Error: " + e);
         }
     } else {
-        // If target is not Claude and we get [DONE], clear it so it's not sent
-        if (targetName !== "claude") {
+        if (context.getVariable("concurrency_slot_released") !== "true") {
+            context.setVariable("release_concurrency_slot", "true");
+            context.setVariable("concurrency_slot_released", "true");
+        }
+        // If request format is not OpenAI and target is not Claude, clear [DONE] so it's not sent to Claude/Gemini clients
+        var reqFmt = context.getVariable("request_format") || "claude";
+        if (reqFmt !== "openai" && targetName !== "claude") {
             context.setVariable("response.event.current.content", "");
         }
     }
 }
+
+})();

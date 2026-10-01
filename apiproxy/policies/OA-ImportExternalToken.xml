@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OAuthV2 continueOnError="true" enabled="true" name="OA-ImportExternalToken">
+  <DisplayName>OA-ImportExternalToken</DisplayName>
+  <Properties/>
+  <Attributes/>
+  <ExpiresIn ref="auth_token_ttl_ms">3600000</ExpiresIn>
+  <ExternalAccessToken>auth_bearer_token</ExternalAccessToken>
+  <ExternalAuthorization>true</ExternalAuthorization>
+  <Operation>GenerateAccessToken</Operation>
+  <StoreToken>true</StoreToken>
+  <SupportedGrantTypes>
+    <GrantType>client_credentials</GrantType>
+  </SupportedGrantTypes>
+  <GenerateResponse enabled="false"/>
+  <Tokens/>
+</OAuthV2>
