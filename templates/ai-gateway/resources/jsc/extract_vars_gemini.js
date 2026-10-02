@@ -123,6 +123,11 @@ try {
             }
         }
 
+        // Preserve raw client payload for multi-model fallback chains before stripping gateway fields
+        if (!context.getVariable("raw_client_payload")) {
+            context.setVariable("raw_client_payload", bodyStr);
+        }
+
         // Clean any gateway plugins before sending to Vertex AI
         if (body.plugins || body.models || body.provider) {
             delete body.plugins;

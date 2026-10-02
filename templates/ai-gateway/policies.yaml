@@ -39,6 +39,16 @@
 - {{ include "./policies/SC-LLMJudge.yaml" . | indent 2 | trim }}
 - {{ include "./policies/JS-process-judge-response.yaml" . | indent 2 | trim }}
 
+# Fallback Chains & Distributed Rolling-Window Circuit Breaker Policies
+{{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
+- {{ include "./policies/LTQ-CircuitBreakerCheck.yaml" . | indent 2 | trim }}
+- {{ include "./policies/LTQ-CircuitBreakerCount.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-prepare-fallback-request.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SC-FallbackGoogleIAM.yaml" . | indent 2 | trim }}
+- {{ include "./policies/SC-FallbackExternal.yaml" . | indent 2 | trim }}
+- {{ include "./policies/JS-apply-fallback-response.yaml" . | indent 2 | trim }}
+{{- end }}
+
 # Enterprise Security (Model Armor) Policies
 - {{ include "./policies/SUP-SanitizeUserPrompt.yaml" . | indent 2 | trim }}
 - {{ include "./policies/SUP-SanitizeUserPromptGemini.yaml" . | indent 2 | trim }}

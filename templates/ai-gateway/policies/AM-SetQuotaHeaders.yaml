@@ -56,6 +56,12 @@ AssignMessage:
           .name: X-Gateway-Fallback-Model
           -Data: '{fallback_model}'
       - Header:
+          .name: X-Gateway-Fallback-Triggered
+          -Data: '{fallback_triggered}'
+      - Header:
+          .name: X-Gateway-Circuit-Breaker
+          -Data: '{circuit_breaker_state}'
+      - Header:
           .name: X-Gateway-Judge-Task
           -Data: '{judge_task}'
       - Header:

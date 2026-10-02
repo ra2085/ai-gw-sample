@@ -1,0 +1,23 @@
+LLMTokenQuota:
+  .continueOnError: true
+  .enabled: true
+  .name: LTQ-CircuitBreakerCount
+  .type: rollingwindow
+  DisplayName: LTQ-CircuitBreakerCount
+  SharedName: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.shared_name | default "llm-circuit-breaker" }}{{ else }}llm-circuit-breaker{{ end }}
+  CountOnly: true
+  Identifier:
+    .ref: tried_primary_model
+  Allow:
+    .count: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.error_threshold | default 3 }}{{ else }}3{{ end }}
+    .countRef: propertyset.config.cb_error_threshold
+  Interval:
+    .ref: propertyset.config.cb_window_interval
+    -Data: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.window_interval | default 1 }}{{ else }}1{{ end }}
+  TimeUnit:
+    .ref: propertyset.config.cb_window_unit
+    -Data: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.window_unit | default "minute" }}{{ else }}minute{{ end }}
+  Distributed: true
+  Synchronous: true
+  LLMTokenUsageSource: '{cb_error_weight}'
+  LLMModelSource: '{tried_primary_model}'

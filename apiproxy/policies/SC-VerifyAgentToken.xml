@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ServiceCallout continueOnError="true" enabled="true" name="SC-VerifyAgentToken">
   <DisplayName>SC-VerifyAgentToken</DisplayName>
   <Properties/>
@@ -16,6 +16,6 @@
     <Properties>
       <Property name="io.timeout.millis">3000</Property>
     </Properties>
-    <URL>https://oauth2.googleapis.com/tokeninfo</URL>
+    <URL>https://workshop.iloveapi.management/mock/oauth2/tokeninfo</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

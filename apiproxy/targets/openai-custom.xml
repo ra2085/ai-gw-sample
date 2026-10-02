@@ -1,15 +1,15 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <TargetEndpoint name="openai-custom">
   <Description>Target Endpoint for Direct OpenAI and External OpenAI-Compatible Endpoints</Description>
   <FaultRules>
     <FaultRule name="sanitize">
+      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
       <Step>
         <Name>JS-inject-deidentified-finding</Name>
       </Step>
       <Step>
         <Name>AM-CustomError</Name>
       </Step>
-      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
     </FaultRule>
   </FaultRules>
   <PreFlow name="PreFlow">
@@ -23,43 +23,44 @@
     </Request>
     <Response/>
   </PreFlow>
-  <PostFlow name="PostFlow">
-    <Request/>
-    <Response>
-      <Step>
-        <Condition>!(stream = true) and (request_format != "openai")</Condition>
-        <Name>JS-gemini-to-anthropic-resp</Name>
-      </Step>
-    </Response>
-  </PostFlow>
-  <Flows/>
   <EventFlow name="EventFlow" content-type="text/event-stream">
     <Response>
       <Step>
         <Name>JS-combine-resp</Name>
       </Step>
       <Step>
-        <Condition>usage_total_tokens != null</Condition>
         <Name>JS-calculate-monetization-cost</Name>
-      </Step>
-      <Step>
         <Condition>usage_total_tokens != null</Condition>
+      </Step>
+      <Step>
         <Name>DC-CaptureTokenCountsStreaming</Name>
+        <Condition>usage_total_tokens != null</Condition>
       </Step>
       <Step>
-        <Condition>usage_total_tokens != null and apiproduct.name != null</Condition>
         <Name>LTQ-CountOnly</Name>
+        <Condition>usage_total_tokens != null and apiproduct.name != null</Condition>
       </Step>
       <Step>
-        <Condition>(model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")</Condition>
         <Name>SMR-SanitizeModelResponse</Name>
+        <Condition>(model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")</Condition>
       </Step>
     </Response>
   </EventFlow>
+  <Flows/>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response>
+      <Step>
+        <Name>JS-gemini-to-anthropic-resp</Name>
+        <Condition>!(stream = true) and (response.status.code &lt; 400) and (request_format != "openai")</Condition>
+      </Step>
+    </Response>
+  </PostFlow>
   <HTTPTargetConnection>
+    <URL>https://api.openai.com/v1/chat/completions</URL>
     <Properties>
       <Property name="io.timeout.millis">300000</Property>
+      <Property name="success.codes">1xx,2xx,3xx,429,5xx</Property>
     </Properties>
-    <URL>https://api.openai.com/v1/chat/completions</URL>
   </HTTPTargetConnection>
 </TargetEndpoint>

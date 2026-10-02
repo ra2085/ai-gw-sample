@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Javascript continueOnError="true" enabled="true" timeLimit="200" name="JS-format-rate-limit-error">
   <DisplayName>JS-format-rate-limit-error</DisplayName>
   <ResourceURL>jsc://format_rate_limit_error.js</ResourceURL>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ServiceCallout continueOnError="true" enabled="true" name="SC-FallbackExternal">
+  <DisplayName>SC-FallbackExternal</DisplayName>
+  <Properties/>
+  <Request clearPayload="true" variable="fallbackRequest">
+    <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+    <Set>
+      <Headers>
+        <Header name="Content-Type">application/json</Header>
+        <Header name="Authorization">{fallback_auth_authorization}</Header>
+        <Header name="x-api-key">{fallback_header_x_api_key}</Header>
+        <Header name="api-key">{fallback_header_api_key}</Header>
+        <Header name="OpenAI-Organization">{fallback_openai_org}</Header>
+        <Header name="OpenAI-Project">{fallback_openai_project}</Header>
+      </Headers>
+      <Verb>POST</Verb>
+      <Payload contentType="application/json">{fallback_request_payload}</Payload>
+    </Set>
+  </Request>
+  <Response>fallbackResponse</Response>
+  <HTTPTargetConnection>
+    <Properties>
+      <Property name="io.timeout.millis">60000</Property>
+    </Properties>
+    <URL>https://{fallback_target_host}/{fallback_target_path}</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

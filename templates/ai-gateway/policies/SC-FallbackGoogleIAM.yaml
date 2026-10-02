@@ -1,0 +1,30 @@
+ServiceCallout:
+  .continueOnError: true
+  .enabled: true
+  .name: SC-FallbackGoogleIAM
+  DisplayName: SC-FallbackGoogleIAM
+  Properties: {}
+  Request:
+    .clearPayload: true
+    .variable: fallbackRequest
+    IgnoreUnresolvedVariables: true
+    Set:
+      Headers:
+        Header:
+          .name: Content-Type
+          -Data: application/json
+      Verb: POST
+      Payload:
+        .contentType: application/json
+        -Data: '{fallback_request_payload}'
+  Response: fallbackResponse
+  HTTPTargetConnection:
+    Authentication:
+      GoogleAccessToken:
+        Scopes:
+          Scope: https://www.googleapis.com/auth/cloud-platform
+    Properties:
+      Property:
+        .name: io.timeout.millis
+        -Data: 60000
+    URL: https://{fallback_target_host}/{fallback_target_path}

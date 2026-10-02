@@ -378,10 +378,10 @@ try {
             context.setVariable("auth_user_email", String(userEmail || userId));
             context.setVariable("auth_persona", matchedPersona);
             context.setVariable("auth_team", String(team || "default"));
-            context.setVariable("auth_quota_override", String(quotaOverride || ""));
-            context.setVariable("auth_quota_override_expires_at", String(quotaOverrideExpiresAt || ""));
-            context.setVariable("auth_model_armor_request_template", String(modelArmorRequestTemplate || ""));
-            context.setVariable("auth_model_armor_response_template", String(modelArmorResponseTemplate || ""));
+            context.setVariable("auth_quota_override", String(quotaOverride || "unset"));
+            context.setVariable("auth_quota_override_expires_at", String(quotaOverrideExpiresAt || "unset"));
+            context.setVariable("auth_model_armor_request_template", String(modelArmorRequestTemplate || "unset"));
+            context.setVariable("auth_model_armor_response_template", String(modelArmorResponseTemplate || "unset"));
             context.setVariable("auth_persona_client_id", personaClientId);
             context.setVariable("auth_token_ttl_ms", tokenTtlMs);
             context.setVariable("auth_ready_to_import", "true");

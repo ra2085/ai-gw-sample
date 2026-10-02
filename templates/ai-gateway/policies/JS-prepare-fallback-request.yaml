@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: true
+  .enabled: true
+  .name: JS-prepare-fallback-request
+  .timeLimit: 200
+  DisplayName: JS-prepare-fallback-request
+  Properties: {}
+  ResourceURL: jsc://prepare_fallback_request.js

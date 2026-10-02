@@ -47,6 +47,12 @@ features:
   llm_judge:
     enabled: true
     classifier_model: "gemini-3.1-flash-lite"
+  circuit_breaker:
+    enabled: true
+    shared_name: "llm-circuit-breaker"
+    error_threshold: 3                   # Trip circuit OPEN after N upstream 429/5xx errors on a primary model
+    window_interval: 1                   # Rolling recovery window duration
+    window_unit: "minute"                # Rolling recovery window unit (minute, hour, day)
   quotas:
     enabled: true
     # Primary window uses native API Product Quota (<UseQuotaConfigInAPIProduct>).

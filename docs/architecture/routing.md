@@ -58,16 +58,36 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
 
     Clients simply pass `"model": "auto:judge"` (or header `X-Gateway-Judge: true`).
 
-=== "Fallback Chains"
-    **Best for:** High-availability applications that want prioritized model failover.
+=== "Fallback Chains & Rolling-Window Circuit Breaker"
+    **Best for:** High-availability applications that require automatic cross-provider/cross-format failover on upstream `429` (rate limit) or `5xx` (server/overload) errors—without paying an extra network hop penalty during sustained outages.
 
-    Clients pass a `models` array in the request body, and the gateway selects the first configured and available model:
+    Configure the rolling-window circuit breaker in `values.yaml`:
+    ```yaml
+    features:
+      circuit_breaker:
+        enabled: true
+        error_threshold: 3       # Number of upstream 429/5xx errors that trips the circuit OPEN
+        window_interval: 1       # Rolling window duration before automatic self-healing recovery
+        window_unit: "minute"    # minute | hour | day
+    ```
+
+    Clients pass a `models` array in the request body (or use a Smart Router cost tier, which automatically pairs the tier's primary model with `defaults.fallback`):
     ```json
     {
-      "models": ["claude-sonnet-4-6", "gemini-3.1-pro-preview", "gemini-3.5-flash"],
+      "models": ["claude-sonnet-4-6", "gemini-2.5-flash"],
       "messages": [{"role": "user", "content": "Analyze this quarterly report."}]
     }
     ```
+
+    **How the Two-Stage Failover & Circuit Breaker Works:**
+    1. **Circuit `CLOSED` (First $N$ Upstream Errors — PostFlow Recovery):**
+       - When `primary_model` returns `HTTP 429` or `>= 500`, `LTQ-CircuitBreakerCount` (`CountOnly: true`, weight `1`) increments the distributed rolling-window error counter for `cb:<tried_primary_model>`.
+       - `JS-prepare-fallback-request` transcodes the original client payload (`raw_client_payload`) into `fallback_model`'s wire format (`gemini`, `anthropic`, or `openai`) and dispatches `SC-FallbackGoogleIAM` (for Vertex AI) or `SC-FallbackExternal` (for OpenAI/BYO endpoints) in `ProxyEndpoint.PostFlow.Response`.
+       - `JS-apply-fallback-response` transcodes the fallback response back into the caller's requested format (`200 OK`) *before* token extraction, Model Armor response sanitization, monetization cost calculation, and token quota deduction execute—so billing and safety reflect the actual model that served the request (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: CLOSED`).
+    2. **Circuit `OPEN` (Sustained Outage — Zero-Latency PreFlow Promotion):**
+       - Once `cb:<primary_model>` reaches `error_threshold` within the rolling window, `LTQ-CircuitBreakerCheck` (`EnforceOnly: true`, `continueOnError: true`) trips in `PreFlow.Request` *before* `RouteRule` executes.
+       - `JS-resolve-model-location` immediately promotes `fallback_model` → `primary_model` in `PreFlow`, routing **directly** to the fallback `TargetEndpoint` with **0ms extra hop latency** and **full native SSE streaming** (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: OPEN`, `X-Gateway-Routed-Model: <fallback_model>`).
+    3. **Self-Healing Recovery:** When the rolling window expires, the distributed counter resets and traffic automatically resumes routing to `primary_model`.
 
 ---
 

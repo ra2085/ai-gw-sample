@@ -155,6 +155,9 @@ model_armor_request_template={{ if and $.Values.features $.Values.features.model
 model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
+cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
+cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
+cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_api_key }}
 openai_api_key={{ $.Values.gateway.openai_api_key }}
 {{- end }}
@@ -323,5 +326,41 @@ buffer_size=50
     Name: RF-Unauthorized
 {{- end -}}
 
+{{/*
+  Helper: circuit_breaker_preflow_steps
+  Checks rolling-window circuit breaker state for primary_model in PreFlow and promotes fallback_model when OPEN
+*/}}
+{{- define "circuit_breaker_preflow_steps" -}}
+- Step:
+    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCheck
+- Step:
+    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Name: JS-resolve-model-location
+{{- end -}}
+
+{{/*
+  Helper: fallback_postflow_steps
+  Increments rolling-window circuit breaker error count on upstream 429/5xx and executes fallback model retry
+*/}}
+{{- define "fallback_postflow_steps" -}}
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCount
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: JS-prepare-fallback-request
+- Step:
+    Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
+    Name: SC-FallbackGoogleIAM
+- Step:
+    Condition: '(fallback_ready = "true") and (fallback_use_google_iam != "true")'
+    Name: SC-FallbackExternal
+- Step:
+    Condition: 'fallback_ready = "true"'
+    Name: JS-apply-fallback-response
+{{- end -}}
+
 {{- define "blank" -}}{{- end -}}
+
 

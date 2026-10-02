@@ -1,0 +1,41 @@
+ServiceCallout:
+  .continueOnError: true
+  .enabled: true
+  .name: SC-FallbackExternal
+  DisplayName: SC-FallbackExternal
+  Properties: {}
+  Request:
+    .clearPayload: true
+    .variable: fallbackRequest
+    IgnoreUnresolvedVariables: true
+    Set:
+      Headers:
+        - Header:
+            .name: Content-Type
+            -Data: application/json
+        - Header:
+            .name: Authorization
+            -Data: '{fallback_auth_authorization}'
+        - Header:
+            .name: x-api-key
+            -Data: '{fallback_header_x_api_key}'
+        - Header:
+            .name: api-key
+            -Data: '{fallback_header_api_key}'
+        - Header:
+            .name: OpenAI-Organization
+            -Data: '{fallback_openai_org}'
+        - Header:
+            .name: OpenAI-Project
+            -Data: '{fallback_openai_project}'
+      Verb: POST
+      Payload:
+        .contentType: application/json
+        -Data: '{fallback_request_payload}'
+  Response: fallbackResponse
+  HTTPTargetConnection:
+    Properties:
+      Property:
+        .name: io.timeout.millis
+        -Data: 60000
+    URL: https://{fallback_target_host}/{fallback_target_path}

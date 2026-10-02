@@ -1,6 +1,6 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ProxyEndpoint name="claude-models">
-  <Description>Anthropic Models API Proxy Endpoint</Description>
+  <Description>Anthropic &amp; OpenAI Models API Catalog Proxy Endpoint</Description>
   <FaultRules/>
   <PreFlow name="PreFlow">
     <Request>
@@ -8,52 +8,52 @@
         <Name>JS-extract-auth-credentials</Name>
       </Step>
       <Step>
+        <Name>VA-ApiKey</Name>
         <Condition>(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")</Condition>
-        <Name>VA-ApiKey</Name>
       </Step>
       <Step>
+        <Name>OA-VerifyAccessToken</Name>
         <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")</Condition>
-        <Name>OA-VerifyAccessToken</Name>
       </Step>
       <Step>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")</Condition>
         <Name>SC-VerifyAgentToken</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")</Condition>
       </Step>
       <Step>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")</Condition>
         <Name>SC-VerifyIdpOpaqueToken</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")</Condition>
       </Step>
       <Step>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")</Condition>
         <Name>VJ-VerifyIdpJwt</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")</Condition>
       </Step>
       <Step>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")</Condition>
         <Name>JS-resolve-auth-persona</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")</Condition>
       </Step>
       <Step>
-        <Condition>auth_ready_to_import = "true"</Condition>
         <Name>OA-ImportExternalToken</Name>
-      </Step>
-      <Step>
-        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
-        <Name>OA-SaveTokenAttributes</Name>
-      </Step>
-      <Step>
         <Condition>auth_ready_to_import = "true"</Condition>
-        <Name>JS-restore-request-payload</Name>
       </Step>
       <Step>
+        <Name>OA-SaveTokenAttributes</Name>
         <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
+      </Step>
+      <Step>
+        <Name>JS-restore-request-payload</Name>
+        <Condition>auth_ready_to_import = "true"</Condition>
+      </Step>
+      <Step>
         <Name>OA-VerifyAccessToken</Name>
+        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
       </Step>
       <Step>
-        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))</Condition>
         <Name>VA-ApiKey</Name>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))</Condition>
       </Step>
       <Step>
-        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")</Condition>
         <Name>RF-Unauthorized</Name>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")</Condition>
       </Step>
       <Step>
         <Name>MLC-EnforceMonetizationLimits</Name>
@@ -64,10 +64,6 @@
     </Request>
     <Response/>
   </PreFlow>
-  <PostFlow name="PostFlow">
-    <Request/>
-    <Response/>
-  </PostFlow>
   <Flows>
     <Flow name="listModels">
       <Description>List available models</Description>
@@ -90,6 +86,10 @@
       </Response>
     </Flow>
   </Flows>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response/>
+  </PostFlow>
   <HTTPProxyConnection>
     <BasePath>/v1/models</BasePath>
   </HTTPProxyConnection>

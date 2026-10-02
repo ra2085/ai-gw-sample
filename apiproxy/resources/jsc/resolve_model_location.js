@@ -57,108 +57,182 @@ try {
         return false;
     }
 
-    // -------------------------------------------------------------------------
-    // 1. Fast Path: Standard Direct Single-Model Requests (Zero JSON Parse)
-    // -------------------------------------------------------------------------
-    var directAlias = (bareExtractedModel && !shouldBypassAlias(bareExtractedModel, explicitPublisher))
-        ? context.getVariable("propertyset.model_locations.alias." + bareExtractedModel)
-        : null;
-    var hasAdvancedFeatures = (bodyStr.indexOf('"models"') !== -1 || 
-                               bodyStr.indexOf('"plugins"') !== -1 || 
-                               bodyStr.indexOf('"auto"') !== -1 ||
-                               (extractedModel && (extractedModel.indexOf("auto") === 0 || extractedModel.indexOf("gateway/") === 0)) ||
-                               directAlias !== null);
+    // Preserve raw client payload for multi-model fallback chains before any target transcoding
+    var rawBodyStr = context.getVariable("raw_client_payload");
+    if (!rawBodyStr && bodyStr) {
+        rawBodyStr = bodyStr;
+        context.setVariable("raw_client_payload", bodyStr);
+    }
+    var effectiveBodyStr = rawBodyStr || bodyStr;
 
-    if (!hasAdvancedFeatures && bareExtractedModel) {
-        // Fast-path: Direct model already extracted by EV-Model / JS-extract-vars
-        requestedModel = extractedModel;
-        primaryModel = bareExtractedModel;
+    var isCircuitBreakerSecondPass = (context.getVariable("circuit_breaker_checked") === "true");
+    if (isCircuitBreakerSecondPass) {
+        var cbAllowed = parseInt(context.getVariable("ratelimit.LTQ-CircuitBreakerCheck.allowed.count") || "0", 10);
+        var cbUsed = parseInt(context.getVariable("ratelimit.LTQ-CircuitBreakerCheck.used.count") || "0", 10);
+        var cbTripped = (
+            context.getVariable("ratelimit.LTQ-CircuitBreakerCheck.failed") === true ||
+            context.getVariable("ratelimit.LTQ-CircuitBreakerCheck.failed") === "true" ||
+            parseInt(context.getVariable("ratelimit.LTQ-CircuitBreakerCheck.exceed.count") || "0", 10) > 0 ||
+            (cbAllowed > 0 && cbUsed >= cbAllowed)
+        );
+        if (!cbTripped) {
+            return;
+        }
+        var savedCands = JSON.parse(context.getVariable("resolved_candidates_json") || "[]");
+        var savedPrefixes = JSON.parse(context.getVariable("resolved_prefixes_json") || "[]");
+        requestedModel = context.getVariable("requested_model") || requestedModel;
+        allowFallbacks = context.getVariable("allow_fallbacks") !== "false";
+        primaryModel = savedCands[1] || context.getVariable("fallback_model") || defaultFallback;
+        fallbackModel = (savedCands.length > 2 && savedCands[2] !== primaryModel) ? savedCands[2] : null;
+        explicitPublisher = savedPrefixes[1] || null;
+
+        // Clear any Pass 1 target URL and auth overrides from the tripped primary model
+        context.removeVariable("model_custom_url");
+        context.removeVariable("target.url");
+        context.removeVariable("upstream_auth_source");
+        context.removeVariable("response.header.X-Gateway-Auth-Source");
+        context.removeVariable("response.header.X-Gateway-Provider-Account");
+        context.removeVariable("request.header.OpenAI-Organization");
+        context.removeVariable("request.header.OpenAI-Project");
+        context.removeVariable("request.header.Authorization");
+
+        context.setVariable("circuit_breaker_state", "OPEN");
+        context.setVariable("fallback_triggered", "true");
+        context.setVariable("response.header.X-Gateway-Circuit-Breaker", "OPEN");
+        context.setVariable("response.header.X-Gateway-Fallback-Triggered", "true");
     } else {
-        // ---------------------------------------------------------------------
-        // 2. Deep Path: Multi-Model Fallback Arrays, Auto-Router & Cost Tiers
-        // ---------------------------------------------------------------------
-        var body = bodyStr ? JSON.parse(bodyStr) : {};
-        var requestedCandidates = [];
+        // -------------------------------------------------------------------------
+        // 1. Fast Path: Standard Direct Single-Model Requests (Zero JSON Parse)
+        // -------------------------------------------------------------------------
+        var directAlias = (bareExtractedModel && !shouldBypassAlias(bareExtractedModel, explicitPublisher))
+            ? context.getVariable("propertyset.model_locations.alias." + bareExtractedModel)
+            : null;
+        var hasAdvancedFeatures = (effectiveBodyStr.indexOf('"models"') !== -1 || 
+                                   effectiveBodyStr.indexOf('"plugins"') !== -1 || 
+                                   effectiveBodyStr.indexOf('"auto"') !== -1 ||
+                                   (extractedModel && (extractedModel.indexOf("auto") === 0 || extractedModel.indexOf("gateway/") === 0)) ||
+                                   directAlias !== null);
 
-        if (Array.isArray(body.models) && body.models.length > 0) {
-            requestedCandidates = body.models;
-            requestedModel = "models:[" + body.models.join(",") + "]";
-        } else if (body.model) {
-            requestedCandidates = [body.model];
-            requestedModel = body.model;
+        if (!hasAdvancedFeatures && bareExtractedModel) {
+            // Fast-path: Direct model already extracted by EV-Model / JS-extract-vars
+            requestedModel = extractedModel;
+            primaryModel = bareExtractedModel;
         } else {
-            requestedCandidates = [defaultModel];
-            requestedModel = "default";
-        }
+            // ---------------------------------------------------------------------
+            // 2. Deep Path: Multi-Model Fallback Arrays, Auto-Router & Cost Tiers
+            // ---------------------------------------------------------------------
+            var body = effectiveBodyStr ? JSON.parse(effectiveBodyStr) : {};
+            var requestedCandidates = [];
 
-        // Smart Auto-Router & LLM Judge plugin
-        var plugins = body.plugins || [];
-        var autoRouterPlugin = null;
-        var judgePlugin = null;
-        for (var i = 0; i < plugins.length; i++) {
-            if (plugins[i]) {
-                if (plugins[i].id === "auto-router" && plugins[i].enabled !== false) {
-                    autoRouterPlugin = plugins[i];
+            if (Array.isArray(body.models) && body.models.length > 0) {
+                requestedCandidates = body.models;
+                requestedModel = "models:[" + body.models.join(",") + "]";
+            } else if (body.model) {
+                requestedCandidates = [body.model];
+                requestedModel = body.model;
+            } else if (bareExtractedModel && bareExtractedModel !== "unknown") {
+                requestedCandidates = [bareExtractedModel];
+                requestedModel = extractedModel;
+            } else {
+                requestedCandidates = [defaultModel];
+                requestedModel = "default";
+            }
+
+            // Smart Auto-Router & LLM Judge plugin
+            var plugins = body.plugins || [];
+            var autoRouterPlugin = null;
+            var judgePlugin = null;
+            for (var i = 0; i < plugins.length; i++) {
+                if (plugins[i]) {
+                    if (plugins[i].id === "auto-router" && plugins[i].enabled !== false) {
+                        autoRouterPlugin = plugins[i];
+                    }
+                    if (plugins[i].id === "judge" || (plugins[i].id === "auto-router" && (plugins[i].judge || plugins[i].mode === "judge"))) {
+                        judgePlugin = plugins[i];
+                    }
                 }
-                if (plugins[i].id === "judge" || (plugins[i].id === "auto-router" && (plugins[i].judge || plugins[i].mode === "judge"))) {
-                    judgePlugin = plugins[i];
+            }
+
+            var primaryCandidate = requestedCandidates[0] || "";
+            var judgeTier = context.getVariable("judge_tier");
+            var isJudgeRequest = !!(judgePlugin || judgeTier || primaryCandidate === "auto:judge" || primaryCandidate === "gateway/judge");
+            var isAutoRouter = !!(autoRouterPlugin || primaryCandidate === "gateway/auto" || primaryCandidate === "auto" || primaryCandidate.indexOf("auto") === 0);
+
+            if (isJudgeRequest || isAutoRouter) {
+                costTier = (autoRouterPlugin && autoRouterPlugin.cost_tier) || judgeTier || "medium";
+                requestedModel = judgeTier ? ("auto:judge:" + costTier) : ("auto:" + costTier);
+                var tierModel = context.getVariable("propertyset.model_locations.tier." + costTier) || 
+                                context.getVariable("propertyset.model_locations.tier.medium") || 
+                                defaultModel;
+                requestedCandidates = [tierModel, defaultFallback];
+                context.setVariable("response.header.X-Gateway-Cost-Tier", costTier);
+            }
+
+            // Fast string prefix normalization & alias lookup
+            var resolvedEntries = [];
+            for (var c = 0; c < requestedCandidates.length; c++) {
+                var rawModel = requestedCandidates[c];
+                if (!rawModel) continue;
+                var slashIdx = rawModel.indexOf('/');
+                var candPrefix = null;
+                if (slashIdx !== -1) {
+                    candPrefix = rawModel.substring(0, slashIdx);
+                    if (c === 0 && candPrefix !== "gateway" && candPrefix !== "auto") {
+                        explicitPublisher = explicitPublisher || candPrefix;
+                    }
                 }
+                var normalized = (slashIdx !== -1) ? rawModel.substring(slashIdx + 1) : rawModel;
+                var effPrefix = (candPrefix && candPrefix !== "gateway" && candPrefix !== "auto")
+                    ? candPrefix
+                    : (c === 0 ? explicitPublisher : null);
+                var alias = shouldBypassAlias(normalized, effPrefix)
+                    ? null
+                    : context.getVariable("propertyset.model_locations.alias." + normalized);
+                resolvedEntries.push({
+                    model: alias || normalized,
+                    prefix: effPrefix
+                });
+            }
+
+            // Optional API Product Entitlements Filter
+            var allowedByProduct = context.getVariable("apiproduct.allowed_models");
+            if (allowedByProduct) {
+                var allowedList = allowedByProduct.split(",").map(function(s) { return s.trim(); });
+                var filteredEntries = resolvedEntries.filter(function(item) {
+                    return allowedList.indexOf(item.model) !== -1;
+                });
+                if (filteredEntries.length > 0) {
+                    resolvedEntries = filteredEntries;
+                }
+            }
+
+            var resolvedCandidates = [];
+            var resolvedPrefixes = [];
+            for (var reIdx = 0; reIdx < resolvedEntries.length; reIdx++) {
+                resolvedCandidates.push(resolvedEntries[reIdx].model);
+                resolvedPrefixes.push(resolvedEntries[reIdx].prefix);
+            }
+
+            primaryModel = resolvedCandidates[0] || defaultModel;
+            fallbackModel = (resolvedCandidates.length > 1 && resolvedCandidates[1] !== primaryModel) ? resolvedCandidates[1] : null;
+            explicitPublisher = resolvedPrefixes[0] || explicitPublisher;
+
+            var providerPrefs = body.provider || {};
+            allowFallbacks = providerPrefs.allow_fallbacks !== false;
+
+            if (fallbackModel) {
+                context.setVariable("resolved_candidates_json", JSON.stringify(resolvedCandidates));
+                context.setVariable("resolved_prefixes_json", JSON.stringify(resolvedPrefixes));
             }
         }
 
-        var primaryCandidate = requestedCandidates[0] || "";
-        var judgeTier = context.getVariable("judge_tier");
-        var isJudgeRequest = !!(judgePlugin || judgeTier || primaryCandidate === "auto:judge" || primaryCandidate === "gateway/judge");
-        var isAutoRouter = !!(autoRouterPlugin || primaryCandidate === "gateway/auto" || primaryCandidate === "auto" || primaryCandidate.indexOf("auto") === 0);
-
-        if (isJudgeRequest || isAutoRouter) {
-            costTier = (autoRouterPlugin && autoRouterPlugin.cost_tier) || judgeTier || "medium";
-            requestedModel = judgeTier ? ("auto:judge:" + costTier) : ("auto:" + costTier);
-            var tierModel = context.getVariable("propertyset.model_locations.tier." + costTier) || 
-                            context.getVariable("propertyset.model_locations.tier.medium") || 
-                            defaultModel;
-            requestedCandidates = [tierModel, defaultFallback];
-            context.setVariable("response.header.X-Gateway-Cost-Tier", costTier);
-        }
-
-        // Fast string prefix normalization & alias lookup
-        var resolvedCandidates = [];
-        for (var c = 0; c < requestedCandidates.length; c++) {
-            var rawModel = requestedCandidates[c];
-            if (!rawModel) continue;
-            var slashIdx = rawModel.indexOf('/');
-            var candPrefix = null;
-            if (slashIdx !== -1) {
-                candPrefix = rawModel.substring(0, slashIdx);
-                if (c === 0 && candPrefix !== "gateway" && candPrefix !== "auto") {
-                    explicitPublisher = explicitPublisher || candPrefix;
-                }
-            }
-            var normalized = (slashIdx !== -1) ? rawModel.substring(slashIdx + 1) : rawModel;
-            
-            var alias = shouldBypassAlias(normalized, candPrefix || (c === 0 ? explicitPublisher : null))
-                ? null
-                : context.getVariable("propertyset.model_locations.alias." + normalized);
-            resolvedCandidates.push(alias || normalized);
-        }
-
-        // Optional API Product Entitlements Filter
-        var allowedByProduct = context.getVariable("apiproduct.allowed_models");
-        if (allowedByProduct) {
-            var allowedList = allowedByProduct.split(",").map(function(s) { return s.trim(); });
-            var filtered = resolvedCandidates.filter(function(m) {
-                return allowedList.indexOf(m) !== -1;
-            });
-            if (filtered.length > 0) {
-                resolvedCandidates = filtered;
-            }
-        }
-
-        primaryModel = resolvedCandidates[0] || defaultModel;
-        fallbackModel = (resolvedCandidates.length > 1 && resolvedCandidates[1] !== primaryModel) ? resolvedCandidates[1] : null;
-
-        var providerPrefs = body.provider || {};
-        allowFallbacks = providerPrefs.allow_fallbacks !== false;
+        context.setVariable("circuit_breaker_checked", "true");
+        context.setVariable("tried_primary_model", primaryModel);
+        context.setVariable("cb_error_weight", "1");
+        context.setVariable("circuit_breaker_state", "CLOSED");
+        context.setVariable("fallback_triggered", "false");
+        context.setVariable("response.header.X-Gateway-Circuit-Breaker", "CLOSED");
+        context.setVariable("response.header.X-Gateway-Fallback-Triggered", "false");
     }
 
     // -------------------------------------------------------------------------
@@ -247,14 +321,15 @@ try {
     if (customUrl) {
         context.setVariable("model_custom_url", customUrl);
         context.setVariable("target.url", customUrl);
-    } else if (isEmbeddings && context.getVariable("request_format") === "gemini") {
+    } else if (context.getVariable("request_format") === "gemini") {
         var pathSuffix = context.getVariable("proxy.pathsuffix") || "";
-        if (pathSuffix) {
+        if (pathSuffix && (isEmbeddings || primaryModel !== bareExtractedModel || isCircuitBreakerSecondPass)) {
             var locMatch = pathSuffix.match(/\/locations\/([^\/]+)\//);
             var pathLoc = (locMatch && locMatch[1]) ? locMatch[1] : endpointLocation;
             var embHost = (pathLoc && pathLoc !== "global") ? (pathLoc + "-aiplatform.googleapis.com") : endpointHost;
+            var rewrittenPath = pathSuffix.replace(/\/models\/[^\/:]+/, "/models/" + primaryModel);
             context.setVariable("target.copy.pathsuffix", false);
-            context.setVariable("target.url", "https://" + embHost + pathSuffix);
+            context.setVariable("target.url", "https://" + embHost + rewrittenPath);
         }
     }
 
@@ -344,27 +419,33 @@ try {
     }
 
     // Identity & Persona Normalization (API Key / OAuth / Imported Agent & IdP Tokens)
-    var oauthUserId = context.getVariable("accesstoken.user_id") || context.getVariable("auth_user_id");
+    function cleanTokenAttr(val) {
+        if (!val) return "";
+        var s = String(val).trim();
+        return (s === "unset" || s === "null" || s === "undefined") ? "" : s;
+    }
+
+    var oauthUserId = cleanTokenAttr(context.getVariable("accesstoken.user_id")) || cleanTokenAttr(context.getVariable("auth_user_id"));
     var identityUserId = oauthUserId ||
                          context.getVariable("verifyapikey.VA-ApiKey.developer.email") ||
                          context.getVariable("developer.email") ||
                          context.getVariable("verifyapikey.VA-ApiKey.client_id") ||
                          context.getVariable("client_id") ||
                          "anonymous";
-    var identityPersona = context.getVariable("accesstoken.persona") ||
-                          context.getVariable("auth_persona") ||
+    var identityPersona = cleanTokenAttr(context.getVariable("accesstoken.persona")) ||
+                          cleanTokenAttr(context.getVariable("auth_persona")) ||
                           context.getVariable("verifyapikey.VA-ApiKey.persona") ||
                           context.getVariable("apiproduct.persona") ||
                           context.getVariable("verifyapikey.VA-ApiKey.apiproduct.name") ||
                           context.getVariable("apiproduct.name") ||
                           "default";
-    var identityTeam = context.getVariable("accesstoken.team") ||
-                       context.getVariable("auth_team") ||
+    var identityTeam = cleanTokenAttr(context.getVariable("accesstoken.team")) ||
+                       cleanTokenAttr(context.getVariable("auth_team")) ||
                        context.getVariable("verifyapikey.VA-ApiKey.team") ||
                        context.getVariable("apiproduct.team") ||
                        "default";
-    var identityAuthType = context.getVariable("accesstoken.auth_source") ||
-                           context.getVariable("auth_token_type") ||
+    var identityAuthType = cleanTokenAttr(context.getVariable("accesstoken.auth_source")) ||
+                           cleanTokenAttr(context.getVariable("auth_token_type")) ||
                            (context.getVariable("verifyapikey.VA-ApiKey.client_id") ? "apikey" : (context.getVariable("client_id") ? "oauth" : "none"));
 
     context.setVariable("identity_user_id", identityUserId);
@@ -385,14 +466,14 @@ try {
         }
     }
 
-    var rawQuotaOverride = context.getVariable("accesstoken.quota_override") ||
-                           context.getVariable("auth_quota_override") ||
+    var rawQuotaOverride = cleanTokenAttr(context.getVariable("accesstoken.quota_override")) ||
+                           cleanTokenAttr(context.getVariable("auth_quota_override")) ||
                            context.getVariable("verifyapikey.VA-ApiKey.quota_override") ||
                            context.getVariable("verifyapikey.VA-ApiKey.quota_limit") ||
                            context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override") ||
                            context.getVariable("verifyapikey.VA-ApiKey.developer.quota_limit");
-    var quotaOverrideExpiresAt = context.getVariable("accesstoken.quota_override_expires_at") ||
-                                 context.getVariable("auth_quota_override_expires_at") ||
+    var quotaOverrideExpiresAt = cleanTokenAttr(context.getVariable("accesstoken.quota_override_expires_at")) ||
+                                 cleanTokenAttr(context.getVariable("auth_quota_override_expires_at")) ||
                                  context.getVariable("verifyapikey.VA-ApiKey.quota_override_expires_at") ||
                                  context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override_expires_at");
     var primaryQuotaOverride = "";
@@ -696,9 +777,9 @@ try {
     }
 
     // Resolve Request Phase Template & Source
-    var claimReqTemplate = context.getVariable("accesstoken.model_armor_request_template") ||
-                           context.getVariable("auth_model_armor_request_template") ||
-                           context.getVariable("accesstoken.model_armor_template");
+    var claimReqTemplate = cleanTokenAttr(context.getVariable("accesstoken.model_armor_request_template")) ||
+                           cleanTokenAttr(context.getVariable("auth_model_armor_request_template")) ||
+                           cleanTokenAttr(context.getVariable("accesstoken.model_armor_template"));
     var appReqTemplate = context.getVariable("verifyapikey.VA-ApiKey.model_armor_request_template") ||
                          context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_request_template") ||
                          context.getVariable("verifyapikey.VA-ApiKey.model_armor_template") ||
@@ -735,9 +816,9 @@ try {
     }
 
     // Resolve Response Phase Template & Source
-    var claimRespTemplate = context.getVariable("accesstoken.model_armor_response_template") ||
-                            context.getVariable("auth_model_armor_response_template") ||
-                            context.getVariable("accesstoken.model_armor_template");
+    var claimRespTemplate = cleanTokenAttr(context.getVariable("accesstoken.model_armor_response_template")) ||
+                            cleanTokenAttr(context.getVariable("auth_model_armor_response_template")) ||
+                            cleanTokenAttr(context.getVariable("accesstoken.model_armor_template"));
     var appRespTemplate = context.getVariable("verifyapikey.VA-ApiKey.model_armor_response_template") ||
                           context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_response_template") ||
                           context.getVariable("verifyapikey.VA-ApiKey.model_armor_template") ||

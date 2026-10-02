@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <SetOAuthV2Info continueOnError="true" enabled="true" name="OA-SaveTokenAttributes">
   <DisplayName>OA-SaveTokenAttributes</DisplayName>
   <AccessToken ref="auth_bearer_token"/>

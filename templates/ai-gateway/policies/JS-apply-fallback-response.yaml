@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: true
+  .enabled: true
+  .name: JS-apply-fallback-response
+  .timeLimit: 200
+  DisplayName: JS-apply-fallback-response
+  Properties: {}
+  ResourceURL: jsc://apply_fallback_response.js

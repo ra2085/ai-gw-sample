@@ -76,11 +76,18 @@ features:
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1                                  # Auto-expiry for disconnected SSE streams
 
-  # 6. CORS Support
+  # 6. Rolling-Window Circuit Breaker & Automatic Fallback Chains
+  circuit_breaker:
+    enabled: true                                     # Enables automatic 429/5xx failover & PreFlow circuit breaking
+    error_threshold: 3                                # Upstream errors within window before circuit trips OPEN
+    window_interval: 1                                # Rolling error budget window duration
+    window_unit: "minute"                             # Rolling window unit (minute | hour | day)
+
+  # 7. CORS Support
   cors:
     enabled: true                                     # Emits CORS headers & handles OPTIONS preflight
 
-  # 7. Authentication & AI Product Persona Mapping
+  # 8. Authentication & AI Product Persona Mapping
   auth:
     enabled: true                                     # Enforces zero-passthrough authentication
     allow_bearer_api_key: true                        # Option 1: Allows passing Apigee API Key via x-apikey, x-api-key, or Authorization: Bearer <api-key>

@@ -15,6 +15,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and checks prepaid balances. | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) for fallback chains (`"models": [...]`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.model_armor.enabled`** | `true` | Screens prompts and responses for PII, secrets, and prompt injection via GCP Model Armor. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.cors.enabled`** | `true` | Adds CORS headers and `OPTIONS` preflight support for browser-based applications. | [`values.yaml` Reference](configuration.md) |
 
@@ -40,7 +41,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
     ```
 
 === "Full Enterprise Governance"
-    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, and Model Armor:
+    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, Fallback Chains with Rolling-Window Circuit Breaker, and Model Armor:
 
     ```yaml
     features:
@@ -99,5 +100,12 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
       llm_judge:
         enabled: true
         classifier_model: "gemini-3.1-flash-lite"
+
+      circuit_breaker:
+        enabled: true
+        failure_threshold: 3
+        interval: 1
+        time_unit: "minute"
     ```
+
 
