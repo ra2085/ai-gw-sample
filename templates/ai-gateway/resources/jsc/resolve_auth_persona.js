@@ -40,6 +40,89 @@ function normalizeClaimValues(rawClaim) {
     return res;
 }
 
+// Linear-time O(N) glob matcher supporting '*' wildcards without RegExp/ReDoS overhead
+function matchesGlob(str, pattern) {
+    if (pattern === "*" || str === pattern) return true;
+    if (pattern.indexOf("*") === -1) return false;
+
+    var segments = pattern.split("*");
+    var pos = 0;
+
+    if (segments[0] !== "") {
+        if (str.indexOf(segments[0]) !== 0) return false;
+        pos = segments[0].length;
+    }
+
+    var endLimit = str.length;
+    var lastSeg = segments[segments.length - 1];
+    if (lastSeg !== "") {
+        if (str.length - pos < lastSeg.length) return false;
+        if (str.lastIndexOf(lastSeg) !== str.length - lastSeg.length) return false;
+        endLimit = str.length - lastSeg.length;
+    }
+
+    for (var i = 1; i < segments.length - 1; i++) {
+        var seg = segments[i];
+        if (seg === "") continue;
+        var idx = str.indexOf(seg, pos);
+        if (idx === -1 || idx + seg.length > endLimit) return false;
+        pos = idx + seg.length;
+    }
+
+    return true;
+}
+
+// Computes specificity score so more specific exact/glob rules always win over broader wildcards
+function computeMatchScore(claim, pattern, defaultAgentPersona) {
+    var isExact = (pattern.indexOf("*") === -1);
+    var literalLen = pattern.replace(/\*/g, "").length;
+
+    if (defaultAgentPersona && pattern === defaultAgentPersona.toLowerCase()) {
+        return 1000 + literalLen;
+    }
+
+    // SPIFFE / Agent Identity patterns (principal://, spiffe://, principalSet://)
+    if (claim.indexOf("principal://") === 0 || claim.indexOf("spiffe://") === 0 || claim.indexOf("principalset://") === 0) {
+        if (pattern.indexOf("reasoningengines/") !== -1) {
+            return 40000 + (isExact ? 500 : 0) + literalLen;
+        }
+        if (pattern.indexOf("/locations/") !== -1) {
+            return 30000 + (isExact ? 500 : 0) + literalLen;
+        }
+        if (pattern.indexOf("/projects/") !== -1) {
+            return 20000 + (isExact ? 500 : 0) + literalLen;
+        }
+        return 10000 + (isExact ? 500 : 0) + literalLen;
+    }
+
+    // Google Cloud Service Account email patterns (<name>@<project>.iam.gserviceaccount.com)
+    if (claim.indexOf(".iam.gserviceaccount.com") !== -1 && pattern.indexOf("@") !== -1) {
+        if (isExact) {
+            return 40500 + literalLen;
+        }
+        var atIdx = pattern.indexOf("@");
+        var localLit = pattern.substring(0, atIdx).replace(/\*/g, "");
+        var domainLit = pattern.substring(atIdx + 1).replace(/\.iam\.gserviceaccount\.com$/i, "").replace(/\*/g, "");
+        if (localLit.length > 0 && domainLit.length > 0) {
+            return 35000 + literalLen; // Prefix + specific project (e.g. finance-*@my-proj.iam.gserviceaccount.com)
+        }
+        if (localLit.length > 0) {
+            return 30000 + literalLen; // Prefix across projects (e.g. finance-*@*.iam.gserviceaccount.com)
+        }
+        if (domainLit.length > 0) {
+            return 20000 + literalLen; // Project-wide wildcard (e.g. *@my-proj.iam.gserviceaccount.com)
+        }
+        return 10000 + literalLen;     // Org-wide wildcard (e.g. *@*.iam.gserviceaccount.com)
+    }
+
+    if (claim.indexOf("project:") === 0 || pattern.indexOf("project:") === 0) {
+        return 20000 + (isExact ? 500 : 0) + literalLen;
+    }
+
+    // Corporate IdP claims or shorthand prefixes
+    return (isExact ? 40500 : 30000) + literalLen;
+}
+
 try {
     context.setVariable("auth_ready_to_import", "false");
 
@@ -48,13 +131,14 @@ try {
     var userId = "";
     var userEmail = "";
     var rawPersonaClaim = "";
+    var defaultAgentPersona = "";
     var team = "default";
     var quotaOverride = "";
     var quotaOverrideExpiresAt = "";
     var tokenTtlMs = "3600000";
 
     // -------------------------------------------------------------------------
-    // Option 3: Google Cloud Agent Identity (ya29.* via GCP tokeninfo)
+    // Option 3: Google Cloud Agents — Agent Identity (SPIFFE) & Service Accounts
     // -------------------------------------------------------------------------
     if (tokenType === "agent_identity") {
         var agentStatus = Number(context.getVariable("agentTokenVerifyResponse.status.code") || 0);
@@ -63,26 +147,91 @@ try {
             var agentData = JSON.parse(agentContent);
             var email = agentData.email || "";
             var sub = agentData.sub || agentData.azp || "";
+            var rawPrincipal = agentData.principal || agentData.spiffe_id ||
+                               ((sub.indexOf("spiffe://") === 0 || sub.indexOf("principal://") === 0 || sub.indexOf(".system.id.goog") !== -1) ? sub : "") ||
+                               ((email.indexOf("spiffe://") === 0 || email.indexOf("principal://") === 0 || email.indexOf(".system.id.goog") !== -1) ? email : "");
+
             var allowedSuffix = context.getVariable("propertyset.config.auth_agent_allowed_email_suffix");
             if (allowedSuffix === null || allowedSuffix === undefined || allowedSuffix === "") {
                 allowedSuffix = ".iam.gserviceaccount.com";
             }
-
-            var suffixValid = false;
-            if (allowedSuffix === "*") {
-                suffixValid = Boolean(email || sub);
-            } else if (email && email.toLowerCase().indexOf(String(allowedSuffix).toLowerCase()) !== -1 &&
-                       email.toLowerCase().lastIndexOf(String(allowedSuffix).toLowerCase()) === email.length - String(allowedSuffix).length) {
-                suffixValid = true;
+            var allowedTrustDomain = context.getVariable("propertyset.config.auth_agent_allowed_trust_domain");
+            if (allowedTrustDomain === null || allowedTrustDomain === undefined || allowedTrustDomain === "") {
+                allowedTrustDomain = ".system.id.goog";
             }
+            defaultAgentPersona = context.getVariable("propertyset.config.auth_agent_persona") || "agent";
+            tokenTtlMs = String(context.getVariable("propertyset.config.auth_agent_token_ttl_ms") || "3600000");
 
-            if (suffixValid) {
-                isVerified = true;
-                userId = email || sub;
-                userEmail = email || sub;
-                rawPersonaClaim = context.getVariable("propertyset.config.auth_agent_persona") || "agent";
-                team = agentData.azp || "agents";
-                tokenTtlMs = String(context.getVariable("propertyset.config.auth_agent_token_ttl_ms") || "3600000");
+            // Case 3a: SPIFFE-based Google Cloud Agent Identity (spiffe:// or principal:// under *.system.id.goog)
+            if (rawPrincipal) {
+                var normalizedPrincipal = rawPrincipal.replace(/^spiffe:\/\//i, "principal://");
+                if (normalizedPrincipal.indexOf("principal://") !== 0 && normalizedPrincipal.indexOf(".system.id.goog") !== -1) {
+                    normalizedPrincipal = "principal://" + normalizedPrincipal.replace(/^\/+/, "");
+                }
+                var spiffeMatch = normalizedPrincipal.match(/^principal:\/\/([^\/]+)\/resources\/([^\/]+)\/projects\/([^\/]+)\/locations\/([^\/]+)\/(.+)$/i);
+                var trustDomain = spiffeMatch ? spiffeMatch[1] : "";
+                var lowerPrincipal = normalizedPrincipal.toLowerCase();
+                var lowerTrust = String(allowedTrustDomain).toLowerCase();
+                var trustValid = (allowedTrustDomain === "*") ||
+                                 (lowerTrust.indexOf("*") !== -1 ? (matchesGlob(lowerPrincipal, lowerTrust) || (trustDomain && matchesGlob(trustDomain.toLowerCase(), lowerTrust))) : (lowerPrincipal.indexOf(lowerTrust) !== -1));
+
+                if (trustValid) {
+                    isVerified = true;
+                    userId = normalizedPrincipal;
+                    userEmail = normalizedPrincipal;
+                    rawPersonaClaim = [
+                        normalizedPrincipal,
+                        normalizedPrincipal.replace(/^principal:\/\//i, "spiffe://")
+                    ];
+                    if (spiffeMatch) {
+                        var svcName = spiffeMatch[2];
+                        var projNum = spiffeMatch[3];
+                        var tailPath = spiffeMatch[5];
+                        var tailSegments = tailPath.split("/");
+                        var engineId = tailSegments[tailSegments.length - 1];
+                        var projectPrincipalSet = "principalSet://" + trustDomain + "/attribute.platformContainer/" + svcName + "/projects/" + projNum;
+                        var orgPrincipalSet = "principalSet://" + trustDomain + "/*";
+                        if (engineId) rawPersonaClaim.push(engineId);
+                        rawPersonaClaim.push(projectPrincipalSet);
+                        rawPersonaClaim.push("project:" + projNum);
+                        rawPersonaClaim.push(orgPrincipalSet);
+                        rawPersonaClaim.push(trustDomain);
+                        team = "project:" + projNum;
+                    } else {
+                        team = agentData.azp || "agents";
+                    }
+                    rawPersonaClaim.push(defaultAgentPersona);
+                }
+            }
+            // Case 3b: Google Cloud IAM Service Account (*.iam.gserviceaccount.com)
+            else {
+                var suffixValid = false;
+                var lowerEmail = email.toLowerCase();
+                var lowerSuffix = String(allowedSuffix).toLowerCase();
+                if (allowedSuffix === "*") {
+                    suffixValid = Boolean(email || sub);
+                } else if (email && lowerSuffix.indexOf("*") !== -1 && matchesGlob(lowerEmail, lowerSuffix)) {
+                    suffixValid = true;
+                } else if (email && lowerEmail.indexOf(lowerSuffix) !== -1 &&
+                           lowerEmail.lastIndexOf(lowerSuffix) === lowerEmail.length - lowerSuffix.length) {
+                    suffixValid = true;
+                }
+
+                if (suffixValid) {
+                    isVerified = true;
+                    userId = email || sub;
+                    userEmail = email || sub;
+                    var emailPrefix = (email && email.indexOf("@") !== -1) ? email.split("@")[0] : "";
+                    var saProjMatch = email.match(/@([^.]+)\.iam\.gserviceaccount\.com$/i);
+                    var saProject = (saProjMatch && saProjMatch[1]) ? saProjMatch[1] : "";
+                    rawPersonaClaim = [];
+                    if (email) rawPersonaClaim.push(email);
+                    if (emailPrefix) rawPersonaClaim.push(emailPrefix);
+                    if (saProject) rawPersonaClaim.push("project:" + saProject);
+                    if (sub && sub !== email) rawPersonaClaim.push(sub);
+                    rawPersonaClaim.push(defaultAgentPersona);
+                    team = saProject ? ("project:" + saProject) : (agentData.azp || "agents");
+                }
             }
         }
     }
@@ -144,6 +293,7 @@ try {
 
     // -------------------------------------------------------------------------
     // Map Verified Identity Claim -> Persona Developer App client_id
+    // Supports exact match & linear-time '*' glob patterns, ranked by specificity
     // -------------------------------------------------------------------------
     if (isVerified) {
         var claimValues = normalizeClaimValues(rawPersonaClaim);
@@ -151,10 +301,15 @@ try {
         var personas = personasCsv.split(",");
         var matchedPersona = "";
         var personaClientId = "";
+        var bestScore = -1;
 
         for (var i = 0; i < personas.length; i++) {
             var pName = personas[i].trim();
             if (!pName) continue;
+
+            var candidateClientId = context.getVariable("propertyset.config.persona." + pName + ".client_id") ||
+                                    context.getVariable("propertyset.config.persona_" + pName + "_client_id");
+            if (!candidateClientId || String(candidateClientId).trim() === "") continue;
 
             var matchClaimsCsv = context.getVariable("propertyset.config.persona." + pName + ".match_claims") || pName;
             var matchCandidates = normalizeClaimValues(matchClaimsCsv);
@@ -162,21 +317,18 @@ try {
                 matchCandidates.push(pName.toLowerCase());
             }
 
-            var isMatch = false;
             for (var c = 0; c < claimValues.length; c++) {
-                if (matchCandidates.indexOf(claimValues[c]) !== -1) {
-                    isMatch = true;
-                    break;
-                }
-            }
-
-            if (isMatch) {
-                var candidateClientId = context.getVariable("propertyset.config.persona." + pName + ".client_id") ||
-                                        context.getVariable("propertyset.config.persona_" + pName + "_client_id");
-                if (candidateClientId && String(candidateClientId).trim() !== "") {
-                    matchedPersona = pName;
-                    personaClientId = String(candidateClientId).trim();
-                    break;
+                var claimVal = claimValues[c];
+                for (var m = 0; m < matchCandidates.length; m++) {
+                    var pattern = matchCandidates[m];
+                    if (matchesGlob(claimVal, pattern)) {
+                        var score = computeMatchScore(claimVal, pattern, defaultAgentPersona);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            matchedPersona = pName;
+                            personaClientId = String(candidateClientId).trim();
+                        }
+                    }
                 }
             }
         }

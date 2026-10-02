@@ -63,9 +63,10 @@ features:
     apigee_oauth:
       enabled: true                        # Option 2: Native Apigee OAuth 2.0 Token verification (<1ms L1 cache)
     agent_identity:
-      enabled: false                       # Option 3: GCP Agent Identity (ya29.*) 1st-request verification + OAuth token import
+      enabled: false                       # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      allowed_email_suffix: ".iam.gserviceaccount.com"
+      allowed_trust_domain: ".system.id.goog"          # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
+      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
       persona: "agent"
       token_ttl_ms: 3600000
     idp_opaque:

@@ -73,32 +73,47 @@ features:
   # 7. Authentication & AI Product Persona Mapping
   auth:
     enabled: true                                     # Enforces zero-passthrough authentication
-    type: "apikey"                                    # Primary mode: apikey | oauth | multi
-    allow_x_api_key_alias: true                       # Accepts both x-apikey and x-api-key (Anthropic/OpenAI SDKs)
-    oauth:
-      enabled: true                                   # Enables native Apigee OAuth 2.0 tokens
+    allow_bearer_api_key: true                        # Option 1: Allows passing Apigee API Key via x-apikey, x-api-key, or Authorization: Bearer <api-key>
+    apigee_oauth:
+      enabled: true                                   # Option 2: Native Apigee OAuth 2.0 tokens (<1ms L1 cache)
     agent_identity:
-      enabled: true                                   # Enables Google Cloud Agents (Agent Identity, Service Accounts via ya29.* tokens)
+      enabled: true                                   # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      cache_ttl_seconds: 300
+      allowed_trust_domain: ".system.id.goog"         # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
+      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
+      persona: "agent"                                # Default persona tier for verified GCP agents
+      token_ttl_ms: 3600000
     idp_opaque:
-      enabled: true                                   # Enables Corporate SSO Opaque Tokens (RFC 7662 introspection)
-      introspection_url: "https://idp.internal.corp/oauth2/introspect"
-      auth_header: "Basic YXBpZ2VlLWdhdGV3YXk6c2VjcmV0"
-      cache_ttl_seconds: 300
+      enabled: true                                   # Option 4a: Corporate SSO Opaque Tokens (/userinfo introspection)
+      userinfo_url: "https://idp.internal.corp/oauth2/v1/userinfo"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
     idp_jwt:
-      enabled: true                                   # Enables Corporate SSO JWTs (JWKS signature verification)
-      jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
-      issuer: ""                                      # Optional expected JWT iss claim
-      audience: ""                                    # Optional expected JWT aud claim
-    personas:
-      claim_name: "groups"                            # JWT/Introspection claim holding user groups/roles
-      default_persona: "developer-default"            # Fallback AI Product persona when no group matches
-      mappings:                                       # Group -> AI Product name:Consumer Key of that AI Product
-        "ai-gateway-leads": "lead-ai-engineer:DEMO_KEY_LEAD_PERSONA"
-        "ai-gateway-PowerUsers": "power-developer:DEMO_KEY_POWER_PERSONA"
-        "ai-gateway-contractors": "contractor-restricted:DEMO_KEY_CONTRACTOR_PERSONA"
-        "default": "developer-default:DEMO_KEY_DEFAULT_PERSONA"
+      enabled: true                                   # Option 4b: Corporate SSO JWTs (JWKS signature verification)
+      jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
+      issuer: "https://login.corp.example.com"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    default_persona: "knowledge-worker"               # Optional fallback persona if an authenticated claim doesn't match
+    personas:                                         # Maps verified IdP claims or GCP identities (exact strings or '*' globs) to AI Products
+      knowledge-worker:
+        match_claims: ["knowledge-worker", "general", "business-*"]
+        client_id: "CONSUMER_KEY_FOR_KNOWLEDGE_WORKER_AI_PRODUCT"
+      developer:
+        match_claims: ["developer", "engineering", "swe-*", "*-data-science"]
+        client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
+      it:
+        match_claims: ["it", "platform-admin", "sre-*", "devops", "secops"]
+        client_id: "CONSUMER_KEY_FOR_IT_AI_PRODUCT"
+      agent:
+        match_claims: ["principalSet://*.system.id.goog/*", "*@*.iam.gserviceaccount.com", "agent"]
+        client_id: "CONSUMER_KEY_FOR_AGENT_AI_PRODUCT"
 ```
 
 ---

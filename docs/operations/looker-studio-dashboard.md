@@ -73,7 +73,7 @@ When you click **Connect** in Step 1, Looker Studio opens the **Data Source Fiel
 
 | Field Name to Enter | Formula to Paste |
 | :--- | :--- |
-| **`Workload Type`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_identity_persona), "agent") OR ENDS_WITH(LOWER(dc_identity_user_id), ".iam.gserviceaccount.com") THEN "Google Cloud Agent (Agent Identity, Service Account)" ELSE "Human Developer" END` |
+| **`Workload Type`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_identity_user_id), "principal://|spiffe://|\\.system\\.id\\.goog") THEN "Google Cloud Agent (Agent Identity)" WHEN ENDS_WITH(LOWER(dc_identity_user_id), ".iam.gserviceaccount.com") OR REGEXP_CONTAINS(LOWER(dc_identity_persona), "agent") THEN "Google Cloud Agent (Service Account)" ELSE "Human Developer" END` |
 | **`Model Provider`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_model), "gemini|text-embedding-005") THEN "Google Vertex AI (Gemini)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "claude") THEN "Anthropic (Claude)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "gpt|o3|text-embedding-3") THEN "OpenAI" WHEN REGEXP_CONTAINS(LOWER(dc_model), "llama|mistral") THEN "Vertex Model Garden (MaaS)" ELSE "Custom / Self-Hosted" END` |
 | **`Routing Strategy`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_requested_model), "auto") THEN "Auto-Routed (Smart Router / Judge)" ELSE "Direct Model Request" END` |
 | **`Cost Tier`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_model), "flash-lite") THEN "Tier Low (Gemini 3.1 Flash-Lite)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "flash") THEN "Tier Medium (Gemini 3.5 Flash)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "pro") THEN "Tier High (Gemini 3.1 Pro)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "claude|gpt-5") THEN "Tier Max (Claude 4.6 / GPT-5.4)" ELSE "Other / Custom" END` |

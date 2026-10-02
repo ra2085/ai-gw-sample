@@ -161,6 +161,7 @@ openai_project_id={{ $.Values.gateway.openai_project_id }}
 # Authentication & Persona-Based Token Import Configuration
 auth_allow_bearer_api_key={{ if hasKey $auth "allow_bearer_api_key" }}{{ $auth.allow_bearer_api_key }}{{ else }}true{{ end }}
 auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
+auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain }}{{ else }}.system.id.goog{{ end }}
 auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix }}{{ else }}.iam.gserviceaccount.com{{ end }}
 auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
 auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
