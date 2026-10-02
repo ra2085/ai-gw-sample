@@ -20,6 +20,12 @@ try {
     if (origContentType !== null && origContentType !== undefined && String(origContentType).trim() !== "") {
         context.setVariable("request.header.Content-Type", origContentType);
     }
+
+    var resolvedClientId = context.getVariable("auth_persona_client_id") || context.getVariable("auth_resolved_client_id");
+    if (resolvedClientId && String(resolvedClientId).trim() !== "") {
+        context.setVariable("client_id", String(resolvedClientId).trim());
+        context.setVariable("request.header.x-apikey", String(resolvedClientId).trim());
+    }
 } catch (e) {
     print("Error in restore_request_payload.js: " + e);
 }

@@ -203,7 +203,7 @@ try {
                    context.getVariable("propertyset.model_locations." + primaryModel + ".auth_type");
 
     var isGoogleUrl = !customUrl || customUrl.indexOf("googleapis.com") !== -1;
-    var useExternalTarget = (publisher === "openai" || (customUrl && !isGoogleUrl && authType !== "google_iam"));
+    var useExternalTarget = (modelFormat === "openai") && (publisher === "openai" || (customUrl && !isGoogleUrl && authType !== "google_iam"));
 
     var configuredTarget = context.getVariable("propertyset.model_locations." + primaryModel + ".target");
     var targetName = defaultTarget;

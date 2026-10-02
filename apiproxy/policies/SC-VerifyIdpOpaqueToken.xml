@@ -17,6 +17,6 @@
     <Properties>
       <Property name="io.timeout.millis">3000</Property>
     </Properties>
-    <URL>{propertyset.config.auth_idp_opaque_userinfo_url}</URL>
+    <URL>https://idp.example.com/oauth2/v1/userinfo</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

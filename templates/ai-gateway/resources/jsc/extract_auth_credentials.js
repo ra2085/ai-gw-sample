@@ -33,6 +33,7 @@ try {
     if (explicitApiKey && String(explicitApiKey).trim() !== "") {
         var cleanKey = String(explicitApiKey).trim();
         context.setVariable("request.header.x-apikey", cleanKey);
+        context.setVariable("client_id", cleanKey);
         context.setVariable("auth_has_apikey", "true");
     } else {
         context.setVariable("auth_has_apikey", "false");
@@ -63,6 +64,7 @@ try {
                 context.getVariable("auth_token_type") === "idp_opaque" &&
                 allowBearerApiKey !== "false") {
                 context.setVariable("request.header.x-apikey", bearerToken);
+                context.setVariable("client_id", bearerToken);
                 context.setVariable("auth_try_bearer_as_apikey", "true");
             } else {
                 context.setVariable("auth_try_bearer_as_apikey", "false");

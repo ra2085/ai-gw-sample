@@ -5,4 +5,4 @@ VerifyAPIKey:
   DisplayName: VA-ApiKey
   Properties: {}
   APIKey:
-    .ref: request.header.x-apikey
+    .ref: client_id

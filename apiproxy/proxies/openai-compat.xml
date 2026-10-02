@@ -67,6 +67,10 @@
         <Name>OA-VerifyAccessToken</Name>
       </Step>
       <Step>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))</Condition>
+        <Name>VA-ApiKey</Name>
+      </Step>
+      <Step>
         <Condition>(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")</Condition>
         <Name>RF-Unauthorized</Name>
       </Step>

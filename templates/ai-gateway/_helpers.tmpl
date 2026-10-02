@@ -255,6 +255,9 @@ buffer_size=50
     Condition: '(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")'
     Name: OA-VerifyAccessToken
 - Step:
+    Condition: '(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))'
+    Name: VA-ApiKey
+- Step:
     Condition: '(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")'
     Name: RF-Unauthorized
 {{- end -}}

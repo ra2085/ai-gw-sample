@@ -2,5 +2,5 @@
 <VerifyAPIKey continueOnError="true" enabled="true" name="VA-ApiKey">
   <DisplayName>VA-ApiKey</DisplayName>
   <Properties/>
-  <APIKey ref="request.header.x-apikey"/>
+  <APIKey ref="client_id"/>
 </VerifyAPIKey>
