@@ -532,6 +532,270 @@ try {
                            "20";
     context.setVariable("concurrency_limit", String(concurrencyLimit));
 
+    // -------------------------------------------------------------------------
+    // 6. Context-Aware Model Armor Template Resolution (Request vs. Response)
+    // Precedence (evaluated independently for Request & Response phases):
+    //   1a. Identity Token Claim (OAuth/JWT/Agent token attribute)
+    //   1b. Identity Glob Rules (features.model_armor.identity_rules)
+    //   2.  Developer App / Developer Custom Attributes
+    //   3a. Persona Configuration (features.auth.personas / features.model_armor.personas)
+    //   3b. API Product Custom Attributes
+    //   4.  Model-Specific Configuration (models.<model>.model_armor)
+    //   5.  Global Default Configuration (features.model_armor)
+    // -------------------------------------------------------------------------
+    function matchesArmorGlob(str, pattern) {
+        if (pattern === "*" || str === pattern) return true;
+        if (pattern.indexOf("*") === -1) return false;
+        var segments = pattern.split("*");
+        var pos = 0;
+        if (segments[0] !== "") {
+            if (str.indexOf(segments[0]) !== 0) return false;
+            pos = segments[0].length;
+        }
+        var endLimit = str.length;
+        var lastSeg = segments[segments.length - 1];
+        if (lastSeg !== "") {
+            if (str.length - pos < lastSeg.length) return false;
+            if (str.lastIndexOf(lastSeg) !== str.length - lastSeg.length) return false;
+            endLimit = str.length - lastSeg.length;
+        }
+        for (var gi = 1; gi < segments.length - 1; gi++) {
+            var seg = segments[gi];
+            if (seg === "") continue;
+            var idx = str.indexOf(seg, pos);
+            if (idx === -1 || idx + seg.length > endLimit) return false;
+            pos = idx + seg.length;
+        }
+        return true;
+    }
+
+    function computeArmorRuleScore(candidate, pattern) {
+        var isExact = (pattern.indexOf("*") === -1);
+        var literalLen = pattern.replace(/\*/g, "").length;
+        if (candidate.indexOf("principal://") === 0 || candidate.indexOf("spiffe://") === 0) {
+            if (pattern.indexOf("reasoningengines/") !== -1) return 40000 + (isExact ? 500 : 0) + literalLen;
+            if (pattern.indexOf("/locations/") !== -1) return 30000 + (isExact ? 500 : 0) + literalLen;
+            if (pattern.indexOf("/projects/") !== -1) return 20000 + (isExact ? 500 : 0) + literalLen;
+            return 10000 + (isExact ? 500 : 0) + literalLen;
+        }
+        if (candidate.indexOf(".iam.gserviceaccount.com") !== -1 && pattern.indexOf("@") !== -1) {
+            if (isExact) return 40500 + literalLen;
+            var atIdx = pattern.indexOf("@");
+            var localLit = pattern.substring(0, atIdx).replace(/\*/g, "");
+            var domainLit = pattern.substring(atIdx + 1).replace(/\.iam\.gserviceaccount\.com$/i, "").replace(/\*/g, "");
+            if (localLit.length > 0 && domainLit.length > 0) return 35000 + literalLen;
+            if (localLit.length > 0) return 30000 + literalLen;
+            if (domainLit.length > 0) return 20000 + literalLen;
+            return 10000 + literalLen;
+        }
+        if (candidate.indexOf("team:") === 0 || candidate.indexOf("project:") === 0) {
+            return 20000 + (isExact ? 500 : 0) + literalLen;
+        }
+        return (isExact ? 40500 : 30000) + literalLen;
+    }
+
+    function parseArmorTemplateSpec(rawSpec, defaultProj, defaultLoc) {
+        var clean = rawSpec ? String(rawSpec).trim() : "";
+        var lower = clean.toLowerCase();
+        if (!clean || lower === "none" || lower === "disabled" || lower === "off" || lower === "false" || lower === "skip") {
+            return {
+                enabled: false,
+                projectId: defaultProj,
+                location: defaultLoc,
+                template: "none"
+            };
+        }
+        var fullMatch = clean.match(/^projects\/([^\/]+)\/locations\/([^\/]+)\/templates\/([^\/]+)$/i);
+        if (fullMatch) {
+            return {
+                enabled: true,
+                projectId: fullMatch[1],
+                location: fullMatch[2],
+                template: fullMatch[3]
+            };
+        }
+        var locMatch = clean.match(/^([^\/]+)\/([^\/]+)$/);
+        if (locMatch) {
+            return {
+                enabled: true,
+                projectId: defaultProj,
+                location: locMatch[1],
+                template: locMatch[2]
+            };
+        }
+        return {
+            enabled: true,
+            projectId: defaultProj,
+            location: defaultLoc,
+            template: clean
+        };
+    }
+
+    var globalArmorEnabled = String(context.getVariable("propertyset.config.model_armor_enabled") || "true").toLowerCase() !== "false";
+    var defaultArmorProj = context.getVariable("propertyset.config.model_armor_project_id") ||
+                           context.getVariable("propertyset.config.gcp_project_id") || "";
+    var defaultArmorLoc = context.getVariable("propertyset.config.model_armor_location") || "us-central1";
+    var globalArmorTemplate = context.getVariable("propertyset.config.model_armor_template") || "ai-gw-template";
+    var globalArmorReqTemplate = context.getVariable("propertyset.config.model_armor_request_template") || globalArmorTemplate;
+    var globalArmorRespTemplate = context.getVariable("propertyset.config.model_armor_response_template") || globalArmorTemplate;
+
+    // Evaluate Identity Glob Rules (Tier 1b)
+    var ruleReqTemplate = "";
+    var ruleRespTemplate = "";
+    var rulesCount = parseInt(context.getVariable("propertyset.config.model_armor_identity_rules_count") || "0", 10);
+    if (rulesCount > 0) {
+        var lowerUserId = String(identityUserId || "").toLowerCase();
+        var lowerTeam = String(identityTeam || "").toLowerCase();
+        var lowerPersona = String(identityPersona || "").toLowerCase();
+        var identityCandidates = [lowerUserId];
+        if (lowerUserId.indexOf("principal://") === 0) {
+            identityCandidates.push(lowerUserId.replace(/^principal:\/\//, "spiffe://"));
+        } else if (lowerUserId.indexOf("spiffe://") === 0) {
+            identityCandidates.push(lowerUserId.replace(/^spiffe:\/\//, "principal://"));
+        }
+        if (lowerTeam && lowerTeam !== "default") {
+            identityCandidates.push("team:" + lowerTeam);
+            if (lowerTeam.indexOf("project:") === 0) {
+                identityCandidates.push(lowerTeam);
+            }
+        }
+        if (lowerPersona && lowerPersona !== "default") {
+            identityCandidates.push("persona:" + lowerPersona);
+        }
+
+        var bestReqScore = -1;
+        var bestRespScore = -1;
+        for (var r = 0; r < rulesCount; r++) {
+            var ruleMatchCsv = context.getVariable("propertyset.config.model_armor.rule." + r + ".match") || "";
+            if (!ruleMatchCsv) continue;
+            var rulePatterns = ruleMatchCsv.split(",");
+            var rShared = context.getVariable("propertyset.config.model_armor.rule." + r + ".template") || "";
+            var rReq = context.getVariable("propertyset.config.model_armor.rule." + r + ".request_template") || rShared;
+            var rResp = context.getVariable("propertyset.config.model_armor.rule." + r + ".response_template") || rShared;
+
+            for (var ic = 0; ic < identityCandidates.length; ic++) {
+                var idCand = identityCandidates[ic];
+                if (!idCand) continue;
+                for (var rp = 0; rp < rulePatterns.length; rp++) {
+                    var pat = rulePatterns[rp].replace(/^[\[\]"\s]+|[\[\]"\s]+$/g, "").toLowerCase();
+                    if (!pat) continue;
+                    if (matchesArmorGlob(idCand, pat)) {
+                        var rScore = computeArmorRuleScore(idCand, pat);
+                        if (rReq && rScore > bestReqScore) {
+                            bestReqScore = rScore;
+                            ruleReqTemplate = rReq;
+                        }
+                        if (rResp && rScore > bestRespScore) {
+                            bestRespScore = rScore;
+                            ruleRespTemplate = rResp;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Resolve Request Phase Template & Source
+    var claimReqTemplate = context.getVariable("accesstoken.model_armor_request_template") ||
+                           context.getVariable("auth_model_armor_request_template") ||
+                           context.getVariable("accesstoken.model_armor_template");
+    var appReqTemplate = context.getVariable("verifyapikey.VA-ApiKey.model_armor_request_template") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_request_template") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.model_armor_template") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_template");
+    var personaReqTemplate = context.getVariable("propertyset.config.model_armor.persona." + identityPersona + ".request_template") ||
+                             context.getVariable("propertyset.config.model_armor.persona." + identityPersona + ".template");
+    var productReqTemplate = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.model_armor_request_template") ||
+                             context.getVariable("apiproduct.model_armor_request_template") ||
+                             context.getVariable("verifyapikey.VA-ApiKey.apiproduct.model_armor_template") ||
+                             context.getVariable("apiproduct.model_armor_template");
+    var modelReqTemplate = context.getVariable("propertyset.model_locations." + primaryModel + ".model_armor_request_template") ||
+                           context.getVariable("propertyset.model_locations." + primaryModel + ".model_armor_template");
+
+    var rawReqTemplate = globalArmorReqTemplate;
+    var reqArmorSource = "global_default";
+    if (claimReqTemplate && String(claimReqTemplate).trim() !== "") {
+        rawReqTemplate = claimReqTemplate;
+        reqArmorSource = "identity_claim";
+    } else if (ruleReqTemplate && String(ruleReqTemplate).trim() !== "") {
+        rawReqTemplate = ruleReqTemplate;
+        reqArmorSource = "identity_rule";
+    } else if (appReqTemplate && String(appReqTemplate).trim() !== "") {
+        rawReqTemplate = appReqTemplate;
+        reqArmorSource = "app_attribute";
+    } else if (personaReqTemplate && String(personaReqTemplate).trim() !== "") {
+        rawReqTemplate = personaReqTemplate;
+        reqArmorSource = "persona:" + identityPersona;
+    } else if (productReqTemplate && String(productReqTemplate).trim() !== "") {
+        rawReqTemplate = productReqTemplate;
+        reqArmorSource = "api_product";
+    } else if (modelReqTemplate && String(modelReqTemplate).trim() !== "") {
+        rawReqTemplate = modelReqTemplate;
+        reqArmorSource = "model_config";
+    }
+
+    // Resolve Response Phase Template & Source
+    var claimRespTemplate = context.getVariable("accesstoken.model_armor_response_template") ||
+                            context.getVariable("auth_model_armor_response_template") ||
+                            context.getVariable("accesstoken.model_armor_template");
+    var appRespTemplate = context.getVariable("verifyapikey.VA-ApiKey.model_armor_response_template") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_response_template") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.model_armor_template") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.developer.model_armor_template");
+    var personaRespTemplate = context.getVariable("propertyset.config.model_armor.persona." + identityPersona + ".response_template") ||
+                              context.getVariable("propertyset.config.model_armor.persona." + identityPersona + ".template");
+    var productRespTemplate = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.model_armor_response_template") ||
+                              context.getVariable("apiproduct.model_armor_response_template") ||
+                              context.getVariable("verifyapikey.VA-ApiKey.apiproduct.model_armor_template") ||
+                              context.getVariable("apiproduct.model_armor_template");
+    var modelRespTemplate = context.getVariable("propertyset.model_locations." + primaryModel + ".model_armor_response_template") ||
+                            context.getVariable("propertyset.model_locations." + primaryModel + ".model_armor_template");
+
+    var rawRespTemplate = globalArmorRespTemplate;
+    var respArmorSource = "global_default";
+    if (claimRespTemplate && String(claimRespTemplate).trim() !== "") {
+        rawRespTemplate = claimRespTemplate;
+        respArmorSource = "identity_claim";
+    } else if (ruleRespTemplate && String(ruleRespTemplate).trim() !== "") {
+        rawRespTemplate = ruleRespTemplate;
+        respArmorSource = "identity_rule";
+    } else if (appRespTemplate && String(appRespTemplate).trim() !== "") {
+        rawRespTemplate = appRespTemplate;
+        respArmorSource = "app_attribute";
+    } else if (personaRespTemplate && String(personaRespTemplate).trim() !== "") {
+        rawRespTemplate = personaRespTemplate;
+        respArmorSource = "persona:" + identityPersona;
+    } else if (productRespTemplate && String(productRespTemplate).trim() !== "") {
+        rawRespTemplate = productRespTemplate;
+        respArmorSource = "api_product";
+    } else if (modelRespTemplate && String(modelRespTemplate).trim() !== "") {
+        rawRespTemplate = modelRespTemplate;
+        respArmorSource = "model_config";
+    }
+
+    var reqSpec = parseArmorTemplateSpec(rawReqTemplate, defaultArmorProj, defaultArmorLoc);
+    var respSpec = parseArmorTemplateSpec(rawRespTemplate, defaultArmorProj, defaultArmorLoc);
+    var reqEnabled = globalArmorEnabled && reqSpec.enabled;
+    var respEnabled = globalArmorEnabled && respSpec.enabled;
+
+    context.setVariable("model_armor_request_enabled", reqEnabled ? "true" : "false");
+    context.setVariable("model_armor_request_project_id", reqSpec.projectId);
+    context.setVariable("model_armor_request_location", reqSpec.location);
+    context.setVariable("model_armor_request_template", reqSpec.template);
+    context.setVariable("model_armor_request_source", reqArmorSource);
+
+    context.setVariable("model_armor_response_enabled", respEnabled ? "true" : "false");
+    context.setVariable("model_armor_response_project_id", respSpec.projectId);
+    context.setVariable("model_armor_response_location", respSpec.location);
+    context.setVariable("model_armor_response_template", respSpec.template);
+    context.setVariable("model_armor_response_source", respArmorSource);
+
+    var combinedArmorSource = (reqArmorSource === respArmorSource) ? reqArmorSource : (reqArmorSource + "/" + respArmorSource);
+    context.setVariable("model_armor_source", combinedArmorSource);
+    context.setVariable("response.header.X-Gateway-Model-Armor-Request-Template", reqEnabled ? reqSpec.template : "none");
+    context.setVariable("response.header.X-Gateway-Model-Armor-Response-Template", respEnabled ? respSpec.template : "none");
+    context.setVariable("response.header.X-Gateway-Model-Armor-Source", combinedArmorSource);
+
     context.setVariable("response.header.X-Gateway-Requested-Model", requestedModel);
     context.setVariable("response.header.X-Gateway-Routed-Model", primaryModel);
     context.setVariable("response.header.X-Gateway-Fallback-Model", fallbackModel || "none");
@@ -549,6 +813,17 @@ try {
     context.setVariable("rate_limit_client_id", context.getVariable("verifyapikey.VA-ApiKey.client_id") || "default_client");
     context.setVariable("burst_rate_limit", context.getVariable("propertyset.config.default_burst_rate") || "600pm");
     context.setVariable("concurrency_limit", context.getVariable("propertyset.config.default_concurrency_limit") || "20");
+    var fallbackArmorProj = context.getVariable("propertyset.config.model_armor_project_id") || context.getVariable("propertyset.config.gcp_project_id") || "";
+    var fallbackArmorLoc = context.getVariable("propertyset.config.model_armor_location") || "us-central1";
+    var fallbackArmorTmpl = context.getVariable("propertyset.config.model_armor_template") || "ai-gw-template";
+    context.setVariable("model_armor_request_enabled", "true");
+    context.setVariable("model_armor_request_project_id", fallbackArmorProj);
+    context.setVariable("model_armor_request_location", fallbackArmorLoc);
+    context.setVariable("model_armor_request_template", fallbackArmorTmpl);
+    context.setVariable("model_armor_response_enabled", "true");
+    context.setVariable("model_armor_response_project_id", fallbackArmorProj);
+    context.setVariable("model_armor_response_location", fallbackArmorLoc);
+    context.setVariable("model_armor_response_template", fallbackArmorTmpl);
 }
 
 })();

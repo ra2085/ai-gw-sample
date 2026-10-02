@@ -10,5 +10,7 @@
     <Attribute name="auth_source" ref="auth_token_type"/>
     <Attribute name="quota_override" ref="auth_quota_override"/>
     <Attribute name="quota_override_expires_at" ref="auth_quota_override_expires_at"/>
+    <Attribute name="model_armor_request_template" ref="auth_model_armor_request_template"/>
+    <Attribute name="model_armor_response_template" ref="auth_model_armor_response_template"/>
   </Attributes>
 </SetOAuthV2Info>

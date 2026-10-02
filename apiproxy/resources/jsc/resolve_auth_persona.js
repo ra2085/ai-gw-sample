@@ -135,6 +135,8 @@ try {
     var team = "default";
     var quotaOverride = "";
     var quotaOverrideExpiresAt = "";
+    var modelArmorRequestTemplate = "";
+    var modelArmorResponseTemplate = "";
     var tokenTtlMs = "3600000";
 
     // -------------------------------------------------------------------------
@@ -161,6 +163,8 @@ try {
             }
             defaultAgentPersona = context.getVariable("propertyset.config.auth_agent_persona") || "agent";
             tokenTtlMs = String(context.getVariable("propertyset.config.auth_agent_token_ttl_ms") || "3600000");
+            modelArmorRequestTemplate = agentData.model_armor_request_template || agentData.model_armor_template || "";
+            modelArmorResponseTemplate = agentData.model_armor_response_template || agentData.model_armor_template || "";
 
             // Case 3a: SPIFFE-based Google Cloud Agent Identity (spiffe:// or principal:// under *.system.id.goog)
             if (rawPrincipal) {
@@ -257,6 +261,8 @@ try {
                 team = idpData[tClaim] || idpData.department || idpData.cost_center || "default";
                 quotaOverride = idpData[qClaim] ? String(idpData[qClaim]) : "";
                 quotaOverrideExpiresAt = idpData[qExpClaim] ? String(idpData[qExpClaim]) : "";
+                modelArmorRequestTemplate = idpData.model_armor_request_template || idpData.model_armor_template || "";
+                modelArmorResponseTemplate = idpData.model_armor_response_template || idpData.model_armor_template || "";
                 tokenTtlMs = String(context.getVariable("propertyset.config.auth_idp_opaque_token_ttl_ms") || "3600000");
             }
         }
@@ -286,6 +292,10 @@ try {
                 team = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jtClaim) || "default";
                 quotaOverride = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqClaim) || "";
                 quotaOverrideExpiresAt = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqExpClaim) || "";
+                modelArmorRequestTemplate = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_request_template") ||
+                                            context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
+                modelArmorResponseTemplate = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_response_template") ||
+                                             context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
                 tokenTtlMs = String(context.getVariable("propertyset.config.auth_idp_jwt_token_ttl_ms") || "3600000");
             }
         }
@@ -370,6 +380,8 @@ try {
             context.setVariable("auth_team", String(team || "default"));
             context.setVariable("auth_quota_override", String(quotaOverride || ""));
             context.setVariable("auth_quota_override_expires_at", String(quotaOverrideExpiresAt || ""));
+            context.setVariable("auth_model_armor_request_template", String(modelArmorRequestTemplate || ""));
+            context.setVariable("auth_model_armor_response_template", String(modelArmorResponseTemplate || ""));
             context.setVariable("auth_persona_client_id", personaClientId);
             context.setVariable("auth_token_ttl_ms", tokenTtlMs);
             context.setVariable("auth_ready_to_import", "true");

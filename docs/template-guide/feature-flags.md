@@ -87,7 +87,14 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
       model_armor:
         enabled: true
         project_id: "your-gcp-project-id"
-        template_id: "filter"
+        location: "us-central1"
+        template: "standard-safety-template"
+        request_template: "standard-request-template"
+        response_template: "standard-response-template"
+        identity_rules:
+          - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
+            request_template: "strict-pci-dlp-template"
+            response_template: "strict-pci-dlp-template"
 
       llm_judge:
         enabled: true

@@ -6,5 +6,5 @@ SanitizeUserPrompt:
   IgnoreUnresolvedVariables: true
   DisplayName: SUP-SanitizeUserPrompt
   ModelArmor:
-    TemplateName: projects/{propertyset.config.model_armor_project_id}/locations/{propertyset.config.model_armor_location}/templates/{propertyset.config.model_armor_template}
+    TemplateName: projects/{model_armor_request_project_id}/locations/{model_armor_request_location}/templates/{model_armor_request_template}
   UserPromptSource: '{extracted_prompt}'

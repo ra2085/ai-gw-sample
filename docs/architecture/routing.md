@@ -71,19 +71,75 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
 
 ---
 
-## 2. Content Safety (Google Cloud Model Armor)
+## 2. Context-Aware Content Safety (Google Cloud Model Armor)
 
-When `features.model_armor.enabled: true` is set in `values.yaml`, the gateway inspects both incoming prompts and outgoing model responses (including streaming responses) using **Google Cloud Model Armor**:
+A single "blanket" safety template rarely fits every consumer across an enterprise: a **PCI/HIPAA compliance workflow** requires strict Sensitive Data Protection (SDP/DLP) redaction on both prompts and responses, a **software engineer** debugging code needs permissive prompt filters but strict response PII/secret redaction, and a **high-throughput internal batch agent** may only need prompt injection screening on ingress while bypassing response sanitization (`"none"`) for minimum latency.
+
+When `features.model_armor.enabled: true` is set in `values.yaml`, the gateway enforces **context-aware, asymmetric Model Armor templates** independently for **Requests (`SUP-SanitizeUserPrompt`)** and **Responses (`SMR-SanitizeModelResponse`)**—across both non-streaming payloads and real-time SSE streams:
 
 ```yaml
 features:
   model_armor:
     enabled: true
     project_id: "your-gcp-project-id"
-    template_id: "filter"
+    location: "us-central1"
+    # Global fallback templates (applied when no higher-priority rule matches):
+    template: "standard-safety-template"
+    request_template: "standard-request-template"
+    response_template: "standard-response-template"
+
+    # Tier 2: Identity & Team Glob Rules (supports '*' wildcards, ranked by specificity)
+    identity_rules:
+      - match:
+          - "finance-*@*.iam.gserviceaccount.com"
+          - "team:pci-compliance"
+          - "*@pci-audit.corp.example.com"
+        request_template: "strict-pci-dlp-template"
+        response_template: "strict-pci-dlp-template"
+
+      - match:
+          - "principal://agents.global.org-123456789012.system.id.goog/*/reasoningEngines/deep-research-*"
+        request_template: "agent-prompt-guard"
+        response_template: "none"   # Bypass response sanitization for trusted internal agent
 ```
 
-* **Sensitive Data Protection (SDP):** Detects and blocks or redacts PII, credit card numbers, credentials, and API keys before they leave your environment.
-* **Prompt Injection & Jailbreak Protection:** Blocks prompt injection attempts and system instruction overrides before the model is called.
-* **Response Safety Filters:** Screens generated completions for harmful or unsafe content before returning them to the client.
+You can also bind templates directly to **Personas** (under `features.auth.personas`) or **Individual Models** (under `models`):
+
+```yaml
+features:
+  auth:
+    personas:
+      developer:
+        match_claims: ["swe-*", "engineering", "developer"]
+        client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
+        model_armor:
+          request_template: "dev-permissive-prompt-template"
+          response_template: "strict-dlp-response-template"
+      agent:
+        match_claims: ["principalSet://*.system.id.goog/*", "*@*.iam.gserviceaccount.com"]
+        client_id: "CONSUMER_KEY_FOR_AGENT_AI_PRODUCT"
+        model_armor:
+          request_template: "agent-prompt-guard"
+          response_template: "none"
+```
+
+### 6-Tier Template Resolution Precedence
+
+On every request, the gateway independently resolves the **Request Template** and **Response Template** using a 6-tier hierarchy (highest to lowest priority):
+
+| Priority | Source (`X-Gateway-Model-Armor-Source`) | How It Is Configured |
+| :---: | :--- | :--- |
+| **1 (Highest)** | **`identity_claim`** | Explicit claim in the verified IdP JWT, `/userinfo` response, or OAuth token (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). |
+| **2** | **`identity_rule`** | Matches caller identity (`user_id`, `email`, SPIFFE `principal://...`, or `team:<department>`) against `features.model_armor.identity_rules` using linear-time `*` glob matching ranked by specificity. |
+| **3** | **`app_attribute`** | Custom attribute on the Apigee Developer App (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). |
+| **4** | **`persona:<name>`** | Persona-level config under `features.auth.personas.<name>.model_armor` (or `features.model_armor.personas.<name>`). |
+| **5** | **`api_product`** | Custom attribute on the Apigee API Product (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). |
+| **6 (Fallback)** | **`model_config` → `global_default`** | Per-model `models[].model_armor` override, falling back to `features.model_armor.{request_template,response_template,template}`. |
+
+### Flexible Template Formats & Phase Bypass (`"none"`)
+
+* **Short ID, Regional Path, or Full Resource URI:** Every template field accepts a short template ID (`strict-pci-dlp`), a regional shorthand (`us-east1/strict-pci-dlp`), or a full cross-project resource name (`projects/sec-ops-prod/locations/us-central1/templates/strict-pci-dlp`).
+* **Selective Phase Bypass (`"none"` / `"disabled"`):** Setting `request_template: "none"` or `response_template: "none"` dynamically skips Model Armor execution for that specific phase without disabling the other phase.
+* **End-to-End Audit Headers & Block Diagnostics:** Every response includes `X-Gateway-Model-Armor-Request-Template`, `X-Gateway-Model-Armor-Response-Template`, and `X-Gateway-Model-Armor-Source`. When a prompt or model response is blocked (`HTTP 403`), the gateway returns `X-Gateway-Model-Armor-Phase` (`request` or `response`), `X-Gateway-Model-Armor-Template`, the resolved persona, and any Sensitive Data Protection `deidentifiedData` redaction preview.
+
 

@@ -20,8 +20,29 @@ features:
   model_armor:
     enabled: true
     location: "global"
-    template: "ai-gateway-filter"
-
+    template: "ai-gateway-filter"               # Global fallback template (used for both request & response unless overridden)
+    request_template: "ai-gateway-filter"       # Default user prompt sanitization template (or "none" to skip request scanning)
+    response_template: "ai-gateway-filter"      # Default model response sanitization template (or "none" to skip response scanning)
+    # Optional context-aware template enforcement by Persona or Identity/Team glob pattern:
+    # personas:
+    #   knowledge-worker:
+    #     request_template: "strict-pii-sdp-prompt"
+    #     response_template: "strict-rai-response"
+    #   developer:
+    #     request_template: "dev-secrets-dlp-prompt"
+    #     response_template: "dev-malicious-uri-response"
+    #   it:
+    #     template: "it-ops-standard-filter"
+    #   agent:
+    #     request_template: "agent-jailbreak-shield"
+    #     response_template: "none"
+    # identity_rules:
+    #   - match: ["*@pci-vault.iam.gserviceaccount.com", "team:finance"]
+    #     request_template: "pci-strict-sdp-prompt"
+    #     response_template: "pci-strict-sdp-response"
+    #   - match: "principal://agents.global.org-*.system.id.goog/*/reasoningEngines/public-*"
+    #     request_template: "public-agent-prompt-filter"
+    #     response_template: "public-agent-response-filter"
 
   llm_judge:
     enabled: true

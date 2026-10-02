@@ -84,6 +84,17 @@ alias.{{ $alias }}={{ $target }}
 {{ .name }}.auth_token={{ .auth.token }}
 {{- end }}
 {{- end }}
+{{- if .model_armor }}
+{{- if .model_armor.template }}
+{{ .name }}.model_armor_template={{ .model_armor.template }}
+{{- end }}
+{{- if .model_armor.request_template }}
+{{ .name }}.model_armor_request_template={{ .model_armor.request_template }}
+{{- end }}
+{{- if .model_armor.response_template }}
+{{ .name }}.model_armor_response_template={{ .model_armor.response_template }}
+{{- end }}
+{{- end }}
 
 
 {{ end }}
@@ -140,6 +151,8 @@ project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.
 model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
 model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
+model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
+model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_api_key }}
@@ -193,6 +206,26 @@ auth_persona_default={{ $auth.default_persona | default "" }}
 {{- range $pName, $pCfg := $auth.personas }}
 persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
 persona.{{ $pName }}.client_id={{ $pCfg.client_id | default "" }}
+{{- if $pCfg.model_armor }}
+{{- if $pCfg.model_armor.template }}
+model_armor.persona.{{ $pName }}.template={{ $pCfg.model_armor.template }}
+{{- end }}
+{{- if $pCfg.model_armor.request_template }}
+model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor.request_template }}
+{{- end }}
+{{- if $pCfg.model_armor.response_template }}
+model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor.response_template }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.model_armor_template }}
+model_armor.persona.{{ $pName }}.template={{ $pCfg.model_armor_template }}
+{{- end }}
+{{- if $pCfg.model_armor_request_template }}
+model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor_request_template }}
+{{- end }}
+{{- if $pCfg.model_armor_response_template }}
+model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor_response_template }}
+{{- end }}
 {{- end }}
 {{- else }}
 auth_personas_list=knowledge-worker,developer,it,agent
@@ -205,6 +238,34 @@ persona.it.match_claims=it,platform-admin,sre,devops,secops
 persona.it.client_id=
 persona.agent.match_claims=agent,service-account,automation
 persona.agent.client_id=
+{{- end }}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas }}
+{{- range $maPersona, $maCfg := $.Values.features.model_armor.personas }}
+{{- if $maCfg.template }}
+model_armor.persona.{{ $maPersona }}.template={{ $maCfg.template }}
+{{- end }}
+{{- if $maCfg.request_template }}
+model_armor.persona.{{ $maPersona }}.request_template={{ $maCfg.request_template }}
+{{- end }}
+{{- if $maCfg.response_template }}
+model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_template }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.identity_rules }}
+model_armor_identity_rules_count={{ len $.Values.features.model_armor.identity_rules }}
+{{- range $idx, $rule := $.Values.features.model_armor.identity_rules }}
+model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
+{{- if $rule.template }}
+model_armor.rule.{{ $idx }}.template={{ $rule.template }}
+{{- end }}
+{{- if $rule.request_template }}
+model_armor.rule.{{ $idx }}.request_template={{ $rule.request_template }}
+{{- end }}
+{{- if $rule.response_template }}
+model_armor.rule.{{ $idx }}.response_template={{ $rule.response_template }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end -}}
 

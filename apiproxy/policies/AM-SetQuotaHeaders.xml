@@ -19,6 +19,9 @@
       <Header name="X-Gateway-Judge-Task">{judge_task}</Header>
       <Header name="X-Gateway-Judge-Complexity">{judge_complexity}</Header>
       <Header name="X-Gateway-Judge-Tier">{judge_tier}</Header>
+      <Header name="X-Gateway-Model-Armor-Request-Template">{model_armor_request_template}</Header>
+      <Header name="X-Gateway-Model-Armor-Response-Template">{model_armor_response_template}</Header>
+      <Header name="X-Gateway-Model-Armor-Source">{model_armor_source}</Header>
     </Headers>
   </Set>
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>

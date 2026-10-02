@@ -18,7 +18,7 @@
       <Step>
         <Name>AM-CustomError</Name>
       </Step>
-      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
+      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
     </FaultRule>
   </FaultRules>
   <PreFlow name="PreFlow">
@@ -109,7 +109,7 @@
         <Name>JS-extract-prompt</Name>
       </Step>
       <Step>
-        <Condition>extracted_prompt != null and extracted_prompt != ""</Condition>
+        <Condition>(model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")</Condition>
         <Name>SUP-SanitizeUserPrompt</Name>
       </Step>
     </Request>
@@ -125,6 +125,10 @@
       <Step>
         <Condition>!(stream = true)</Condition>
         <Name>JS-calculate-tokens-non-streaming</Name>
+      </Step>
+      <Step>
+        <Condition>!(stream = true) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")</Condition>
+        <Name>SMR-SanitizeModelResponse</Name>
       </Step>
       <Step>
         <Condition>!(stream = true)</Condition>

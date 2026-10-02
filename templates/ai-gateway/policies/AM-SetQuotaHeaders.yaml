@@ -64,6 +64,15 @@ AssignMessage:
       - Header:
           .name: X-Gateway-Judge-Tier
           -Data: '{judge_tier}'
+      - Header:
+          .name: X-Gateway-Model-Armor-Request-Template
+          -Data: '{model_armor_request_template}'
+      - Header:
+          .name: X-Gateway-Model-Armor-Response-Template
+          -Data: '{model_armor_response_template}'
+      - Header:
+          .name: X-Gateway-Model-Armor-Source
+          -Data: '{model_armor_source}'
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

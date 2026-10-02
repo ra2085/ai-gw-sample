@@ -116,6 +116,44 @@ try {
     context.setVariable("completion_tokens", totalCompletionTokens.toFixed(0));
     context.setVariable("usage_completion_tokens", totalCompletionTokens.toFixed(0));
     context.setVariable("usage_total_tokens", totalTokens.toFixed(0));
+
+    // Extract assistant response text into response_partial for non-streaming Model Armor response sanitization
+    if (!isEmbeddings && !isVertexPredict && context.getVariable("model_armor_response_enabled") !== "false") {
+        var rawRespContent = context.getVariable("response.content");
+        if (rawRespContent) {
+            try {
+                var parsedResp = JSON.parse(rawRespContent);
+                var extractedText = "";
+                if (Array.isArray(parsedResp.choices) && parsedResp.choices.length > 0 && parsedResp.choices[0].message) {
+                    var msgContent = parsedResp.choices[0].message.content;
+                    if (typeof msgContent === "string") {
+                        extractedText = msgContent;
+                    } else if (Array.isArray(msgContent)) {
+                        for (var mc = 0; mc < msgContent.length; mc++) {
+                            if (msgContent[mc] && msgContent[mc].text) extractedText += msgContent[mc].text + " ";
+                        }
+                    }
+                } else if (Array.isArray(parsedResp.content)) {
+                    for (var cb = 0; cb < parsedResp.content.length; cb++) {
+                        if (parsedResp.content[cb] && parsedResp.content[cb].text) {
+                            extractedText += parsedResp.content[cb].text + " ";
+                        }
+                    }
+                } else if (Array.isArray(parsedResp.candidates) && parsedResp.candidates.length > 0 &&
+                           parsedResp.candidates[0].content && Array.isArray(parsedResp.candidates[0].content.parts)) {
+                    var parts = parsedResp.candidates[0].content.parts;
+                    for (var gp = 0; gp < parts.length; gp++) {
+                        if (parts[gp] && parts[gp].text) {
+                            extractedText += parts[gp].text + " ";
+                        }
+                    }
+                }
+                if (extractedText.trim() !== "") {
+                    context.setVariable("response_partial", extractedText.trim());
+                }
+            } catch (ignoreErr) {}
+        }
+    }
 } catch (e) {
     print("Error calculating non-streaming tokens: " + e);
 }

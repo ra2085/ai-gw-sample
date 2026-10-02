@@ -35,7 +35,7 @@ ProxyEndpoints:
                       Name: JS-inject-deidentified-finding
                   - Step:
                       Name: AM-CustomError
-                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
 
         - PreFlow:
@@ -89,7 +89,7 @@ ProxyEndpoints:
                   Name: JS-extract-prompt
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
-                  Condition: extracted_prompt != null and extracted_prompt != ""
+                  Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
             Response: {}
@@ -108,6 +108,11 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+              - Step:
+                  Condition: '!(stream = true) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
+                  Name: SMR-SanitizeModelResponse
+              {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
@@ -189,7 +194,7 @@ ProxyEndpoints:
                       Name: JS-inject-deidentified-finding
                   - Step:
                       Name: AM-CustomError
-                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
 
         - PreFlow:
@@ -239,10 +244,10 @@ ProxyEndpoints:
               {{- end }}
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
-                  Condition: request_format = "gemini" and gemini_text_prompt != null and gemini_text_prompt != ""
+                  Condition: (model_armor_request_enabled != "false") and (request_format = "gemini") and (gemini_text_prompt != null) and (gemini_text_prompt != "")
                   Name: SUP-SanitizeUserPromptGemini
               - Step:
-                  Condition: request_format = "claude" and extracted_prompt != null and extracted_prompt != ""
+                  Condition: (model_armor_request_enabled != "false") and (request_format = "claude") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
             Response: {}
@@ -264,6 +269,11 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+              - Step:
+                  Condition: '!(stream = true) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
+                  Name: SMR-SanitizeModelResponse
+              {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
@@ -336,7 +346,7 @@ ProxyEndpoints:
                       Name: JS-inject-deidentified-finding
                   - Step:
                       Name: AM-CustomError
-                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
 
         - PreFlow:
@@ -388,7 +398,7 @@ ProxyEndpoints:
               {{- end }}
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
-                  Condition: extracted_prompt != null and extracted_prompt != ""
+                  Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
             Response: {}
@@ -407,6 +417,11 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true)'
                   Name: JS-calculate-tokens-non-streaming
+              {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
+              - Step:
+                  Condition: '!(stream = true) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
+                  Name: SMR-SanitizeModelResponse
+              {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
               - Step:
                   Condition: '!(stream = true)'
@@ -483,7 +498,7 @@ ProxyEndpoints:
                       Name: JS-inject-deidentified-finding
                   - Step:
                       Name: AM-CustomError
-                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+                  - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
 
         - PreFlow:
@@ -524,7 +539,7 @@ ProxyEndpoints:
               {{- end }}
               {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
               - Step:
-                  Condition: extracted_prompt != null and extracted_prompt != ""
+                  Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
               {{- end }}
             Response: {}
@@ -653,7 +668,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
 
       PreFlow:
@@ -704,7 +719,7 @@ TargetEndpoints:
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
-              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
       HTTPTargetConnection:
@@ -735,7 +750,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -777,7 +792,7 @@ TargetEndpoints:
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
-              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
       HTTPTargetConnection:
@@ -808,7 +823,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -857,7 +872,7 @@ TargetEndpoints:
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
-              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
       HTTPTargetConnection:
@@ -888,7 +903,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -937,7 +952,7 @@ TargetEndpoints:
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
-              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
       HTTPTargetConnection:
@@ -964,7 +979,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState  = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
 
       PreFlow:
@@ -1014,7 +1029,7 @@ TargetEndpoints:
           {{- end }}
           {{- if $.Values.features.model_armor.enabled }}
           - Step:
-              Condition: buff_ready = "true" and response_partial != null and response_partial != ""
+              Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
       HTTPTargetConnection:

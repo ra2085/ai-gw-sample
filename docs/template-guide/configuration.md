@@ -30,11 +30,21 @@ features:
     default_currency: "USD"                           # Default currency code
     default_markup: 1.0                               # Default markup multiplier
 
-  # 2. GCP Model Armor Prompt & Response Sanitization
+  # 2. GCP Model Armor Context-Aware Prompt & Response Sanitization
   model_armor:
     enabled: true                                     # Screens prompts and responses via Google Cloud Model Armor
-    project_id: "your-gcp-project-id"                 # GCP Project hosting the Model Armor template
-    template_id: "filter"                             # Model Armor template ID
+    project_id: "your-gcp-project-id"                 # Default GCP Project hosting Model Armor templates
+    location: "us-central1"                           # Default GCP Region hosting Model Armor templates
+    template: "standard-safety-template"              # Global fallback template ID
+    request_template: "standard-request-template"     # Optional: global default template for user prompts (or "none")
+    response_template: "standard-response-template"   # Optional: global default template for model responses (or "none")
+    identity_rules:                                   # Optional: Tier 2 identity/team '*' glob overrides (ranked by specificity)
+      - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
+        request_template: "strict-pci-dlp-template"
+        response_template: "strict-pci-dlp-template"
+      - match: ["principal://agents.global.org-123456789012.system.id.goog/*/reasoningEngines/deep-research-*"]
+        request_template: "agent-prompt-guard"
+        response_template: "none"
 
   # 3. Real-Time LLM Judge Classifier (auto:judge)
   llm_judge:
@@ -105,15 +115,27 @@ features:
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business-*"]
         client_id: "CONSUMER_KEY_FOR_KNOWLEDGE_WORKER_AI_PRODUCT"
+        model_armor:
+          request_template: "standard-request-template"
+          response_template: "standard-response-template"
       developer:
         match_claims: ["developer", "engineering", "swe-*", "*-data-science"]
         client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
+        model_armor:
+          request_template: "dev-permissive-prompt-template"
+          response_template: "strict-dlp-response-template"
       it:
         match_claims: ["it", "platform-admin", "sre-*", "devops", "secops"]
         client_id: "CONSUMER_KEY_FOR_IT_AI_PRODUCT"
+        model_armor:
+          request_template: "it-admin-template"
+          response_template: "none"
       agent:
         match_claims: ["principalSet://*.system.id.goog/*", "*@*.iam.gserviceaccount.com", "agent"]
         client_id: "CONSUMER_KEY_FOR_AGENT_AI_PRODUCT"
+        model_armor:
+          request_template: "agent-prompt-guard"
+          response_template: "none"
 ```
 
 ---
@@ -166,6 +188,9 @@ models:
       header_name: "Authorization"
       token: ""
       token_ref: "propertyset.config.openai_api_key"
+    model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
+      request_template: "frontier-request-template"
+      response_template: "frontier-response-template"
     pricing:
       input_rate: 2.000                               # USD per 1M uncached prompt tokens (<= 200K context)
       output_rate: 12.000                             # USD per 1M completion & reasoning tokens
