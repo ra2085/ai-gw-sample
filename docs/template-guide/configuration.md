@@ -239,6 +239,7 @@ Each entry in `models` registers a model in `/v1/models`, configures its backend
 
 ```yaml
 models:
+  # 1. Vertex AI Model (uses Apigee's Google Cloud Service Account IAM automatically)
   - name: "gemini-3.1-pro-preview"                    # Unique model identifier exposed in /v1/models
     displayName: "Gemini 3.1 Pro Preview"             # Human-readable catalog display name
     publisher: "google"                               # google | anthropic | openai | meta | mistralai | azure | custom
@@ -246,17 +247,6 @@ models:
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
     region: "global"                                  # Vertex AI region: global | us-east5 | us-central1 | europe-west1
     created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
-    custom_url: ""                                    # Optional: full URL for Direct OpenAI, Direct Anthropic, Azure, or vLLM
-    upstream_model: ""                                # Optional: backend model ID if different from catalog `name`
-    anthropic_version: "2023-06-01"                   # Optional (Anthropic): sets anthropic-version header (or body version on Vertex)
-    anthropic_beta: "prompt-caching-2024-07-31"       # Optional (Anthropic): injects anthropic-beta HTTP header
-    openai_org_id: ""                                 # Optional (OpenAI): injects OpenAI-Organization header (for legacy multi-org keys)
-    openai_project_id: ""                             # Optional (OpenAI): injects OpenAI-Project header (for legacy multi-project keys)
-    auth:                                             # Optional: upstream credentials for custom_url endpoints
-      type: "bearer"                                  # bearer | header | none
-      header_name: "Authorization"                    # e.g., "x-api-key" for Direct Anthropic or "api-key" for Azure OpenAI
-      token_ref: "propertyset.provider_keys.openai_api_key" # Recommended: Apigee Environment PropertySet reference (no secrets in Git)
-      token: ""                                       # Optional fallback: literal token (for local/dev testing only)
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
       request_template: "frontier-request-template"
       response_template: "frontier-response-template"
@@ -266,6 +256,28 @@ models:
       cache_read_rate: 0.200                          # Optional: USD per 1M cached input tokens (0.10x)
       cache_write_rate: 2.500                         # Optional: USD per 1M cache creation tokens (e.g. 1.25x on Claude)
       markup: 1.0                                     # Optional per-model markup multiplier
+
+  # 2. External / Custom URL Model (uses Apigee Environment PropertySet for upstream API key)
+  - name: "gpt-5.4-direct"
+    displayName: "OpenAI GPT-5.4 (Direct API)"
+    publisher: "openai"
+    target: "openai-custom"
+    format: "openai"
+    custom_url: "https://api.openai.com/v1/chat/completions" # Full URL for OpenAI, Anthropic, Azure, or vLLM
+    upstream_model: "gpt-5.4"                         # Optional: backend model ID if different from catalog `name`
+    anthropic_version: ""                             # Optional (Anthropic): sets anthropic-version header
+    anthropic_beta: ""                                # Optional (Anthropic): injects anthropic-beta HTTP header
+    openai_org_id: ""                                 # Optional (OpenAI): injects OpenAI-Organization header
+    openai_project_id: ""                             # Optional (OpenAI): injects OpenAI-Project header
+    auth:                                             # Optional: upstream credentials for custom_url endpoints
+      type: "api_key"                                 # api_key | bearer | header | none
+      header_name: "Authorization"                    # Optional: e.g., "x-api-key" (Anthropic) or "api-key" (Azure); validated against RFC 7230 & internal headers
+      token_ref: "propertyset.provider_keys.openai_api_key" # Recommended: trusted variable ref (propertyset.*, private.*, verifyapikey.*, apiproduct.*, kvm.*)
+      token: ""                                       # Optional fallback: literal token (for local/dev testing only)
+    pricing:
+      input_rate: 2.500
+      output_rate: 10.000
+      cache_read_rate: 1.250
 ```
 
 ---

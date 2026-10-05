@@ -104,8 +104,9 @@ try {
     var authType = context.getVariable("verifyapikey.VA-ApiKey." + fallbackModel + "_auth_type") ||
                    context.getVariable("propertyset.model_locations." + fallbackModel + ".auth_type");
 
+    var normAuthType = authType ? String(authType).toLowerCase() : "";
     var isGoogleUrl = isGoogleCloudUrl(customUrl);
-    var useGoogleIam = isGoogleUrl && ((publisher !== "openai" && authType !== "bearer" && authType !== "header" && authType !== "apikey") || authType === "google_iam");
+    var useGoogleIam = isGoogleUrl && ((publisher !== "openai" && normAuthType !== "bearer" && normAuthType !== "header" && normAuthType !== "apikey" && normAuthType !== "api_key") || normAuthType === "google_iam");
 
     // -------------------------------------------------------------------------
     // 1. Build Target URL for Synchronous ServiceCallout (Non-Streaming JSON)
@@ -145,6 +146,13 @@ try {
     // -------------------------------------------------------------------------
     // 2. Resolve Upstream Auth Credentials for External / BYO Fallback Models
     // -------------------------------------------------------------------------
+    function isSafeTokenRef(ref) {
+        if (!ref) return false;
+        var r = String(ref).trim();
+        if (r.indexOf("..") !== -1 || /[\r\n\0\s]/.test(r)) return false;
+        return /^(propertyset\.[a-zA-Z0-9_.-]+|private\.[a-zA-Z0-9_.-]+|(?:verifyapikey\.VA-ApiKey\.)?apiproduct\.[a-zA-Z0-9_.-]+)$/.test(r);
+    }
+
     if (!useGoogleIam) {
         var authHeader = context.getVariable("verifyapikey.VA-ApiKey." + fallbackModel + "_auth_header") ||
                          context.getVariable("verifyapikey.VA-ApiKey.upstream_auth_header") ||
@@ -154,7 +162,7 @@ try {
                            context.getVariable("verifyapikey.VA-ApiKey." + publisher + "_api_key_ref") ||
                            (publisher === "openai" ? context.getVariable("verifyapikey.VA-ApiKey.openai_api_key_ref") : null) ||
                            context.getVariable("verifyapikey.VA-ApiKey.upstream_api_key_ref");
-        var tokenVal = (clientKeyRef ? context.getVariable(clientKeyRef) : null) ||
+        var tokenVal = (isSafeTokenRef(clientKeyRef) ? context.getVariable(String(clientKeyRef).trim()) : null) ||
                        context.getVariable("verifyapikey.VA-ApiKey." + fallbackModel + "_api_key") ||
                        context.getVariable("verifyapikey.VA-ApiKey." + publisher + "_api_key") ||
                        (publisher === "openai" ? context.getVariable("verifyapikey.VA-ApiKey.openai_api_key") : null) ||
@@ -165,7 +173,7 @@ try {
                                 context.getVariable("apiproduct." + publisher + "_api_key_ref") ||
                                 (publisher === "openai" ? context.getVariable("apiproduct.openai_api_key_ref") : null) ||
                                 context.getVariable("apiproduct.upstream_api_key_ref");
-            tokenVal = (productKeyRef ? context.getVariable(productKeyRef) : null) ||
+            tokenVal = (isSafeTokenRef(productKeyRef) ? context.getVariable(String(productKeyRef).trim()) : null) ||
                        context.getVariable("apiproduct." + fallbackModel + "_api_key") ||
                        context.getVariable("apiproduct." + publisher + "_api_key") ||
                        (publisher === "openai" ? context.getVariable("apiproduct.openai_api_key") : null) ||
@@ -173,25 +181,25 @@ try {
         }
         if (!tokenVal) {
             var authTokenRef = context.getVariable("propertyset.model_locations." + fallbackModel + ".auth_token_ref");
-            tokenVal = (authTokenRef ? context.getVariable(authTokenRef) : null) ||
+            tokenVal = (isSafeTokenRef(authTokenRef) ? context.getVariable(String(authTokenRef).trim()) : null) ||
                        context.getVariable("propertyset.model_locations." + fallbackModel + ".auth_token") ||
                        context.getVariable("propertyset.config." + publisher + "_api_key") ||
                        (publisher === "openai" ? context.getVariable("propertyset.config.openai_api_key") : null);
         }
 
-        if (tokenVal) {
-            var effAuthType = authType || (authHeader ? "header" : "bearer");
-            if (effAuthType === "bearer") {
-                context.setVariable("fallback_auth_authorization", "Bearer " + tokenVal);
-            } else if (authHeader) {
+        if (tokenVal && normAuthType !== "none" && normAuthType !== "google_iam") {
+            var isCustomHeader = Boolean(authHeader && String(authHeader).toLowerCase() !== "authorization");
+            if (isCustomHeader) {
                 var lowerH = authHeader.toLowerCase();
                 if (lowerH === "x-api-key") {
-                    context.setVariable("fallback_header_x_api_key", tokenVal);
+                    context.setVariable("private.fallback_header_x_api_key", tokenVal);
                 } else if (lowerH === "api-key") {
-                    context.setVariable("fallback_header_api_key", tokenVal);
-                } else if (lowerH === "authorization") {
-                    context.setVariable("fallback_auth_authorization", tokenVal);
+                    context.setVariable("private.fallback_header_api_key", tokenVal);
                 }
+            } else if (normAuthType === "header" && authHeader && authHeader.toLowerCase() === "authorization") {
+                context.setVariable("private.fallback_auth_authorization", tokenVal);
+            } else {
+                context.setVariable("private.fallback_auth_authorization", "Bearer " + tokenVal);
             }
         }
 

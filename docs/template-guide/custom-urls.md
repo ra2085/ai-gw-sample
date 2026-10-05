@@ -312,6 +312,12 @@ models:
       token_ref: "propertyset.provider_keys.openai_api_key"
 ```
 
+> [!NOTE]
+> **Runtime Security Guarantees for External Provider Credentials:**
+> * **`token_ref` Namespace Allowlisting:** `auth.token_ref` only resolves variables from trusted credential namespaces (`propertyset.*`, `private.*`, `verifyapikey.*`, `apiproduct.*`, `kvm.*`). Arbitrary flow variable namespaces (`request.*`, `message.*`, `client.*`, `system.*`) are rejected.
+> * **Header Injection & Internal Header Protection:** Custom `auth.header_name` values are validated against RFC 7230 token characters and cannot overwrite internal gateway or hop-by-hop headers (`X-Internal-*`, `X-Gateway-*`, `Host`, `Content-Length`, `Transfer-Encoding`).
+> * **Inbound `Authorization` Stripping & Trace Masking:** When routing to external `custom_url` endpoints using custom headers (`x-api-key`, `api-key`) or `auth.type: "none"`, the gateway automatically strips the caller's inbound Apigee `Authorization` header so gateway tokens never leak upstream, and isolates resolved fallback credentials in `private.*` variables so Apigee Debug/Trace masks them automatically.
+
 ---
 
 ## 3. Any Client SDK, Any Model

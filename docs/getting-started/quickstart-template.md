@@ -131,6 +131,6 @@ Once deployed, developers can call any model in your catalog using their preferr
 Explore the **Guides** tab to enable enterprise controls via `values.yaml`:
 
 1. **[AI Products, Tenancy & Auth](../architecture/security.md):** Define AI Products (`lead-ai-engineer`, `power-developer`, `developer-default`, `autonomous-agent`) and connect Corporate SSO, API Keys, or Google Cloud Agent tokens.
-2. **[Models & Providers](../template-guide/custom-urls.md):** Add Vertex Model Garden MaaS (`meta/llama-*`, `mistralai/*`), Direct OpenAI (`api.openai.com` with per-department key isolation), or self-hosted endpoints.
+2. **[Models & Providers](../template-guide/custom-urls.md):** Add Vertex Model Garden MaaS (`meta/llama-*`, `mistralai/*`), Direct OpenAI & Anthropic (`api.openai.com`, `api.anthropic.com` using Apigee PropertySet key references), or self-hosted endpoints.
 3. **[Quotas, Budgets & Cost Control](../architecture/monetization.md):** Configure per-user and per-model token quotas, shared team budgets, temporary exceptions, and **Invoice-Accurate Cost Attribution**.
 4. **[Smart Routing & Content Safety](../architecture/routing.md):** Enable model aliases, cost tiers, automatic complexity routing (`auto:judge`), and Google Cloud Model Armor.

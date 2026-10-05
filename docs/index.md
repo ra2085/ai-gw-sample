@@ -57,7 +57,7 @@ graph LR
 
     subgraph Backends["Where Models Run"]
         B1["Google Vertex AI<br/>(Gemini, Claude, Embeddings, MaaS)"]
-        B2["Direct OpenAI & Azure<br/>(Per-Tenant Credential Isolation)"]
+        B2["Direct OpenAI, Anthropic & Azure<br/>(Apigee PropertySet Key Isolation)"]
         B3["Self-Hosted Clusters<br/>(vLLM, Ollama)"]
     end
 
@@ -73,7 +73,7 @@ graph LR
 | :--- | :--- | :--- |
 | **Step 1** | **[5-Minute Quickstart](getting-started/quickstart-template.md)** | Render and deploy a working AI Gateway from a minimal 15-line `values.quickstart.yaml` file. |
 | **Step 2** | **[AI Products, Tenancy & Auth](architecture/security.md)** | Design your **AI Product** tiers for personas and teams, and connect API Keys, Corporate SSO (Okta / Entra / Ping), or GCP Agent identities. |
-| **Step 3** | **[Models & Providers](template-guide/custom-urls.md)** | Add Vertex AI Gemini & Claude, Model Garden MaaS (Llama, Mistral), Direct OpenAI (with per-tenant keys), Embeddings, or self-hosted vLLM. |
+| **Step 3** | **[Models & Providers](template-guide/custom-urls.md)** | Add Vertex AI Gemini & Claude, Model Garden MaaS (Llama, Mistral), Direct OpenAI & Anthropic (`provider_keys` PropertySet), Embeddings, or self-hosted vLLM. |
 | **Step 4** | **[Quotas, Budgets & Cost Control](architecture/monetization.md)** | Configure rolling token allowances, per-model caps, shared department budgets, temporary overrides, and **Invoice-Accurate Cost Attribution**. |
 | **Step 5** | **[Smart Routing & Content Safety](architecture/routing.md)** | Set up transparent model aliases, cost tiers, fallback chains, complexity-based routing (`auto:judge`), and GCP Model Armor sanitization. |
 

@@ -15,13 +15,13 @@ ServiceCallout:
             -Data: application/json
         - Header:
             .name: Authorization
-            -Data: '{fallback_auth_authorization}'
+            -Data: '{private.fallback_auth_authorization}'
         - Header:
             .name: x-api-key
-            -Data: '{fallback_header_x_api_key}'
+            -Data: '{private.fallback_header_x_api_key}'
         - Header:
             .name: api-key
-            -Data: '{fallback_header_api_key}'
+            -Data: '{private.fallback_header_api_key}'
         - Header:
             .name: OpenAI-Organization
             -Data: '{fallback_openai_org}'

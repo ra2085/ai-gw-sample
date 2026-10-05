@@ -280,22 +280,25 @@ try {
             var jqClaim = context.getVariable("propertyset.config.auth_idp_jwt_quota_override_claim") || "ai_quota_override";
             var jqExpClaim = context.getVariable("propertyset.config.auth_idp_jwt_quota_override_expires_at_claim") || "ai_quota_override_expires_at";
 
-            userId = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + juClaim) ||
-                     context.getVariable("jwt.VJ-VerifyIdpJwt.claim.email") ||
+            var jwtEmailClaim = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.email");
+            userId = (juClaim === "email" ? jwtEmailClaim : context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + juClaim)) ||
+                     jwtEmailClaim ||
                      context.getVariable("jwt.VJ-VerifyIdpJwt.claim.sub") || "";
             if (userId) {
                 isVerified = true;
-                userEmail = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.email") || String(userId);
-                rawPersonaClaim = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jpClaim) ||
-                                  context.getVariable("jwt.VJ-VerifyIdpJwt.claim.role") ||
-                                  context.getVariable("jwt.VJ-VerifyIdpJwt.claim.groups") || "";
+                userEmail = jwtEmailClaim || String(userId);
+                var jwtPrimaryPersona = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jpClaim);
+                rawPersonaClaim = jwtPrimaryPersona ||
+                                  (jpClaim !== "role" ? context.getVariable("jwt.VJ-VerifyIdpJwt.claim.role") : "") ||
+                                  (jpClaim !== "groups" ? context.getVariable("jwt.VJ-VerifyIdpJwt.claim.groups") : "") || "";
                 team = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jtClaim) || "default";
                 quotaOverride = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqClaim) || "";
                 quotaOverrideExpiresAt = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqExpClaim) || "";
+                var jwtSharedArmor = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
                 modelArmorRequestTemplate = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_request_template") ||
-                                            context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
+                                            jwtSharedArmor;
                 modelArmorResponseTemplate = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_response_template") ||
-                                             context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
+                                             jwtSharedArmor;
                 tokenTtlMs = String(context.getVariable("propertyset.config.auth_idp_jwt_token_ttl_ms") || "3600000");
             }
         }
@@ -313,6 +316,7 @@ try {
         var matchedPersona = "";
         var personaClientId = "";
         var bestScore = -1;
+        var personaClientIdsMap = {};
 
         for (var i = 0; i < personas.length; i++) {
             var pName = personas[i].trim();
@@ -321,6 +325,7 @@ try {
             var candidateClientId = context.getVariable("propertyset.config.persona." + pName + ".client_id") ||
                                     context.getVariable("propertyset.config.persona_" + pName + "_client_id") ||
                                     defaultClientIdFallback;
+            personaClientIdsMap[pName] = candidateClientId;
             if (!candidateClientId || String(candidateClientId).trim() === "") continue;
 
             var matchClaimsCsv = context.getVariable("propertyset.config.persona." + pName + ".match_claims") || pName;
@@ -351,9 +356,11 @@ try {
             if (defaultPersona && String(defaultPersona).trim() !== "") {
                 var defName = String(defaultPersona).trim();
                 if (/^[A-Za-z0-9._-]+$/.test(defName)) {
-                    var defClientId = context.getVariable("propertyset.config.persona." + defName + ".client_id") ||
-                                      context.getVariable("propertyset.config.persona_" + defName + "_client_id") ||
-                                      defaultClientIdFallback;
+                    var defClientId = Object.prototype.hasOwnProperty.call(personaClientIdsMap, defName)
+                        ? personaClientIdsMap[defName]
+                        : (context.getVariable("propertyset.config.persona." + defName + ".client_id") ||
+                           context.getVariable("propertyset.config.persona_" + defName + "_client_id") ||
+                           defaultClientIdFallback);
                     if (defClientId && String(defClientId).trim() !== "") {
                         matchedPersona = defName;
                         personaClientId = String(defClientId).trim();

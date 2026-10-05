@@ -18,7 +18,7 @@ Instead of configuring settings for one user at a time, you define a small set o
 ### How AI Products Simplify Operations
 * **Define Once, Apply Everywhere:** Model access, token limits, and department budgets are configured once on the **AI Product**.
 * **Automatic Per-User Isolation:** When 1,000 engineers use the `power-developer` AI Product, each engineer automatically receives their own isolated **500k token / 4h** allowance and individual usage tracking—without creating per-user configurations in Apigee.
-* **Multi-Tenant Department Isolation:** You can attach department-specific attributes to an AI Product or Developer App—such as a shared **Team Token Budget** (`team_quota_limit`) or a department's own **OpenAI API Key & Billing Project** (`openai_api_key`, `openai_project_id`).
+* **Multi-Tenant Department Isolation:** You can attach department-specific controls to an AI Product or Persona—such as a shared **Team Token Budget** (`team_budget` / `team_quota_limit`), per-model caps (`per_model`), or context-aware **Model Armor** safety templates (`model_armor_request_template`, `model_armor_response_template`).
 
 ---
 
@@ -132,7 +132,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
               - "principalSet://agents.global.org-123456789012.system.id.goog/attribute.platformContainer/aiplatform/projects/9876543210"
               - "principal://*/projects/9876543210/*"
             client_id: "CONSUMER_KEY_FOR_PROJECT_AGENT_AI_PRODUCT"
-            models: ["gemini-*", "claude-sonnet-*"]
+            models: ["gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
             quota:
               limit: 2000000
               interval: 1
@@ -144,7 +144,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
               - "principalSet://agents.global.org-123456789012.system.id.goog/*"
               - "agent"
             client_id: "CONSUMER_KEY_FOR_STANDARD_AGENT_AI_PRODUCT"
-            models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "text-embedding-*"]
+            models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "text-embedding-005"]
             quota:
               limit: 500000
               interval: 1

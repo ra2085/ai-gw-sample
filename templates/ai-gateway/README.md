@@ -75,8 +75,8 @@ models:
     format: "openai"                            # openai | anthropic | gemini | passthrough
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
     auth:
-      type: "bearer"                            # bearer | header | none
-      token_ref: "propertyset.config.vllm_api_key"
+      type: "bearer"                            # api_key | bearer | header | none
+      token_ref: "propertyset.provider_keys.vllm_api_key"
     pricing:
       input_rate: 0.050
       output_rate: 0.150

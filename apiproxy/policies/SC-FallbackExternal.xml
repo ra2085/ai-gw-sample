@@ -7,9 +7,9 @@
     <Set>
       <Headers>
         <Header name="Content-Type">application/json</Header>
-        <Header name="Authorization">{fallback_auth_authorization}</Header>
-        <Header name="x-api-key">{fallback_header_x_api_key}</Header>
-        <Header name="api-key">{fallback_header_api_key}</Header>
+        <Header name="Authorization">{private.fallback_auth_authorization}</Header>
+        <Header name="x-api-key">{private.fallback_header_x_api_key}</Header>
+        <Header name="api-key">{private.fallback_header_api_key}</Header>
         <Header name="OpenAI-Organization">{fallback_openai_org}</Header>
         <Header name="OpenAI-Project">{fallback_openai_project}</Header>
       </Headers>
