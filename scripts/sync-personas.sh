@@ -299,49 +299,55 @@ if per_model_quotas:
             if mk and mv:
                 per_model_map[mk] = mv
 
-# 3. Expand persona models into concrete model IDs for llmOperationGroup
+# 3. Expand persona models for RBAC (allowed_models) and build full catalog list for llmOperationGroup
+# Note: llmOperationGroup.operationConfigs includes all catalog models + aliases (matching live
+# ai-product-gold/silver/bronze in cymbal-ai) so that if an exception unlocks a frontier model
+# for a user on a restricted persona (or circuit-breaker fallback triggers), LTQ-EnforceOnly
+# and LTQ-CountOnly still have a valid token counter bucket for {model}, while JS-resolve-model-location
+# and models_endpoint.js enforce the persona/exception RBAC allowlist before LTQ-EnforceOnly runs.
 raw_patterns = [p.strip() for p in models.split(",") if p.strip()] if models else []
 unrestricted = (not raw_patterns) or ("*" in raw_patterns)
 
-concrete_allowed = []
-def add_model(m_id):
-    if m_id and m_id not in concrete_allowed:
-        concrete_allowed.append(m_id)
+rbac_allowed = []
+def add_rbac_model(m_id):
+    if m_id and m_id not in rbac_allowed:
+        rbac_allowed.append(m_id)
 
-if unrestricted:
-    for cm in catalog_models:
-        add_model(cm)
-    for ak in aliases_map:
-        add_model(ak)
-    for special in ("auto", "gateway/auto", "auto:judge", "gateway/judge"):
-        add_model(special)
-else:
+if not unrestricted:
     for pat in raw_patterns:
         if "*" in pat or "?" in pat:
             for cm in catalog_models:
                 if fnmatch.fnmatchcase(cm.lower(), pat.lower()):
-                    add_model(cm)
+                    add_rbac_model(cm)
         else:
-            add_model(pat)
-    # Include aliases whose target model is in concrete_allowed, plus auto routing virtual models
-    allowed_set = set(concrete_allowed)
-    for ak, target_m in aliases_map.items():
-        if target_m in allowed_set or ak in ("auto", "gateway/auto", "auto:judge", "gateway/judge"):
-            add_model(ak)
+            add_rbac_model(pat)
 
+counter_models = []
+def add_counter_model(m_id):
+    if m_id and m_id not in counter_models:
+        counter_models.append(m_id)
+
+for cm in catalog_models:
+    add_counter_model(cm)
+for rm in rbac_allowed:
+    add_counter_model(rm)
+for ak in aliases_map:
+    add_counter_model(ak)
+for special in ("auto", "gateway/auto", "auto:judge", "gateway/judge"):
+    add_counter_model(special)
 for pm_key in per_model_map:
-    add_model(pm_key)
+    add_counter_model(pm_key)
 
 # Fallback if catalog was empty
-if not concrete_allowed:
-    concrete_allowed = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
+if not counter_models:
+    counter_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
 
 eff_default_limit = str(q_limit) if q_limit else "1000000"
 eff_interval = str(q_interval) if q_interval else "1"
 eff_unit = str(q_unit) if q_unit else "hour"
 
 llm_op_configs = []
-for m_id in concrete_allowed:
+for m_id in counter_models:
     target_m = aliases_map.get(m_id, m_id)
     m_limit = str(per_model_map.get(m_id) or per_model_map.get(target_m) or eff_default_limit)
     llm_op_configs.append({
@@ -364,9 +370,7 @@ if match_claims:
     attrs.append({"name": "match_claims", "value": match_claims})
 if models:
     # Store concrete expanded model names (or '*' if unrestricted)
-    expanded_attr_models = "*" if unrestricted else ",".join(
-        [m for m in concrete_allowed if m in catalog_models or m in raw_patterns]
-    )
+    expanded_attr_models = "*" if unrestricted else ",".join(rbac_allowed)
     attrs.append({"name": "allowed_models", "value": expanded_attr_models})
 if per_model_quotas:
     attrs.append({"name": "per_model_quotas", "value": per_model_quotas})
