@@ -20,7 +20,17 @@ ServiceCallout:
   Response: idpOpaqueVerifyResponse
   HTTPTargetConnection:
     Properties:
-      Property:
-        .name: io.timeout.millis
-        -Data: 3000
+      - Property:
+          .name: connect.timeout.millis
+          -Data: 2000
+      - Property:
+          .name: io.timeout.millis
+          -Data: 3000
+      - Property:
+          .name: keepalive.timeout.millis
+          -Data: 50000
+    SSLInfo:
+      Enabled: true
+      Enforce: true
+      IgnoreValidationErrors: false
     URL: '{{ if and $.Values.auth $.Values.auth.idp_opaque $.Values.auth.idp_opaque.userinfo_url }}{{ $.Values.auth.idp_opaque.userinfo_url }}{{ else if and $.Values.features $.Values.features.auth $.Values.features.auth.idp_opaque $.Values.features.auth.idp_opaque.userinfo_url }}{{ $.Values.features.auth.idp_opaque.userinfo_url }}{{ else }}https://idp.example.com/oauth2/v1/userinfo{{ end }}'

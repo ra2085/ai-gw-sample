@@ -24,6 +24,9 @@
       <Header name="X-Gateway-Model-Armor-Request-Template">{model_armor_request_template}</Header>
       <Header name="X-Gateway-Model-Armor-Response-Template">{model_armor_response_template}</Header>
       <Header name="X-Gateway-Model-Armor-Source">{model_armor_source}</Header>
+      <Header name="X-Gateway-Auth-Source">{upstream_auth_source}</Header>
+      <Header name="X-Gateway-Provider-Account">{openai_org_id}</Header>
+      <Header name="X-Gateway-Identity-Persona">{identity_persona}</Header>
     </Headers>
   </Set>
   <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>

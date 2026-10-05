@@ -281,7 +281,7 @@ models:
       input_rate: 0.025
       output_rate: 0.000
 
-  # --- Example 1: Vertex AI Model Garden (MaaS - OpenAI Format, No Prompt Caching) ---
+  # --- Recipe 1: Vertex AI Model Garden (MaaS - OpenAI Format, GCP IAM Auth) ---
   # - name: "llama-3.3-70b-instruct-maas"
   #   displayName: "Llama 3.3 70B Instruct (Vertex MaaS)"
   #   publisher: "meta"
@@ -292,31 +292,55 @@ models:
   #     input_rate: 0.720
   #     output_rate: 0.720
 
-  # --- Example 2: Direct OpenAI (api.openai.com - Supports Prompt Caching) ---
+  # --- Recipe 2: Direct OpenAI (api.openai.com - Bearer Token Reference) ---
   # - name: "gpt-5.4"
   #   displayName: "OpenAI GPT-5.4"
   #   publisher: "openai"
   #   target: "openai-custom"
   #   format: "openai"
   #   custom_url: "https://api.openai.com/v1/chat/completions"
+  #   # Optional: only needed for legacy multi-org/multi-project keys (not needed for sk-proj-* keys)
+  #   # openai_org_id: "org-your-openai-org"
+  #   # openai_project_id: "proj-your-openai-project"
   #   auth:
   #     type: "bearer"
-  #     token_ref: "propertyset.config.openai_api_key"
+  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key"
   #   pricing:
   #     input_rate: 2.500
   #     output_rate: 15.000
   #     cache_read_rate: 0.250
 
-  # --- Example 3: Self-Hosted / External Model (vLLM, Ollama, TGI, LiteLLM) ---
+  # --- Recipe 3: Direct Anthropic (api.anthropic.com - x-api-key Header Reference) ---
+  # - name: "claude-direct-sonnet"
+  #   displayName: "Claude Sonnet 4.6 (Direct Anthropic)"
+  #   publisher: "anthropic"
+  #   target: "claude"
+  #   format: "anthropic"
+  #   custom_url: "https://api.anthropic.com/v1/messages"
+  #   upstream_model: "claude-sonnet-4-6"
+  #   anthropic_version: "2023-06-01"
+  #   anthropic_beta: "prompt-caching-2024-07-31"
+  #   auth:
+  #     type: "header"
+  #     header_name: "x-api-key"
+  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.anthropic_api_key"
+  #   pricing:
+  #     input_rate: 3.000
+  #     output_rate: 15.000
+  #     cache_read_rate: 0.300
+  #     cache_write_rate: 3.750
+
+  # --- Recipe 4: Self-Hosted / External Model (vLLM, Ollama, Azure OpenAI, LiteLLM) ---
   # - name: "custom-llama-3"
   #   displayName: "Llama 3 70B (vLLM)"
   #   publisher: "custom"
   #   target: "openai-custom"
   #   format: "openai"
   #   custom_url: "https://vllm.internal.corp/v1/chat/completions"
+  #   upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
   #   auth:
   #     type: "bearer"
-  #     token_ref: "propertyset.config.vllm_api_key"
+  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.vllm_api_key"
   #   pricing:
   #     input_rate: 0.050
   #     output_rate: 0.150

@@ -13,6 +13,9 @@
     <Variable name="prompt" type="string">
       <JSONPath>{propertyset.extract_expressions.prompt_exp}</JSONPath>
     </Variable>
+    <Variable name="judge_plugin_id" type="string">
+      <JSONPath>$.plugins[0].id</JSONPath>
+    </Variable>
   </JSONPayload>
   <Source clearPayload="false">request</Source>
 </ExtractVariables>

@@ -183,18 +183,24 @@ Each entry in `models` registers a model in `/v1/models`, configures its backend
 
 ```yaml
 models:
-  - name: "gemini-3.1-pro-preview"                    # Unique model identifier
-    displayName: "Gemini 3.1 Pro Preview"             # Catalog display name
-    publisher: "google"                               # google | anthropic | openai | meta | mistralai | custom
+  - name: "gemini-3.1-pro-preview"                    # Unique model identifier exposed in /v1/models
+    displayName: "Gemini 3.1 Pro Preview"             # Human-readable catalog display name
+    publisher: "google"                               # google | anthropic | openai | meta | mistralai | azure | custom
+    target: "gemini"                                  # gemini | claude | gemini-openai-compat | openai-custom
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
-    region: "global"                                  # Region: global | us-east5 | us-central1 | europe-west1
+    region: "global"                                  # Vertex AI region: global | us-east5 | us-central1 | europe-west1
     created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
-    custom_url: ""                                    # Optional: full URL for OpenAI, Azure, vLLM, or DeepSeek
-    auth:                                             # Optional: upstream auth for custom_url
+    custom_url: ""                                    # Optional: full URL for Direct OpenAI, Direct Anthropic, Azure, or vLLM
+    upstream_model: ""                                # Optional: backend model ID if different from catalog `name`
+    anthropic_version: "2023-06-01"                   # Optional (Anthropic): sets anthropic-version header (or body version on Vertex)
+    anthropic_beta: "prompt-caching-2024-07-31"       # Optional (Anthropic): injects anthropic-beta HTTP header
+    openai_org_id: ""                                 # Optional (OpenAI): injects OpenAI-Organization header (for legacy multi-org keys)
+    openai_project_id: ""                             # Optional (OpenAI): injects OpenAI-Project header (for legacy multi-project keys)
+    auth:                                             # Optional: upstream credentials for custom_url endpoints
       type: "bearer"                                  # bearer | header | none
-      header_name: "Authorization"
-      token: ""
-      token_ref: "propertyset.config.openai_api_key"
+      header_name: "Authorization"                    # e.g., "x-api-key" for Direct Anthropic or "api-key" for Azure OpenAI
+      token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key" # Recommended: runtime variable reference (no secrets in Git)
+      token: ""                                       # Optional fallback: literal token (for local/dev testing only)
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
       request_template: "frontier-request-template"
       response_template: "frontier-response-template"
@@ -202,7 +208,7 @@ models:
       input_rate: 2.000                               # USD per 1M uncached prompt tokens (<= 200K context)
       output_rate: 12.000                             # USD per 1M completion & reasoning tokens
       cache_read_rate: 0.200                          # Optional: USD per 1M cached input tokens (0.10x)
-      cache_write_rate: 2.500                         # Optional: USD per 1M cache creation tokens (e.g. 1.25x on Claude/OpenAI)
+      cache_write_rate: 2.500                         # Optional: USD per 1M cache creation tokens (e.g. 1.25x on Claude)
       markup: 1.0                                     # Optional per-model markup multiplier
 ```
 

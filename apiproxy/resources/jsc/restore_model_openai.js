@@ -193,7 +193,7 @@ try {
         } else if (publisher === "google") {
             var loc = (modelLocation && modelLocation !== "global") ? modelLocation : "us-central1";
             var predictHost = (endpointHost === "aiplatform.googleapis.com") ? (loc + "-aiplatform.googleapis.com") : endpointHost;
-            var predictUrl = "https://" + predictHost + "/v1/projects/" + projectId + "/locations/" + loc + "/publishers/google/models/" + resolvedModel + ":predict";
+            var predictUrl = "https://" + predictHost + "/v1/projects/" + projectId + "/locations/" + loc + "/publishers/google/models/" + (upstreamModel || resolvedModel) + ":predict";
             context.setVariable("target.url", predictUrl);
             context.setVariable("vertex_predict_embeddings", "true");
 
@@ -239,6 +239,13 @@ try {
                 originalModel = (resolvedModel && resolvedModel.indexOf("/") !== -1) ? resolvedModel : (publisher + "/" + resolvedModel);
             }
             body.model = upstreamModel || originalModel;
+        }
+        if (body.stream === true || body.stream === "true") {
+            if (!body.stream_options) {
+                body.stream_options = { include_usage: true };
+            } else if (body.stream_options.include_usage === undefined) {
+                body.stream_options.include_usage = true;
+            }
         }
         if (bodyStr) {
             context.setVariable("request.content", JSON.stringify(body));

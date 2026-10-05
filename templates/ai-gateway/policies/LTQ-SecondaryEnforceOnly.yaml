@@ -18,4 +18,5 @@ LLMTokenQuota:
     .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit_ref | default "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit" }}{{ else }}verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit{{ end }}
     -Data: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit | default "day" }}{{ else }}day{{ end }}
   Distributed: true
+  Synchronous: true
   LLMModelSource: '{model}'

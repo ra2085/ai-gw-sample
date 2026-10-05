@@ -15,8 +15,15 @@
   <Response>idpOpaqueVerifyResponse</Response>
   <HTTPTargetConnection>
     <Properties>
+      <Property name="connect.timeout.millis">2000</Property>
       <Property name="io.timeout.millis">3000</Property>
+      <Property name="keepalive.timeout.millis">50000</Property>
     </Properties>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
+      <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
     <URL>https://workshop.iloveapi.management/mock/oauth2/v1/userinfo</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

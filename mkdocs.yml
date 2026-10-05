@@ -84,7 +84,7 @@ nav:
       - Prerequisites & Setup: getting-started/installation.md
   - Guides:
       - AI Products, Tenancy & Auth: architecture/security.md
-      - Models & Providers: template-guide/custom-urls.md
+      - Models & Provider Recipes: template-guide/custom-urls.md
       - Quotas, Budgets & Cost Control: architecture/monetization.md
       - Smart Routing & Content Safety: architecture/routing.md
   - Reference:

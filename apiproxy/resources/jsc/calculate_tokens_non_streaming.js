@@ -7,21 +7,26 @@ try {
 
     var isEmbeddings = context.getVariable("is_embeddings") === "true";
     var isVertexPredict = context.getVariable("vertex_predict_embeddings") === "true";
+    var requestFormat = (context.getVariable("request_format") || "").toLowerCase();
+    var isOpenAIFormat = requestFormat === "openai";
+    var respStr = null;
+    var parsedResp = null;
 
-    if ((isEmbeddings || isVertexPredict || (promptTokens === 0 && completionTokens === 0)) && context.getVariable("response.content")) {
-        var respStr = context.getVariable("response.content");
+    if (isEmbeddings || isVertexPredict || (promptTokens === 0 && completionTokens === 0)) {
+        respStr = context.getVariable("response.content");
         if (respStr && respStr.indexOf('"predictions"') !== -1) {
-            var respBody = JSON.parse(respStr);
-            if (Array.isArray(respBody.predictions)) {
+            parsedResp = JSON.parse(respStr);
+            if (Array.isArray(parsedResp.predictions)) {
                 var embTokens = 0;
                 var dataList = [];
-                for (var i = 0; i < respBody.predictions.length; i++) {
-                    var pred = respBody.predictions[i] || {};
+                var buildOpenAIList = isVertexPredict || isOpenAIFormat;
+                for (var i = 0; i < parsedResp.predictions.length; i++) {
+                    var pred = parsedResp.predictions[i] || {};
                     var emb = pred.embeddings || pred;
                     if (emb.statistics && typeof emb.statistics.token_count === "number") {
                         embTokens += emb.statistics.token_count;
                     }
-                    if (isVertexPredict || context.getVariable("request_format") === "openai") {
+                    if (buildOpenAIList) {
                         dataList.push({
                             object: "embedding",
                             index: i,
@@ -33,7 +38,7 @@ try {
                 context.setVariable("prompt_tokens", promptTokens.toFixed(0));
                 context.setVariable("completion_tokens", "0");
 
-                if (isVertexPredict || context.getVariable("request_format") === "openai") {
+                if (buildOpenAIList) {
                     var openaiEmbResp = {
                         object: "list",
                         data: dataList,
@@ -59,7 +64,6 @@ try {
     var cachedPromptStr = context.getVariable("cached_prompt_tokens");
     var reasoningTokensStr = context.getVariable("reasoning_tokens");
     var existingThinkingStr = context.getVariable("thinking_tokens");
-    var requestFormat = (context.getVariable("request_format") || "").toLowerCase();
 
     function toNonNegInt(val) {
         var n = parseInt(val, 10);
@@ -79,7 +83,7 @@ try {
         uncachedPromptTokens = Math.max(0, promptTokens - cacheReadTokens);
         thinkingTokens = toNonNegInt(thoughtsTokensStr);
         totalCompletionTokens = completionTokens + thinkingTokens;
-    } else if (cachedPromptStr !== null || reasoningTokensStr !== null || requestFormat === "openai") {
+    } else if (cachedPromptStr !== null || reasoningTokensStr !== null || isOpenAIFormat) {
         // OpenAI / Codex format:
         // prompt_tokens includes prompt_tokens_details.cached_tokens (and cache_creation_input_tokens when transcoded from Claude);
         // completion_tokens already includes completion_tokens_details.reasoning_tokens
@@ -103,26 +107,36 @@ try {
     var totalPromptTokens = uncachedPromptTokens + cacheReadTokens + cacheWriteTokens;
     var totalTokens = totalPromptTokens + totalCompletionTokens;
 
-    context.setVariable("prompt_tokens", totalPromptTokens.toFixed(0));
-    context.setVariable("usage_prompt_tokens", totalPromptTokens.toFixed(0));
-    context.setVariable("uncached_prompt_tokens", uncachedPromptTokens.toFixed(0));
-    context.setVariable("usage_uncached_prompt_tokens", uncachedPromptTokens.toFixed(0));
-    context.setVariable("cache_read_tokens", cacheReadTokens.toFixed(0));
-    context.setVariable("usage_cache_read_tokens", cacheReadTokens.toFixed(0));
-    context.setVariable("cache_write_tokens", cacheWriteTokens.toFixed(0));
-    context.setVariable("usage_cache_write_tokens", cacheWriteTokens.toFixed(0));
-    context.setVariable("thinking_tokens", thinkingTokens.toFixed(0));
-    context.setVariable("usage_thinking_tokens", thinkingTokens.toFixed(0));
-    context.setVariable("completion_tokens", totalCompletionTokens.toFixed(0));
-    context.setVariable("usage_completion_tokens", totalCompletionTokens.toFixed(0));
-    context.setVariable("usage_total_tokens", totalTokens.toFixed(0));
+    var totalPromptStr = totalPromptTokens.toFixed(0);
+    var uncachedPromptStr = uncachedPromptTokens.toFixed(0);
+    var cacheReadStr = cacheReadTokens.toFixed(0);
+    var cacheWriteStr = cacheWriteTokens.toFixed(0);
+    var thinkingStr = thinkingTokens.toFixed(0);
+    var totalCompletionStr = totalCompletionTokens.toFixed(0);
+    var totalTokensStr = totalTokens.toFixed(0);
+
+    context.setVariable("prompt_tokens", totalPromptStr);
+    context.setVariable("usage_prompt_tokens", totalPromptStr);
+    context.setVariable("uncached_prompt_tokens", uncachedPromptStr);
+    context.setVariable("usage_uncached_prompt_tokens", uncachedPromptStr);
+    context.setVariable("cache_read_tokens", cacheReadStr);
+    context.setVariable("usage_cache_read_tokens", cacheReadStr);
+    context.setVariable("cache_write_tokens", cacheWriteStr);
+    context.setVariable("usage_cache_write_tokens", cacheWriteStr);
+    context.setVariable("thinking_tokens", thinkingStr);
+    context.setVariable("usage_thinking_tokens", thinkingStr);
+    context.setVariable("completion_tokens", totalCompletionStr);
+    context.setVariable("usage_completion_tokens", totalCompletionStr);
+    context.setVariable("usage_total_tokens", totalTokensStr);
 
     // Extract assistant response text into response_partial for non-streaming Model Armor response sanitization
     if (!isEmbeddings && !isVertexPredict && context.getVariable("model_armor_response_enabled") !== "false") {
-        var rawRespContent = context.getVariable("response.content");
+        var rawRespContent = respStr !== null ? respStr : context.getVariable("response.content");
         if (rawRespContent) {
             try {
-                var parsedResp = JSON.parse(rawRespContent);
+                if (!parsedResp) {
+                    parsedResp = JSON.parse(rawRespContent);
+                }
                 var extractedText = "";
                 if (Array.isArray(parsedResp.choices) && parsedResp.choices.length > 0 && parsedResp.choices[0].message) {
                     var msgContent = parsedResp.choices[0].message.content;

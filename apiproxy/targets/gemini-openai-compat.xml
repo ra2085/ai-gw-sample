@@ -3,7 +3,7 @@
   <Description>Target Endpoint for OpenAI-compatible Gemini requests</Description>
   <FaultRules>
     <FaultRule name="sanitize">
-      <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
+      <Condition>(SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
       <Step>
         <Name>JS-inject-deidentified-finding</Name>
       </Step>
@@ -65,9 +65,15 @@
         </Scopes>
       </GoogleAccessToken>
     </Authentication>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
+    </SSLInfo>
     <Properties>
+      <Property name="connect.timeout.millis">5000</Property>
       <Property name="io.timeout.millis">300000</Property>
-      <Property name="success.codes">1xx,2xx,3xx,429,5xx</Property>
+      <Property name="keepalive.timeout.millis">50000</Property>
+      <Property name="success.codes">1xx,2xx,3xx,4xx,5xx</Property>
     </Properties>
   </HTTPTargetConnection>
 </TargetEndpoint>

@@ -2,15 +2,6 @@
 <ProxyEndpoint name="gemini-native">
   <Description>Native Gemini API Proxy Endpoint compatible with ADK</Description>
   <FaultRules>
-    <FaultRule name="rate-limit">
-      <Condition>(fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)</Condition>
-      <Step>
-        <Name>JS-format-rate-limit-error</Name>
-      </Step>
-      <Step>
-        <Name>AM-RateLimitError</Name>
-      </Step>
-    </FaultRule>
     <FaultRule name="sanitize">
       <Condition>(SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")</Condition>
       <Step>
@@ -18,6 +9,15 @@
       </Step>
       <Step>
         <Name>AM-CustomError</Name>
+      </Step>
+    </FaultRule>
+    <FaultRule name="rate-limit">
+      <Condition>(fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)</Condition>
+      <Step>
+        <Name>JS-format-rate-limit-error</Name>
+      </Step>
+      <Step>
+        <Name>AM-RateLimitError</Name>
       </Step>
     </FaultRule>
   </FaultRules>
@@ -48,7 +48,7 @@
       </Step>
       <Step>
         <Name>JS-resolve-auth-persona</Name>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")</Condition>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))</Condition>
       </Step>
       <Step>
         <Name>OA-ImportExternalToken</Name>
@@ -85,7 +85,7 @@
       </Step>
       <Step>
         <Name>JS-prepare-judge-request</Name>
-        <Condition>(request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")</Condition>
+        <Condition>(request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (has_judge_payload = "true")</Condition>
       </Step>
       <Step>
         <Name>SC-LLMJudge</Name>
@@ -175,7 +175,7 @@
       </Step>
       <Step>
         <Name>AM-SetQuotaHeaders</Name>
-        <Condition>!(stream = true)</Condition>
+        <Condition>!(stream = true) and (response.status.code &lt; 400)</Condition>
       </Step>
       <Step>
         <Name>AM-SetMonetizationHeaders</Name>

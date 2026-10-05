@@ -70,6 +70,12 @@ alias.{{ $alias }}={{ $target }}
 {{- if .openai_project_id }}
 {{ .name }}.openai_project_id={{ .openai_project_id }}
 {{- end }}
+{{- if .anthropic_version }}
+{{ .name }}.anthropic_version={{ .anthropic_version }}
+{{- end }}
+{{- if .anthropic_beta }}
+{{ .name }}.anthropic_beta={{ .anthropic_beta }}
+{{- end }}
 {{- if .auth }}
 {{- if .auth.type }}
 {{ .name }}.auth_type={{ .auth.type }}
@@ -158,6 +164,9 @@ default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_lim
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
 cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
 cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
+openai_base_url={{ $.Values.gateway.openai_base_url }}
+{{- end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_api_key }}
 openai_api_key={{ $.Values.gateway.openai_api_key }}
 {{- end }}
@@ -304,7 +313,7 @@ buffer_size=50
     Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
     Name: VJ-VerifyIdpJwt
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
     Name: JS-resolve-auth-persona
 - Step:
     Condition: 'auth_ready_to_import = "true"'

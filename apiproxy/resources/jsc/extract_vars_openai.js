@@ -9,6 +9,18 @@ try {
     if (bodyStr) {
         var body = JSON.parse(bodyStr);
         
+        if (body.model === "auto:judge" || body.model === "gateway/judge") {
+            context.setVariable("has_judge_payload", "true");
+        } else if (Array.isArray(body.plugins)) {
+            for (var pIdx = 0; pIdx < body.plugins.length; pIdx++) {
+                var plg = body.plugins[pIdx];
+                if (plg && (plg.id === "judge" || plg.id === "task-classifier" || (plg.id === "auto-router" && (plg.mode === "judge" || plg.judge === true || plg.judge === "true")))) {
+                    context.setVariable("has_judge_payload", "true");
+                    break;
+                }
+            }
+        }
+
         if (body.model) {
             var modelName = body.model;
             context.setVariable("model", modelName);
@@ -29,7 +41,7 @@ try {
             }
 
             var configuredPub = context.getVariable("propertyset.model_locations." + bareModel + ".publisher") ||
-                                context.getVariable("propertyset.model_locations." + modelName + ".publisher") ||
+                                (bareModel !== modelName ? context.getVariable("propertyset.model_locations." + modelName + ".publisher") : null) ||
                                 explicitPub ||
                                 context.getVariable("propertyset.model_locations.default.publisher") ||
                                 "google";
@@ -43,10 +55,10 @@ try {
                            (pathSuffix.indexOf("/embeddings") !== -1);
         if (isEmbeddings) {
             context.setVariable("is_embeddings", "true");
-            context.setVariable("stream", false);
+            context.setVariable("stream", "false");
         } else {
             var stream = body.stream === true || body.stream === "true";
-            context.setVariable("stream", stream);
+            context.setVariable("stream", String(stream));
         }
         context.setVariable("request_format", "openai");
         

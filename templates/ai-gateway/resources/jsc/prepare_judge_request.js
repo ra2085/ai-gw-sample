@@ -6,21 +6,29 @@ try {
     var headerJudge = context.getVariable("request.header.X-Gateway-Judge") || 
                       context.getVariable("request.header.x-enable-judge");
     var extractedModel = context.getVariable("model") || "";
+    var hasJudgePayload = context.getVariable("has_judge_payload") === "true";
+    var judgePluginId = context.getVariable("judge_plugin_id") || "";
 
-    var shouldTrigger = (headerJudge === "true" || 
+    var shouldTrigger = (headerJudge === "true" ||
+                         hasJudgePayload ||
+                         judgePluginId === "judge" ||
+                         judgePluginId === "task-classifier" ||
+                         extractedModel === "auto:judge" ||
+                         extractedModel === "gateway/judge" ||
                          bodyStr.indexOf('"judge"') !== -1 || 
                          bodyStr.indexOf('auto:judge') !== -1 ||
                          bodyStr.indexOf('gateway/judge') !== -1);
 
+    var parsedBody = null;
     // Also check plugins in body if not obvious from string match
     if (!shouldTrigger && (bodyStr.indexOf('"plugins"') !== -1 || bodyStr.indexOf('"auto"') !== -1)) {
         try {
-            var parsed = JSON.parse(bodyStr);
-            if (parsed.model === "auto:judge" || parsed.model === "gateway/judge") {
+            parsedBody = JSON.parse(bodyStr);
+            if (parsedBody.model === "auto:judge" || parsedBody.model === "gateway/judge") {
                 shouldTrigger = true;
-            } else if (Array.isArray(parsed.plugins)) {
-                for (var p = 0; p < parsed.plugins.length; p++) {
-                    if (parsed.plugins[p] && (parsed.plugins[p].id === "judge" || parsed.plugins[p].id === "task-classifier" || (parsed.plugins[p].id === "auto-router" && (parsed.plugins[p].mode === "judge" || parsed.plugins[p].judge === true || parsed.plugins[p].judge === "true")))) {
+            } else if (Array.isArray(parsedBody.plugins)) {
+                for (var p = 0; p < parsedBody.plugins.length; p++) {
+                    if (parsedBody.plugins[p] && (parsedBody.plugins[p].id === "judge" || parsedBody.plugins[p].id === "task-classifier" || (parsedBody.plugins[p].id === "auto-router" && (parsedBody.plugins[p].mode === "judge" || parsedBody.plugins[p].judge === true || parsedBody.plugins[p].judge === "true")))) {
                         shouldTrigger = true;
                         break;
                     }
@@ -38,7 +46,7 @@ try {
 
         if (!promptText && bodyStr) {
             try {
-                var jsonBody = JSON.parse(bodyStr);
+                var jsonBody = parsedBody || JSON.parse(bodyStr);
                 if (Array.isArray(jsonBody.messages)) {
                     var userMsgs = jsonBody.messages.filter(function(m) { return m.role === "user"; });
                     if (userMsgs.length > 0) {

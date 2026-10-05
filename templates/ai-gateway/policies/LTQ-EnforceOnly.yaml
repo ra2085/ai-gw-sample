@@ -11,4 +11,5 @@ LLMTokenQuota:
   UseQuotaConfigInAPIProduct:
     .stepName: VA-ApiKey
   Distributed: true
+  Synchronous: true
   LLMModelSource: '{model}'

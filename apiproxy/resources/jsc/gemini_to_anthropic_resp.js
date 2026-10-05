@@ -62,8 +62,9 @@ try {
                 }
             };
             
-            context.setVariable("thinking_tokens", thoughtsTokens);
-            context.setVariable("usage_thinking_tokens", thoughtsTokens);
+            var thoughtsStr = String(thoughtsTokens);
+            context.setVariable("thinking_tokens", thoughtsStr);
+            context.setVariable("usage_thinking_tokens", thoughtsStr);
             context.setVariable("response.content", JSON.stringify(anthropicResp));
         } else if (body.choices && Array.isArray(body.choices) && body.choices[0]) {
             var choice = body.choices[0];
@@ -145,13 +146,14 @@ try {
             };
 
             var oaiEffectivePromptTokens = oaiUncachedPromptTokens + oaiCachedTokens + oaiCacheWriteTokens;
-            context.setVariable("usage_prompt_tokens", oaiEffectivePromptTokens);
-            context.setVariable("usage_uncached_prompt_tokens", oaiUncachedPromptTokens);
-            context.setVariable("usage_cache_read_tokens", oaiCachedTokens);
-            context.setVariable("usage_cache_write_tokens", oaiCacheWriteTokens);
-            context.setVariable("usage_completion_tokens", oaiCompletionTokens);
-            context.setVariable("thinking_tokens", oaiReasoningTokens);
-            context.setVariable("usage_thinking_tokens", oaiReasoningTokens);
+            var oaiReasoningStr = String(oaiReasoningTokens);
+            context.setVariable("usage_prompt_tokens", String(oaiEffectivePromptTokens));
+            context.setVariable("usage_uncached_prompt_tokens", String(oaiUncachedPromptTokens));
+            context.setVariable("usage_cache_read_tokens", String(oaiCachedTokens));
+            context.setVariable("usage_cache_write_tokens", String(oaiCacheWriteTokens));
+            context.setVariable("usage_completion_tokens", String(oaiCompletionTokens));
+            context.setVariable("thinking_tokens", oaiReasoningStr);
+            context.setVariable("usage_thinking_tokens", oaiReasoningStr);
             context.setVariable("usage_total_tokens", (oaiEffectivePromptTokens + oaiCompletionTokens).toFixed(0));
             context.setVariable("response.content", JSON.stringify(oaiAnthropicResp));
         }

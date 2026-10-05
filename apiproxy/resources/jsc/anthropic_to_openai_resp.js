@@ -77,12 +77,13 @@ try {
         };
 
         // Populate token counts for downstream monetization & quota policies
-        context.setVariable("usage_prompt_tokens", inTokens);
-        context.setVariable("usage_uncached_prompt_tokens", uncachedInTokens);
-        context.setVariable("usage_cache_read_tokens", cacheReadTokens);
-        context.setVariable("usage_cache_write_tokens", cacheWriteTokens);
-        context.setVariable("cache_creation_input_tokens", cacheWriteTokens);
-        context.setVariable("usage_completion_tokens", outTokens);
+        var cacheWriteStr = String(cacheWriteTokens);
+        context.setVariable("usage_prompt_tokens", String(inTokens));
+        context.setVariable("usage_uncached_prompt_tokens", String(uncachedInTokens));
+        context.setVariable("usage_cache_read_tokens", String(cacheReadTokens));
+        context.setVariable("usage_cache_write_tokens", cacheWriteStr);
+        context.setVariable("cache_creation_input_tokens", cacheWriteStr);
+        context.setVariable("usage_completion_tokens", String(outTokens));
         context.setVariable("usage_total_tokens", totalTokens.toFixed(0));
 
         context.setVariable("response.content", JSON.stringify(openAiResp));

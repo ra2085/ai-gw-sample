@@ -6,5 +6,6 @@
   <Identifier ref="rate_limit_client_id"/>
   <UseQuotaConfigInAPIProduct stepName="VA-ApiKey"/>
   <Distributed>true</Distributed>
+  <Synchronous>true</Synchronous>
   <LLMModelSource>{model}</LLMModelSource>
 </LLMTokenQuota>

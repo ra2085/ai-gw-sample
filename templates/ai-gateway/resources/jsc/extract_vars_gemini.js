@@ -35,13 +35,24 @@ try {
         }
     }
     
-    context.setVariable("stream", stream);
+    context.setVariable("stream", String(stream));
     context.setVariable("request_format", requestFormat);
 
     // Extract text prompts for sanitization
     var bodyStr = context.getVariable("request.content");
     if (bodyStr) {
         var body = JSON.parse(bodyStr);
+        if (body.model === "auto:judge" || body.model === "gateway/judge") {
+            context.setVariable("has_judge_payload", "true");
+        } else if (Array.isArray(body.plugins)) {
+            for (var pIdx = 0; pIdx < body.plugins.length; pIdx++) {
+                var plg = body.plugins[pIdx];
+                if (plg && (plg.id === "judge" || plg.id === "task-classifier" || (plg.id === "auto-router" && (plg.mode === "judge" || plg.judge === true || plg.judge === "true")))) {
+                    context.setVariable("has_judge_payload", "true");
+                    break;
+                }
+            }
+        }
         if (requestFormat === "claude") {
             var prompts = [];
             

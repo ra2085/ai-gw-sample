@@ -14,14 +14,6 @@ ProxyEndpoints:
       -Data:
         - Description: Anthropic Claude Messages Proxy Endpoint
         - FaultRules:
-            - FaultRule:
-                .name: rate-limit
-                -Data:
-                  - Step:
-                      Name: JS-format-rate-limit-error
-                  - Step:
-                      Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
             - FaultRule:
                 .name: sanitize
@@ -37,6 +29,21 @@ ProxyEndpoints:
                       Name: AM-CustomError
                   - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+        {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+        - DefaultFaultRule:
+            .name: default-fault-cleanup
+            Step:
+              Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+              Name: RQ-ReleaseConcurrencySlot
+        {{- end }}
 
         - PreFlow:
             .name: PreFlow
@@ -56,7 +63,7 @@ ProxyEndpoints:
                   Name: EV-Model
               {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (judge_plugin_id = "auto-router")
                   Name: JS-prepare-judge-request
               - Step:
                   Condition: trigger_judge = "true"
@@ -137,7 +144,7 @@ ProxyEndpoints:
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
-                  Condition: '!(stream = true)'
+                  Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
@@ -179,14 +186,6 @@ ProxyEndpoints:
       -Data:
         - Description: Native Gemini API Proxy Endpoint compatible with ADK
         - FaultRules:
-            - FaultRule:
-                .name: rate-limit
-                -Data:
-                  - Step:
-                      Name: JS-format-rate-limit-error
-                  - Step:
-                      Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
             - FaultRule:
                 .name: sanitize
@@ -202,6 +201,21 @@ ProxyEndpoints:
                       Name: AM-CustomError
                   - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+        {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+        - DefaultFaultRule:
+            .name: default-fault-cleanup
+            Step:
+              Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+              Name: RQ-ReleaseConcurrencySlot
+        {{- end }}
 
         - PreFlow:
             .name: PreFlow
@@ -219,7 +233,7 @@ ProxyEndpoints:
                   Name: JS-extract-vars-gemini
               {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (has_judge_payload = "true")
                   Name: JS-prepare-judge-request
               - Step:
                   Condition: trigger_judge = "true"
@@ -304,7 +318,7 @@ ProxyEndpoints:
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
-                  Condition: '!(stream = true)'
+                  Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
@@ -337,14 +351,6 @@ ProxyEndpoints:
       -Data:
         - Description: OpenAI Compatibility API Proxy Endpoint for Gemini
         - FaultRules:
-            - FaultRule:
-                .name: rate-limit
-                -Data:
-                  - Step:
-                      Name: JS-format-rate-limit-error
-                  - Step:
-                      Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
             - FaultRule:
                 .name: sanitize
@@ -360,6 +366,21 @@ ProxyEndpoints:
                       Name: AM-CustomError
                   - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+        {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+        - DefaultFaultRule:
+            .name: default-fault-cleanup
+            Step:
+              Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+              Name: RQ-ReleaseConcurrencySlot
+        {{- end }}
 
         - PreFlow:
             .name: PreFlow
@@ -379,7 +400,7 @@ ProxyEndpoints:
                   Name: JS-extract-vars-openai
               {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.enabled }}
               - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (request.content Matches "*judge*")
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (has_judge_payload = "true")
                   Name: JS-prepare-judge-request
               - Step:
                   Condition: trigger_judge = "true"
@@ -458,7 +479,7 @@ ProxyEndpoints:
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
-                  Condition: '!(stream = true)'
+                  Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
@@ -495,14 +516,6 @@ ProxyEndpoints:
       -Data:
         - Description: OpenAI Embeddings API Proxy Endpoint for Vertex AI and BYO Models
         - FaultRules:
-            - FaultRule:
-                .name: rate-limit
-                -Data:
-                  - Step:
-                      Name: JS-format-rate-limit-error
-                  - Step:
-                      Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.enabled }}
             - FaultRule:
                 .name: sanitize
@@ -518,6 +531,21 @@ ProxyEndpoints:
                       Name: AM-CustomError
                   - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") OR (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") OR (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
             {{- end }}
+            - FaultRule:
+                .name: rate-limit
+                -Data:
+                  - Step:
+                      Name: JS-format-rate-limit-error
+                  - Step:
+                      Name: AM-RateLimitError
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+        {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+        - DefaultFaultRule:
+            .name: default-fault-cleanup
+            Step:
+              Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+              Name: RQ-ReleaseConcurrencySlot
+        {{- end }}
 
         - PreFlow:
             .name: PreFlow
@@ -600,7 +628,7 @@ ProxyEndpoints:
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
-                  Condition: '!(stream = true)'
+                  Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: AM-SetQuotaHeaders
               {{- end }}
               {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
@@ -644,6 +672,7 @@ ProxyEndpoints:
               Name: MLC-EnforceMonetizationLimits
           {{- end }}
           - Step:
+              Condition: '(proxy.pathsuffix = "") or (proxy.pathsuffix = null)'
               Name: AM-NormalizePathSuffix
         Response: {}
       PostFlow:
@@ -654,7 +683,7 @@ ProxyEndpoints:
         - Flow:
             .name: listModels
             Description: List available models
-            Condition: (request.verb = "GET") AND ((proxy.pathsuffix MatchesPath "") OR (proxy.pathsuffix MatchesPath "/"))
+            Condition: (request.verb = "GET") AND ((proxy.pathsuffix = "") OR (proxy.pathsuffix = "/"))
             Request: {}
             Response:
               Step:
@@ -692,7 +721,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
 
       PreFlow:
@@ -749,11 +778,21 @@ TargetEndpoints:
       HTTPTargetConnection:
         Properties:
           - Property:
+              .name: connect.timeout.millis
+              -Data: 5000
+          - Property:
               .name: io.timeout.millis
               -Data: 300000
           - Property:
+              .name: keepalive.timeout.millis
+              -Data: 50000
+          - Property:
               .name: success.codes
-              -Data: 1xx,2xx,3xx,429,5xx
+              -Data: 1xx,2xx,3xx,4xx,5xx
+        SSLInfo:
+          Enabled: true
+          Enforce: true
+          IgnoreValidationErrors: false
         Authentication:
           GoogleAccessToken:
             Scopes:
@@ -777,7 +816,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.filterMatchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPromptGemini.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -825,11 +864,21 @@ TargetEndpoints:
       HTTPTargetConnection:
         Properties:
           - Property:
+              .name: connect.timeout.millis
+              -Data: 5000
+          - Property:
               .name: io.timeout.millis
               -Data: 300000
           - Property:
+              .name: keepalive.timeout.millis
+              -Data: 50000
+          - Property:
               .name: success.codes
-              -Data: 1xx,2xx,3xx,429,5xx
+              -Data: 1xx,2xx,3xx,4xx,5xx
+        SSLInfo:
+          Enabled: true
+          Enforce: true
+          IgnoreValidationErrors: false
         Authentication:
           GoogleAccessToken:
             Scopes:
@@ -853,7 +902,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -908,11 +957,21 @@ TargetEndpoints:
       HTTPTargetConnection:
         Properties:
           - Property:
+              .name: connect.timeout.millis
+              -Data: 5000
+          - Property:
               .name: io.timeout.millis
               -Data: 300000
           - Property:
+              .name: keepalive.timeout.millis
+              -Data: 50000
+          - Property:
               .name: success.codes
-              -Data: 1xx,2xx,3xx,429,5xx
+              -Data: 1xx,2xx,3xx,4xx,5xx
+        SSLInfo:
+          Enabled: true
+          Enforce: true
+          IgnoreValidationErrors: false
         Authentication:
           GoogleAccessToken:
             Scopes:
@@ -936,7 +995,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
       PreFlow:
         .name: PreFlow
@@ -991,11 +1050,21 @@ TargetEndpoints:
       HTTPTargetConnection:
         Properties:
           - Property:
+              .name: connect.timeout.millis
+              -Data: 5000
+          - Property:
               .name: io.timeout.millis
               -Data: 300000
           - Property:
+              .name: keepalive.timeout.millis
+              -Data: 50000
+          - Property:
               .name: success.codes
-              -Data: 1xx,2xx,3xx,429,5xx
+              -Data: 1xx,2xx,3xx,4xx,5xx
+        SSLInfo:
+          Enabled: true
+          Enforce: true
+          IgnoreValidationErrors: false
         URL: https://api.openai.com/v1/chat/completions
 
   - TargetEndpoint:
@@ -1015,7 +1084,7 @@ TargetEndpoints:
                 Name: JS-inject-deidentified-finding
             - Step:
                 Name: AM-CustomError
-            - Condition: (SanitizeUserPrompt.SUP-SanitizeUserPrompt.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeUserPrompt.SUP-SanitizeUserPrompt.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
+            - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
       {{- end }}
 
       PreFlow:
@@ -1071,11 +1140,21 @@ TargetEndpoints:
       HTTPTargetConnection:
         Properties:
           - Property:
+              .name: connect.timeout.millis
+              -Data: 5000
+          - Property:
               .name: io.timeout.millis
               -Data: 300000
           - Property:
+              .name: keepalive.timeout.millis
+              -Data: 50000
+          - Property:
               .name: success.codes
-              -Data: 1xx,2xx,3xx,429,5xx
+              -Data: 1xx,2xx,3xx,4xx,5xx
+        SSLInfo:
+          Enabled: true
+          Enforce: true
+          IgnoreValidationErrors: false
         Authentication:
           GoogleAccessToken:
             Scopes:

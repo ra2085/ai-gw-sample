@@ -35,7 +35,17 @@ ServiceCallout:
   Response: fallbackResponse
   HTTPTargetConnection:
     Properties:
-      Property:
-        .name: io.timeout.millis
-        -Data: 60000
+      - Property:
+          .name: connect.timeout.millis
+          -Data: 5000
+      - Property:
+          .name: io.timeout.millis
+          -Data: 180000
+      - Property:
+          .name: keepalive.timeout.millis
+          -Data: 50000
+    SSLInfo:
+      Enabled: true
+      Enforce: true
+      IgnoreValidationErrors: false
     URL: https://{fallback_target_host}/{fallback_target_path}

@@ -29,7 +29,7 @@
       </Step>
       <Step>
         <Name>JS-resolve-auth-persona</Name>
-        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true")</Condition>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))</Condition>
       </Step>
       <Step>
         <Name>OA-ImportExternalToken</Name>
@@ -60,6 +60,7 @@
       </Step>
       <Step>
         <Name>AM-NormalizePathSuffix</Name>
+        <Condition>(proxy.pathsuffix = "") or (proxy.pathsuffix = null)</Condition>
       </Step>
     </Request>
     <Response/>
@@ -67,7 +68,7 @@
   <Flows>
     <Flow name="listModels">
       <Description>List available models</Description>
-      <Condition>(request.verb = "GET") AND ((proxy.pathsuffix MatchesPath "") OR (proxy.pathsuffix MatchesPath "/"))</Condition>
+      <Condition>(request.verb = "GET") AND ((proxy.pathsuffix = "") OR (proxy.pathsuffix = "/"))</Condition>
       <Request/>
       <Response>
         <Step>

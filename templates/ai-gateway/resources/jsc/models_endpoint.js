@@ -19,26 +19,29 @@ try {
         });
     }
 
-    // Build model list dynamically from propertyset definitions
-    var models = [];
-    for (var i = 0; i < catalogIds.length; i++) {
-        var modelId = catalogIds[i].trim();
-        if (modelId) {
-            var displayName = context.getVariable("propertyset.model_locations." + modelId + ".display_name") || modelId;
-            var createdAt = context.getVariable("propertyset.model_locations." + modelId + ".created_at") || "2025-01-01T00:00:00Z";
-            var publisher = context.getVariable("propertyset.model_locations." + modelId + ".publisher") || "google";
-            
-            models.push({
-                "type": "model",
-                "id": modelId,
-                "display_name": displayName,
-                "created_at": createdAt,
-                "owned_by": publisher
-            });
-        }
+    function buildModelObject(id, dispOverride) {
+        var displayName = dispOverride || context.getVariable("propertyset.model_locations." + id + ".display_name") || id;
+        var createdAt = context.getVariable("propertyset.model_locations." + id + ".created_at") || "2025-01-01T00:00:00Z";
+        var publisher = context.getVariable("propertyset.model_locations." + id + ".publisher") || "google";
+        return {
+            "type": "model",
+            "id": id,
+            "display_name": displayName,
+            "created_at": createdAt,
+            "owned_by": publisher
+        };
     }
 
     if (pathSuffix === "" || pathSuffix === "/") {
+        // Build model list dynamically from propertyset definitions only when listing all models
+        var models = [];
+        for (var i = 0; i < catalogIds.length; i++) {
+            var modelId = catalogIds[i].trim();
+            if (modelId) {
+                models.push(buildModelObject(modelId, null));
+            }
+        }
+
         // List Models
         var responsePayload = {
             "object": "list",
@@ -60,24 +63,18 @@ try {
         var effectiveId = aliasTarget || requestedId;
 
         var foundModel = null;
-        for (var j = 0; j < models.length; j++) {
-            if (models[j].id === effectiveId) {
-                foundModel = models[j];
+        for (var j = 0; j < catalogIds.length; j++) {
+            if (catalogIds[j].trim() === effectiveId) {
+                foundModel = buildModelObject(effectiveId, null);
                 break;
             }
         }
 
         // If not found in catalog list, check direct propertyset definition
-        if (!foundModel) {
+        if (!foundModel && !allowedByProduct) {
             var dispName = context.getVariable("propertyset.model_locations." + effectiveId + ".display_name");
             if (dispName) {
-                foundModel = {
-                    "type": "model",
-                    "id": effectiveId,
-                    "display_name": dispName,
-                    "created_at": context.getVariable("propertyset.model_locations." + effectiveId + ".created_at") || "2025-01-01T00:00:00Z",
-                    "owned_by": context.getVariable("propertyset.model_locations." + effectiveId + ".publisher") || "google"
-                };
+                foundModel = buildModelObject(effectiveId, dispName);
             }
         }
 

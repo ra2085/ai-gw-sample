@@ -22,19 +22,26 @@ try {
     }));
 
     // 1. Normalize explicit API Key headers / query parameters into request.header.x-apikey
+    var qpApiKey = context.getVariable("request.queryparam.apikey") ||
+                   context.getVariable("request.queryparam.key");
     var explicitApiKey = context.getVariable("request.header.x-apikey") ||
                          context.getVariable("request.header.x-api-key") ||
                          context.getVariable("request.header.anthropic-api-key") ||
                          context.getVariable("request.header.x-goog-api-key") ||
                          context.getVariable("request.header.api-key") ||
-                         context.getVariable("request.queryparam.apikey") ||
-                         context.getVariable("request.queryparam.key");
+                         qpApiKey;
+    if (qpApiKey) {
+        context.removeVariable("request.queryparam.apikey");
+        context.removeVariable("request.queryparam.key");
+    }
 
+    var hasApiKey = false;
     if (explicitApiKey && String(explicitApiKey).trim() !== "") {
         var cleanKey = String(explicitApiKey).trim();
         context.setVariable("request.header.x-apikey", cleanKey);
         context.setVariable("client_id", cleanKey);
         context.setVariable("auth_has_apikey", "true");
+        hasApiKey = true;
     } else {
         context.setVariable("auth_has_apikey", "false");
     }
@@ -49,23 +56,25 @@ try {
 
             // Classify token format for first-request external verification routing
             var parts = bearerToken.split(".");
+            var tokenType = "idp_opaque";
             if (bearerToken.indexOf("ya29.") === 0) {
-                context.setVariable("auth_token_type", "agent_identity");
+                tokenType = "agent_identity";
             } else if (parts.length === 3 && bearerToken.indexOf("eyJ") === 0) {
-                context.setVariable("auth_token_type", "idp_jwt");
-            } else {
-                context.setVariable("auth_token_type", "idp_opaque");
+                tokenType = "idp_jwt";
             }
+            context.setVariable("auth_token_type", tokenType);
 
             // Allow passing an Apigee API key inside Authorization: Bearer <api-key>
             // (used by OpenAI SDK, Codex, Cursor, or claude-cli with ANTHROPIC_AUTH_TOKEN)
-            var allowBearerApiKey = context.getVariable("propertyset.config.auth_allow_bearer_api_key");
-            if (context.getVariable("auth_has_apikey") !== "true" &&
-                context.getVariable("auth_token_type") === "idp_opaque" &&
-                allowBearerApiKey !== "false") {
-                context.setVariable("request.header.x-apikey", bearerToken);
-                context.setVariable("client_id", bearerToken);
-                context.setVariable("auth_try_bearer_as_apikey", "true");
+            if (!hasApiKey && tokenType === "idp_opaque") {
+                var allowBearerApiKey = context.getVariable("propertyset.config.auth_allow_bearer_api_key");
+                if (allowBearerApiKey !== "false") {
+                    context.setVariable("request.header.x-apikey", bearerToken);
+                    context.setVariable("client_id", bearerToken);
+                    context.setVariable("auth_try_bearer_as_apikey", "true");
+                } else {
+                    context.setVariable("auth_try_bearer_as_apikey", "false");
+                }
             } else {
                 context.setVariable("auth_try_bearer_as_apikey", "false");
             }

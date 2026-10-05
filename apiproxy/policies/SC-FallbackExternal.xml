@@ -20,8 +20,15 @@
   <Response>fallbackResponse</Response>
   <HTTPTargetConnection>
     <Properties>
-      <Property name="io.timeout.millis">60000</Property>
+      <Property name="connect.timeout.millis">5000</Property>
+      <Property name="io.timeout.millis">180000</Property>
+      <Property name="keepalive.timeout.millis">50000</Property>
     </Properties>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
+      <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
     <URL>https://{fallback_target_host}/{fallback_target_path}</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

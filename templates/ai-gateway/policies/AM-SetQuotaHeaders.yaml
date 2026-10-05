@@ -79,6 +79,15 @@ AssignMessage:
       - Header:
           .name: X-Gateway-Model-Armor-Source
           -Data: '{model_armor_source}'
+      - Header:
+          .name: X-Gateway-Auth-Source
+          -Data: '{upstream_auth_source}'
+      - Header:
+          .name: X-Gateway-Provider-Account
+          -Data: '{openai_org_id}'
+      - Header:
+          .name: X-Gateway-Identity-Persona
+          -Data: '{identity_persona}'
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

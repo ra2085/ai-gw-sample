@@ -6,7 +6,7 @@ var targetName = context.getVariable("route.target") || context.getVariable("tar
 var bufferSize = context.getVariable("buffer_size");
 if (!bufferSize) {
     bufferSize = parseInt(context.getVariable("propertyset.extract_expressions.buffer_size")) || 10;
-    context.setVariable("buffer_size", bufferSize);
+    context.setVariable("buffer_size", String(bufferSize));
 }
 
 // Clear per-chunk export variables only if they were populated on the previous chunk
@@ -45,18 +45,24 @@ if (rawContent && dataIdx !== -1) {
                 var totalIn = uncachedIn + cacheRead + cacheWrite;
                 var totalT = totalIn + outTokens;
                 if (totalT > 0) {
-                    context.setVariable("prompt_tokens", totalIn);
-                    context.setVariable("usage_prompt_tokens", totalIn);
-                    context.setVariable("uncached_prompt_tokens", uncachedIn);
-                    context.setVariable("usage_uncached_prompt_tokens", uncachedIn);
-                    context.setVariable("cache_read_tokens", cacheRead);
-                    context.setVariable("usage_cache_read_tokens", cacheRead);
-                    context.setVariable("cache_write_tokens", cacheWrite);
-                    context.setVariable("usage_cache_write_tokens", cacheWrite);
-                    context.setVariable("thinking_tokens", thinkingTokens);
-                    context.setVariable("usage_thinking_tokens", thinkingTokens);
-                    context.setVariable("completion_tokens", outTokens);
-                    context.setVariable("usage_completion_tokens", outTokens);
+                    var totalInStr = String(totalIn);
+                    var uncachedInStr = String(uncachedIn);
+                    var cacheReadStr = String(cacheRead);
+                    var cacheWriteStr = String(cacheWrite);
+                    var thinkingStr = String(thinkingTokens);
+                    var outTokensStr = String(outTokens);
+                    context.setVariable("prompt_tokens", totalInStr);
+                    context.setVariable("usage_prompt_tokens", totalInStr);
+                    context.setVariable("uncached_prompt_tokens", uncachedInStr);
+                    context.setVariable("usage_uncached_prompt_tokens", uncachedInStr);
+                    context.setVariable("cache_read_tokens", cacheReadStr);
+                    context.setVariable("usage_cache_read_tokens", cacheReadStr);
+                    context.setVariable("cache_write_tokens", cacheWriteStr);
+                    context.setVariable("usage_cache_write_tokens", cacheWriteStr);
+                    context.setVariable("thinking_tokens", thinkingStr);
+                    context.setVariable("usage_thinking_tokens", thinkingStr);
+                    context.setVariable("completion_tokens", outTokensStr);
+                    context.setVariable("usage_completion_tokens", outTokensStr);
                     context.setVariable("usage_total_tokens", totalT.toFixed(0));
                     context.setVariable("stream_tokens_already_counted", "true");
                 }
@@ -72,10 +78,10 @@ if (rawContent && dataIdx !== -1) {
                     var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
                     var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
                     if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
-                        context.setVariable("saved_stream_prompt_tokens", inT);
-                        context.setVariable("saved_stream_cached_tokens", cachedT);
-                        context.setVariable("saved_stream_completion_tokens", outT);
-                        context.setVariable("saved_stream_thinking_tokens", thoughtsT);
+                        context.setVariable("saved_stream_prompt_tokens", String(inT));
+                        context.setVariable("saved_stream_cached_tokens", String(cachedT));
+                        context.setVariable("saved_stream_completion_tokens", String(outT));
+                        context.setVariable("saved_stream_thinking_tokens", String(thoughtsT));
                     }
                 }
 
@@ -122,13 +128,13 @@ if (rawContent && dataIdx !== -1) {
                     if (parsedEvent.type === "message_start") {
                         var msgStartUsage = (parsedEvent.message && parsedEvent.message.usage) ? parsedEvent.message.usage : {};
                         if (msgStartUsage.input_tokens !== undefined) {
-                            context.setVariable("saved_stream_uncached_prompt_tokens", msgStartUsage.input_tokens);
+                            context.setVariable("saved_stream_uncached_prompt_tokens", String(msgStartUsage.input_tokens));
                         }
                         if (msgStartUsage.cache_read_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cached_tokens", msgStartUsage.cache_read_input_tokens);
+                            context.setVariable("saved_stream_cached_tokens", String(msgStartUsage.cache_read_input_tokens));
                         }
                         if (msgStartUsage.cache_creation_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cache_write_tokens", msgStartUsage.cache_creation_input_tokens);
+                            context.setVariable("saved_stream_cache_write_tokens", String(msgStartUsage.cache_creation_input_tokens));
                         }
                         if (parsedEvent.message && parsedEvent.message.id) {
                             context.setVariable("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
@@ -138,16 +144,16 @@ if (rawContent && dataIdx !== -1) {
                     } else if (parsedEvent.type === "message_delta") {
                         if (parsedEvent.usage) {
                             if (parsedEvent.usage.input_tokens !== undefined) {
-                                context.setVariable("saved_stream_uncached_prompt_tokens", parsedEvent.usage.input_tokens);
+                                context.setVariable("saved_stream_uncached_prompt_tokens", String(parsedEvent.usage.input_tokens));
                             }
                             if (parsedEvent.usage.cache_read_input_tokens !== undefined) {
-                                context.setVariable("saved_stream_cached_tokens", parsedEvent.usage.cache_read_input_tokens);
+                                context.setVariable("saved_stream_cached_tokens", String(parsedEvent.usage.cache_read_input_tokens));
                             }
                             if (parsedEvent.usage.cache_creation_input_tokens !== undefined) {
-                                context.setVariable("saved_stream_cache_write_tokens", parsedEvent.usage.cache_creation_input_tokens);
+                                context.setVariable("saved_stream_cache_write_tokens", String(parsedEvent.usage.cache_creation_input_tokens));
                             }
                             if (parsedEvent.usage.output_tokens !== undefined) {
-                                context.setVariable("saved_stream_completion_tokens", parsedEvent.usage.output_tokens);
+                                context.setVariable("saved_stream_completion_tokens", String(parsedEvent.usage.output_tokens));
                             }
                         }
                         finishReason = "stop";
@@ -209,11 +215,11 @@ if (rawContent && dataIdx !== -1) {
                         var outT = parsedEvent.usage.completion_tokens || 0;
                         var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
                         if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
-                            context.setVariable("saved_stream_prompt_tokens", inT);
-                            context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
-                            context.setVariable("saved_stream_cached_tokens", cachedT);
-                            context.setVariable("saved_stream_completion_tokens", outT);
-                            context.setVariable("saved_stream_thinking_tokens", reasoningT);
+                            context.setVariable("saved_stream_prompt_tokens", String(inT));
+                            context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
+                            context.setVariable("saved_stream_cached_tokens", String(cachedT));
+                            context.setVariable("saved_stream_completion_tokens", String(outT));
+                            context.setVariable("saved_stream_thinking_tokens", String(reasoningT));
                         }
                     }
 
@@ -272,16 +278,16 @@ if (rawContent && dataIdx !== -1) {
                     var claudeUsage = parsedEvent.usage || (parsedEvent.message && parsedEvent.message.usage);
                     if (claudeUsage) {
                         if (claudeUsage.input_tokens !== undefined) {
-                            context.setVariable("saved_stream_uncached_prompt_tokens", claudeUsage.input_tokens);
+                            context.setVariable("saved_stream_uncached_prompt_tokens", String(claudeUsage.input_tokens));
                         }
                         if (claudeUsage.cache_read_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cached_tokens", claudeUsage.cache_read_input_tokens);
+                            context.setVariable("saved_stream_cached_tokens", String(claudeUsage.cache_read_input_tokens));
                         }
                         if (claudeUsage.cache_creation_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cache_write_tokens", claudeUsage.cache_creation_input_tokens);
+                            context.setVariable("saved_stream_cache_write_tokens", String(claudeUsage.cache_creation_input_tokens));
                         }
                         if (claudeUsage.output_tokens !== undefined) {
-                            context.setVariable("saved_stream_completion_tokens", claudeUsage.output_tokens);
+                            context.setVariable("saved_stream_completion_tokens", String(claudeUsage.output_tokens));
                         }
                     }
 
@@ -311,11 +317,11 @@ if (rawContent && dataIdx !== -1) {
                             var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
                             var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
                             if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
-                                context.setVariable("saved_stream_prompt_tokens", inT);
-                                context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
-                                context.setVariable("saved_stream_cached_tokens", cachedT);
-                                context.setVariable("saved_stream_completion_tokens", outT + thoughtsT);
-                                context.setVariable("saved_stream_thinking_tokens", thoughtsT);
+                                context.setVariable("saved_stream_prompt_tokens", String(inT));
+                                context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
+                                context.setVariable("saved_stream_cached_tokens", String(cachedT));
+                                context.setVariable("saved_stream_completion_tokens", String(outT + thoughtsT));
+                                context.setVariable("saved_stream_thinking_tokens", String(thoughtsT));
                             }
                         }
                         if (finishReason) {
@@ -333,11 +339,11 @@ if (rawContent && dataIdx !== -1) {
                             var outT = parsedEvent.usage.completion_tokens || 0;
                             var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
                             if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
-                                context.setVariable("saved_stream_prompt_tokens", inT);
-                                context.setVariable("saved_stream_uncached_prompt_tokens", Math.max(0, inT - cachedT));
-                                context.setVariable("saved_stream_cached_tokens", cachedT);
-                                context.setVariable("saved_stream_completion_tokens", outT);
-                                context.setVariable("saved_stream_thinking_tokens", reasoningT);
+                                context.setVariable("saved_stream_prompt_tokens", String(inT));
+                                context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
+                                context.setVariable("saved_stream_cached_tokens", String(cachedT));
+                                context.setVariable("saved_stream_completion_tokens", String(outT));
+                                context.setVariable("saved_stream_thinking_tokens", String(reasoningT));
                             }
                         }
                         if (finishReason) {
@@ -368,7 +374,7 @@ if (rawContent && dataIdx !== -1) {
                     var msgId = parsedEvent.id ? parsedEvent.id.replace("chatcmpl-", "msg_") : "msg_stream";
                     
                     if (!sentStart) {
-                        context.setVariable("sent_message_start", true);
+                        context.setVariable("sent_message_start", "true");
                         
                         // 1. message_start
                         var msgStart = {
