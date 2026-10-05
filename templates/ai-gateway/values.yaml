@@ -354,7 +354,7 @@ models:
   #   # openai_project_id: "proj-your-openai-project"
   #   auth:
   #     type: "bearer"
-  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key"
+  #     token_ref: "propertyset.provider_keys.openai_api_key"
   #   pricing:
   #     input_rate: 2.500
   #     output_rate: 15.000
@@ -373,7 +373,7 @@ models:
   #   auth:
   #     type: "header"
   #     header_name: "x-api-key"
-  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.anthropic_api_key"
+  #     token_ref: "propertyset.provider_keys.anthropic_api_key"
   #   pricing:
   #     input_rate: 3.000
   #     output_rate: 15.000
@@ -390,7 +390,7 @@ models:
   #   upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
   #   auth:
   #     type: "bearer"
-  #     token_ref: "verifyapikey.VA-ApiKey.apiproduct.vllm_api_key"
+  #     token_ref: "propertyset.provider_keys.vllm_api_key"
   #   pricing:
   #     input_rate: 0.050
   #     output_rate: 0.150

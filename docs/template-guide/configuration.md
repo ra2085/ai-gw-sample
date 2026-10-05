@@ -255,7 +255,7 @@ models:
     auth:                                             # Optional: upstream credentials for custom_url endpoints
       type: "bearer"                                  # bearer | header | none
       header_name: "Authorization"                    # e.g., "x-api-key" for Direct Anthropic or "api-key" for Azure OpenAI
-      token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key" # Recommended: runtime variable reference (no secrets in Git)
+      token_ref: "propertyset.provider_keys.openai_api_key" # Recommended: Apigee Environment PropertySet reference (no secrets in Git)
       token: ""                                       # Optional fallback: literal token (for local/dev testing only)
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
       request_template: "frontier-request-template"

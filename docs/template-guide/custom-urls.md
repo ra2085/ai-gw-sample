@@ -88,7 +88,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
 === "3. Direct Anthropic (`api.anthropic.com`) & BYO Claude"
     **How it works:** Routes directly to Anthropic's first-party API (`https://api.anthropic.com/v1/messages`) or a custom Anthropic-compatible proxy (e.g., AWS Bedrock gateway / LiteLLM):
 
-    * **Authentication (`x-api-key` + `token_ref`):** Direct Anthropic authenticates via the `x-api-key` HTTP header. Use `auth.token_ref` to reference the secret from an Apigee API Product custom attribute or Environment PropertySet rather than hardcoding the key in Git.
+    * **Authentication (`x-api-key` + `token_ref`):** Direct Anthropic authenticates via the `x-api-key` HTTP header. Reference your key from an Apigee Environment PropertySet (`propertyset.provider_keys.anthropic_api_key`)—see **[Section 2](#2-storing-provider-api-keys-in-an-apigee-propertyset)** below—rather than hardcoding secrets in Git.
     * **Workspace Isolation:** Unlike OpenAI, Anthropic does not use organization/project headers—each Anthropic API key (`sk-ant-api03-...`) is already bound to a specific **Anthropic Workspace** in the Anthropic Console.
     * **Headers & Model ID (`anthropic_version`, `anthropic_beta`, `upstream_model`):** When `custom_url` is set, the gateway automatically sets the `anthropic-version: 2023-06-01` HTTP header, omits `vertex-2023-10-16` from the JSON body for `api.anthropic.com`, optionally injects `anthropic-beta` headers, and preserves/rewrites `"model"` in the JSON payload.
 
@@ -107,8 +107,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         auth:
           type: "header"
           header_name: "x-api-key"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.anthropic_api_key"
-          # token: "sk-ant-..."                           # Optional literal fallback (for local/dev testing only)
+          token_ref: "propertyset.provider_keys.anthropic_api_key"
         pricing:
           input_rate: 3.000
           output_rate: 15.000
@@ -117,12 +116,12 @@ Select a provider recipe below to copy its `values.yaml` configuration:
     ```
 
 === "4. Direct OpenAI (`api.openai.com`)"
-    **How it works:** Routes to OpenAI (`https://api.openai.com/v1/chat/completions`) while keeping OpenAI API keys managed centrally in Apigee:
+    **How it works:** Routes to OpenAI (`https://api.openai.com/v1/chat/completions`) while keeping OpenAI API keys stored in an Apigee Environment PropertySet:
 
-    * **Authentication (`bearer` + `token_ref`):** Injects `Authorization: Bearer <token>` resolved from `auth.token_ref` (or per-client/per-product custom attributes).
+    * **Authentication (`bearer` + `token_ref`):** Injects `Authorization: Bearer <token>` resolved from `propertyset.provider_keys.openai_api_key` (see **[Section 2](#2-storing-provider-api-keys-in-an-apigee-propertyset)** below).
     * **Are `openai_org_id` and `openai_project_id` needed?**
         * **With modern Project API Keys (`sk-proj-...`):** **No.** Modern OpenAI Project keys are already cryptographically scoped to a single Organization and Project inside OpenAI.
-        * **With legacy User/Admin Keys (`sk-...`):** **Optional.** If a single legacy key spans multiple OpenAI organizations or projects, you can set `openai_org_id` and `openai_project_id` on the model (or as custom attributes on the Apigee **API Product** / **Developer App**) to inject `OpenAI-Organization` and `OpenAI-Project` headers on outbound requests.
+        * **With legacy User/Admin Keys (`sk-...`):** **Optional.** If a single legacy key spans multiple OpenAI organizations or projects, you can set `openai_org_id` and `openai_project_id` on the model to inject `OpenAI-Organization` and `OpenAI-Project` headers on outbound requests.
 
     ```yaml
     models:
@@ -138,8 +137,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         # openai_project_id: "proj-your-openai-project"
         auth:
           type: "bearer"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key"
-          # token: "sk-proj-..."                          # Optional literal fallback (for local/dev testing only)
+          token_ref: "propertyset.provider_keys.openai_api_key"
         pricing:
           input_rate: 2.500                               # $2.50 / 1M input tokens
           output_rate: 15.000                             # $15.00 / 1M output tokens
@@ -154,7 +152,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         custom_url: "https://api.openai.com/v1/chat/completions"
         auth:
           type: "bearer"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key"
+          token_ref: "propertyset.provider_keys.openai_api_key"
         pricing:
           input_rate: 0.150                               # $0.15 / 1M input tokens
           output_rate: 0.600                               # $0.60 / 1M output tokens
@@ -215,7 +213,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
         auth:
           type: "bearer"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.vllm_api_key"
+          token_ref: "propertyset.provider_keys.vllm_api_key"
         pricing:
           input_rate: 0.050
           output_rate: 0.150
@@ -230,7 +228,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         auth:
           type: "header"
           header_name: "api-key"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.azure_api_key"
+          token_ref: "propertyset.provider_keys.azure_api_key"
         pricing:
           input_rate: 2.500
           output_rate: 10.000
@@ -262,7 +260,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
         custom_url: "https://api.openai.com/v1/embeddings"
         auth:
           type: "bearer"
-          token_ref: "verifyapikey.VA-ApiKey.apiproduct.openai_api_key"
+          token_ref: "propertyset.provider_keys.openai_api_key"
         pricing:
           input_rate: 0.020               # $0.02 / 1M input tokens
           output_rate: 0.000
@@ -270,15 +268,49 @@ Select a provider recipe below to copy its `values.yaml` configuration:
 
 ---
 
-## 2. Managing Upstream API Keys Securely (`token_ref` vs `token`)
+## 2. Storing Provider API Keys in an Apigee PropertySet
 
-For external providers (`api.openai.com`, `api.anthropic.com`, Azure OpenAI, vLLM), **avoid hardcoding plaintext keys in `values.yaml`**. The gateway resolves upstream credentials dynamically per request in the following priority order (emitting the winning tier in the `X-Gateway-Auth-Source` response header):
+For external providers (`api.openai.com`, `api.anthropic.com`, Azure OpenAI, vLLM), keep your provider keys out of Git by storing them in an **Apigee Environment-Scoped PropertySet** (for example, `provider_keys`) and referencing them via `auth.token_ref`.
 
-| Priority | Source (`X-Gateway-Auth-Source`) | How to Configure | Best For |
-| :---: | :--- | :--- | :--- |
-| **1 (Highest)** | **`client_app`**<br>*(Developer App Attribute)* | Add custom attribute `<model>_api_key` or `<publisher>_api_key` (or `*_api_key_ref`) on the Apigee **Developer App** | Dedicated per-team or per-app BYO provider keys |
-| **2** | **`api_product`**<br>*(AI Product Attribute)* | Add custom attribute `<model>_api_key` or `<publisher>_api_key` (e.g., `openai_api_key`, `anthropic_api_key`) on the Apigee **API Product** | Multi-tenant department billing isolation per AI Product |
-| **3** | **`model_config`**<br>*(Model `auth.token_ref` / `auth.token`)* | Set `auth.token_ref` on the model in `values.yaml` to any runtime Apigee variable (e.g., `verifyapikey.VA-ApiKey.apiproduct.openai_api_key` or an environment-scoped PropertySet `propertyset.secrets.openai_api_key`). Falls back to `auth.token` if set. | Central gateway key shared across all callers of a model |
+### Step 1: Create a local `provider_keys.properties` file (do not commit to Git)
+
+```ini
+openai_api_key=sk-proj-your-openai-key
+anthropic_api_key=sk-ant-api03-your-anthropic-key
+vllm_api_key=your-internal-vllm-token
+azure_api_key=your-azure-openai-key
+```
+
+### Step 2: Upload the PropertySet to your Apigee Environment
+
+```bash
+apigeecli res create \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV" \
+    --name provider_keys \
+    --type properties \
+    --respath ./provider_keys.properties \
+    --default-token
+
+# Delete the local plaintext file once uploaded
+rm ./provider_keys.properties
+```
+
+*(To rotate a key later without redeploying the proxy, run `apigeecli res update --org "$PROJECT_ID" --env "$APIGEE_ENV" --name provider_keys --type properties --respath ./provider_keys.properties --default-token`).*
+
+### Step 3: Reference the PropertySet key in `values.yaml`
+
+```yaml
+models:
+  - name: "gpt-5.4"
+    publisher: "openai"
+    target: "openai-custom"
+    format: "openai"
+    custom_url: "https://api.openai.com/v1/chat/completions"
+    auth:
+      type: "bearer"
+      token_ref: "propertyset.provider_keys.openai_api_key"
+```
 
 ---
 
