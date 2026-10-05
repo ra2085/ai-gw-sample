@@ -99,6 +99,10 @@
         <Name>JS-resolve-model-location</Name>
       </Step>
       <Step>
+        <Name>RF-Unauthorized</Name>
+        <Condition>model_access_denied = "true"</Condition>
+      </Step>
+      <Step>
         <Name>LTQ-CircuitBreakerCheck</Name>
         <Condition>(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")</Condition>
       </Step>

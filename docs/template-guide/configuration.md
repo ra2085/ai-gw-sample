@@ -118,31 +118,87 @@ features:
       quota_override_claim: "ai_quota_override"
       token_ttl_ms: 3600000
     default_persona: "knowledge-worker"               # Optional fallback persona if an authenticated claim doesn't match
-    personas:                                         # Maps verified IdP claims or GCP identities (exact strings or '*' globs) to AI Products
+    default_client_id: ""                             # Optional shared fallback Consumer Key when personas omit client_id
+    personas:                                         # Unified AI Product & Persona definitions (compiled into config.properties + optional sync-personas.sh)
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business-*"]
-        client_id: "CONSUMER_KEY_FOR_KNOWLEDGE_WORKER_AI_PRODUCT"
+        client_id: "CONSUMER_KEY_FOR_KNOWLEDGE_WORKER_AI_PRODUCT" # Optional if default_client_id is set or synced via scripts/sync-personas.sh
+        models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "claude-haiku-4-5"] # Concrete catalog model IDs (or ["*"] for all catalog models)
+        quota:
+          limit: 100000                               # Per-user rolling token allowance
+          interval: 4
+          time_unit: "hour"                           # minute | hour | day | week | month
+        team_budget:
+          limit: 5000000                              # Shared department/team rolling token budget
+          interval: 7
+          time_unit: "day"
+        rate_limits:
+          burst: "300pm"                              # Per-user spike arrest override
+          concurrency: 10                             # Max simultaneous streams per user
         model_armor:
           request_template: "standard-request-template"
           response_template: "standard-response-template"
       developer:
         match_claims: ["developer", "engineering", "swe-*", "*-data-science"]
         client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
+        models: ["*"]                                 # Expands to all concrete catalog models in llmOperationGroup
+        quota:
+          limit: 500000                               # 500k tokens / 4 hours per engineer
+          interval: 4
+          time_unit: "hour"
+          per_model:                                  # Optional: cap expensive frontier models while leaving fast models uncapped
+            claude-sonnet-4-6: 50000
+            gemini-3.1-pro-preview: 100000
+        team_budget:
+          limit: 25000000
+          interval: 7
+          time_unit: "day"
+        rate_limits:
+          burst: "600pm"
+          concurrency: 20
         model_armor:
           request_template: "dev-permissive-prompt-template"
           response_template: "strict-dlp-response-template"
       it:
         match_claims: ["it", "platform-admin", "sre-*", "devops", "secops"]
         client_id: "CONSUMER_KEY_FOR_IT_AI_PRODUCT"
+        models: ["*"]
+        quota:
+          limit: 1000000
+          interval: 4
+          time_unit: "hour"
         model_armor:
           request_template: "it-admin-template"
           response_template: "none"
       agent:
         match_claims: ["principalSet://*.system.id.goog/*", "*@*.iam.gserviceaccount.com", "agent"]
         client_id: "CONSUMER_KEY_FOR_AGENT_AI_PRODUCT"
+        models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "text-embedding-005"]
+        quota:
+          limit: 2000000
+          interval: 1
+          time_unit: "hour"
+        rate_limits:
+          burst: "1200pm"
+          concurrency: 50
         model_armor:
           request_template: "agent-prompt-guard"
           response_template: "none"
+
+    # 9. Unified Identity & Team Exceptions (Quotas, Team Budgets, Model Access, Rate Limits & Model Armor)
+    exceptions:
+      - match: ["alice@corp.example.com"]             # Individual temporary token boost + frontier model unlock
+        quota_limit: 5000000                          # Overrides primary token quota (bypasses exhausted team budget while active)
+        expires_at: "2026-12-31T23:59:59Z"            # Optional ISO-8601 UTC auto-expiration timestamp
+        models: ["*"]                                 # Optional: unlocks specific models for this user/agent
+      - match: ["team:ml-research", "team:core-ai"]   # Department-level shared team budget override
+        team_budget_limit: 100000000                  # Overrides shared 7-day department pool to 100M tokens
+      - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
+        burst_rate: "1200pm"                          # Optional per-identity/team burst rate override
+        concurrency_limit: 50                         # Optional per-identity/team concurrency override
+        model_armor:
+          request_template: "strict-pci-dlp-template"
+          response_template: "strict-pci-dlp-template"
 ```
 
 ---

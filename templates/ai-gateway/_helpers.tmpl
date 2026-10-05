@@ -208,16 +208,96 @@ auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $a
 auth_idp_jwt_quota_override_claim={{ if and $auth.idp_jwt $auth.idp_jwt.quota_override_claim }}{{ $auth.idp_jwt.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
 auth_idp_jwt_token_ttl_ms={{ if and $auth.idp_jwt $auth.idp_jwt.token_ttl_ms }}{{ $auth.idp_jwt.token_ttl_ms }}{{ else }}3600000{{ end }}
 
-{{- if $auth.personas }}
+{{- $defaultClientId := $auth.default_client_id | default "" }}
+{{- if $defaultClientId }}
+auth_default_client_id={{ $defaultClientId }}
+{{- end }}
+{{- $personas := dict }}
+{{- if $.Values.personas }}
+{{- $personas = $.Values.personas }}
+{{- else if $auth.personas }}
+{{- $personas = $auth.personas }}
+{{- end }}
+{{- if $personas }}
 {{- $pNames := list -}}
-{{- range $pName, $_ := $auth.personas -}}
+{{- range $pName, $_ := $personas -}}
   {{- $pNames = append $pNames $pName -}}
 {{- end }}
 auth_personas_list={{ $pNames | sortAlpha | join "," }}
-auth_persona_default={{ $auth.default_persona | default "" }}
-{{- range $pName, $pCfg := $auth.personas }}
+auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
+{{- range $pName, $pCfg := $personas }}
 persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
-persona.{{ $pName }}.client_id={{ $pCfg.client_id | default "" }}
+persona.{{ $pName }}.client_id={{ $pCfg.client_id | default $defaultClientId }}
+{{- if or $pCfg.display_name $pCfg.displayName }}
+persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayName }}
+{{- end }}
+{{- if or $pCfg.models $pCfg.allowed_models }}
+persona.{{ $pName }}.models={{ if $pCfg.models }}{{ if kindIs "slice" $pCfg.models }}{{ $pCfg.models | join "," }}{{ else }}{{ $pCfg.models }}{{ end }}{{ else if kindIs "slice" $pCfg.allowed_models }}{{ $pCfg.allowed_models | join "," }}{{ else }}{{ $pCfg.allowed_models }}{{ end }}
+{{- end }}
+{{- if $pCfg.quota }}
+{{- if $pCfg.quota.limit }}
+persona.{{ $pName }}.quota_limit={{ $pCfg.quota.limit }}
+{{- end }}
+{{- if $pCfg.quota.interval }}
+persona.{{ $pName }}.quota_interval={{ $pCfg.quota.interval }}
+{{- end }}
+{{- if or $pCfg.quota.unit $pCfg.quota.time_unit }}
+persona.{{ $pName }}.quota_unit={{ $pCfg.quota.unit | default $pCfg.quota.time_unit }}
+{{- end }}
+{{- if $pCfg.quota.per_model }}
+{{- $pmList := list -}}
+{{- range $mName, $mLimit := $pCfg.quota.per_model }}
+persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mLimit }}
+{{- $pmList = append $pmList (printf "%s:%v" $mName $mLimit) -}}
+{{- end }}
+{{- if $pmList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmList | sortAlpha | join "," }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.quota_limit }}
+persona.{{ $pName }}.quota_limit={{ $pCfg.quota_limit }}
+{{- end }}
+{{- if $pCfg.quota_interval }}
+persona.{{ $pName }}.quota_interval={{ $pCfg.quota_interval }}
+{{- end }}
+{{- if or $pCfg.quota_unit $pCfg.quota_time_unit }}
+persona.{{ $pName }}.quota_unit={{ $pCfg.quota_unit | default $pCfg.quota_time_unit }}
+{{- end }}
+{{- if $pCfg.team_budget }}
+{{- if $pCfg.team_budget.limit }}
+persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_budget.limit }}
+{{- end }}
+{{- if $pCfg.team_budget.interval }}
+persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_budget.interval }}
+{{- end }}
+{{- if or $pCfg.team_budget.unit $pCfg.team_budget.time_unit }}
+persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_budget.unit | default $pCfg.team_budget.time_unit }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.team_quota_limit }}
+persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_quota_limit }}
+{{- end }}
+{{- if $pCfg.team_quota_interval }}
+persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_quota_interval }}
+{{- end }}
+{{- if $pCfg.team_quota_unit }}
+persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_quota_unit }}
+{{- end }}
+{{- if $pCfg.rate_limits }}
+{{- if or $pCfg.rate_limits.burst_rate $pCfg.rate_limits.burst }}
+persona.{{ $pName }}.burst_rate={{ $pCfg.rate_limits.burst_rate | default $pCfg.rate_limits.burst }}
+{{- end }}
+{{- if or $pCfg.rate_limits.concurrency_limit $pCfg.rate_limits.concurrency }}
+persona.{{ $pName }}.concurrency_limit={{ $pCfg.rate_limits.concurrency_limit | default $pCfg.rate_limits.concurrency }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.burst_rate }}
+persona.{{ $pName }}.burst_rate={{ $pCfg.burst_rate }}
+{{- end }}
+{{- if $pCfg.concurrency_limit }}
+persona.{{ $pName }}.concurrency_limit={{ $pCfg.concurrency_limit }}
+{{- end }}
 {{- if $pCfg.model_armor }}
 {{- if $pCfg.model_armor.template }}
 model_armor.persona.{{ $pName }}.template={{ $pCfg.model_armor.template }}
@@ -241,15 +321,15 @@ model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor_response
 {{- end }}
 {{- else }}
 auth_personas_list=knowledge-worker,developer,it,agent
-auth_persona_default={{ $auth.default_persona | default "" }}
+auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
 persona.knowledge-worker.match_claims=knowledge-worker,general,business
-persona.knowledge-worker.client_id=
+persona.knowledge-worker.client_id={{ $defaultClientId }}
 persona.developer.match_claims=developer,engineering,swe,data-science
-persona.developer.client_id=
+persona.developer.client_id={{ $defaultClientId }}
 persona.it.match_claims=it,platform-admin,sre,devops,secops
-persona.it.client_id=
+persona.it.client_id={{ $defaultClientId }}
 persona.agent.match_claims=agent,service-account,automation
-persona.agent.client_id=
+persona.agent.client_id={{ $defaultClientId }}
 {{- end }}
 {{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas }}
 {{- range $maPersona, $maCfg := $.Values.features.model_armor.personas }}
@@ -264,10 +344,55 @@ model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_templa
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.identity_rules }}
-model_armor_identity_rules_count={{ len $.Values.features.model_armor.identity_rules }}
-{{- range $idx, $rule := $.Values.features.model_armor.identity_rules }}
+{{- $allRules := list -}}
+{{- if $.Values.exceptions -}}
+  {{- range $.Values.exceptions -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if $auth.exceptions -}}
+  {{- range $auth.exceptions -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.identity_rules -}}
+  {{- range $.Values.features.model_armor.identity_rules -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if gt (len $allRules) 0 }}
+model_armor_identity_rules_count={{ len $allRules }}
+{{- range $idx, $rule := $allRules }}
 model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
+{{- if $rule.quota_limit }}
+model_armor.rule.{{ $idx }}.quota_limit={{ $rule.quota_limit }}
+{{- end }}
+{{- if $rule.expires_at }}
+model_armor.rule.{{ $idx }}.expires_at={{ $rule.expires_at }}
+{{- end }}
+{{- if or $rule.team_budget_limit $rule.team_quota_limit }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit | default $rule.team_quota_limit }}
+{{- end }}
+{{- if or $rule.models $rule.allowed_models }}
+model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $rule.models }}{{ $rule.models | join "," }}{{ else }}{{ $rule.models }}{{ end }}{{ else if kindIs "slice" $rule.allowed_models }}{{ $rule.allowed_models | join "," }}{{ else }}{{ $rule.allowed_models }}{{ end }}
+{{- end }}
+{{- if $rule.burst_rate }}
+model_armor.rule.{{ $idx }}.burst_rate={{ $rule.burst_rate }}
+{{- end }}
+{{- if $rule.concurrency_limit }}
+model_armor.rule.{{ $idx }}.concurrency_limit={{ $rule.concurrency_limit }}
+{{- end }}
+{{- if $rule.model_armor }}
+{{- if $rule.model_armor.template }}
+model_armor.rule.{{ $idx }}.template={{ $rule.model_armor.template }}
+{{- end }}
+{{- if $rule.model_armor.request_template }}
+model_armor.rule.{{ $idx }}.request_template={{ $rule.model_armor.request_template }}
+{{- end }}
+{{- if $rule.model_armor.response_template }}
+model_armor.rule.{{ $idx }}.response_template={{ $rule.model_armor.response_template }}
+{{- end }}
+{{- end }}
 {{- if $rule.template }}
 model_armor.rule.{{ $idx }}.template={{ $rule.template }}
 {{- end }}

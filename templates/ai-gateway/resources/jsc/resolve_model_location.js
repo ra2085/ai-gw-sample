@@ -461,209 +461,16 @@ try {
         return (s === "unset" || s === "null" || s === "undefined") ? "" : s;
     }
 
-    var vaClientId = context.getVariable("verifyapikey.VA-ApiKey.client_id");
-    var oauthClientId = context.getVariable("client_id");
-    var devAppName = context.getVariable("developer.app.name");
-    var apiProductName = context.getVariable("apiproduct.name");
-
-    var oauthUserId = cleanTokenAttr(context.getVariable("accesstoken.user_id")) || cleanTokenAttr(context.getVariable("auth_user_id"));
-    var identityUserId = oauthUserId ||
-                         context.getVariable("verifyapikey.VA-ApiKey.developer.email") ||
-                         context.getVariable("developer.email") ||
-                         vaClientId ||
-                         oauthClientId ||
-                         "anonymous";
-    var identityPersona = cleanTokenAttr(context.getVariable("accesstoken.persona")) ||
-                          cleanTokenAttr(context.getVariable("auth_persona")) ||
-                          context.getVariable("verifyapikey.VA-ApiKey.persona") ||
-                          context.getVariable("apiproduct.persona") ||
-                          context.getVariable("verifyapikey.VA-ApiKey.apiproduct.name") ||
-                          apiProductName ||
-                          "default";
-    var identityTeam = cleanTokenAttr(context.getVariable("accesstoken.team")) ||
-                       cleanTokenAttr(context.getVariable("auth_team")) ||
-                       context.getVariable("verifyapikey.VA-ApiKey.team") ||
-                       context.getVariable("apiproduct.team") ||
-                       "default";
-    var identityAuthType = cleanTokenAttr(context.getVariable("accesstoken.auth_source")) ||
-                           cleanTokenAttr(context.getVariable("auth_token_type")) ||
-                           (vaClientId ? "apikey" : (oauthClientId ? "oauth" : "none"));
-
-    context.setVariable("identity_user_id", identityUserId);
-    context.setVariable("identity_persona", identityPersona);
-    context.setVariable("identity_team", identityTeam);
-    context.setVariable("identity_auth_type", identityAuthType);
-    context.setVariable("response.header.X-Gateway-Identity-Persona", identityPersona);
-
-    // Bridge OAuth / Imported Token identity & API Product quotas to VA-ApiKey variables
-    // so LLMTokenQuota (which references stepName="VA-ApiKey") enforces per-user buckets under the Persona product
-    if (oauthUserId || !vaClientId) {
-        var effectiveQuotaClientId = oauthUserId || vaClientId || oauthClientId || devAppName;
-        if (effectiveQuotaClientId) {
-            context.setVariable("verifyapikey.VA-ApiKey.client_id", effectiveQuotaClientId);
-            vaClientId = effectiveQuotaClientId;
+    function isTimestampExpired(expVal) {
+        if (!expVal || String(expVal).trim() === "") return false;
+        var expStr = String(expVal).trim();
+        var expMs = /^[0-9]+$/.test(expStr) ? parseInt(expStr, 10) : Date.parse(expStr);
+        if (!isNaN(expMs) && expMs < 100000000000) {
+            expMs = expMs * 1000; // Convert Unix seconds to milliseconds if needed
         }
+        return (!isNaN(expMs) && Date.now() >= expMs);
     }
 
-    var rawQuotaOverride = cleanTokenAttr(context.getVariable("accesstoken.quota_override")) ||
-                           cleanTokenAttr(context.getVariable("auth_quota_override")) ||
-                           context.getVariable("verifyapikey.VA-ApiKey.quota_override") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.quota_limit") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_limit");
-    var quotaOverrideExpiresAt = cleanTokenAttr(context.getVariable("accesstoken.quota_override_expires_at")) ||
-                                 cleanTokenAttr(context.getVariable("auth_quota_override_expires_at")) ||
-                                 context.getVariable("verifyapikey.VA-ApiKey.quota_override_expires_at") ||
-                                 context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override_expires_at");
-    var primaryQuotaOverride = "";
-    var quotaExceptionActive = false;
-    if (rawQuotaOverride) {
-        var isExpired = false;
-        if (quotaOverrideExpiresAt && String(quotaOverrideExpiresAt).trim() !== "") {
-            var expStr = String(quotaOverrideExpiresAt).trim();
-            var expMs = /^[0-9]+$/.test(expStr) ? parseInt(expStr, 10) : Date.parse(expStr);
-            if (!isNaN(expMs) && expMs < 100000000000) {
-                expMs = expMs * 1000; // Convert Unix seconds to milliseconds if needed
-            }
-            if (!isNaN(expMs) && Date.now() >= expMs) {
-                isExpired = true;
-            }
-        }
-        if (!isExpired) {
-            primaryQuotaOverride = String(rawQuotaOverride);
-            quotaExceptionActive = true;
-        }
-    }
-    context.setVariable("quota_exception_active", quotaExceptionActive ? "true" : "false");
-
-    var oauthProductQuotaLimit = context.getVariable("apiproduct.developer.quota.limit");
-    var oauthLlmQuotaLimit = context.getVariable("apiproduct.developer.llmQuota.limit");
-    if (primaryQuotaOverride) {
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(primaryQuotaOverride));
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(primaryQuotaOverride));
-    } else {
-        if (oauthProductQuotaLimit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit")) {
-            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(oauthProductQuotaLimit));
-        }
-        if (oauthLlmQuotaLimit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit")) {
-            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(oauthLlmQuotaLimit));
-        }
-    }
-    var oauthProductQuotaInterval = context.getVariable("apiproduct.developer.quota.interval");
-    if (oauthProductQuotaInterval && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval")) {
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval", String(oauthProductQuotaInterval));
-    }
-    var oauthLlmQuotaInterval = context.getVariable("apiproduct.developer.llmQuota.interval");
-    if (oauthLlmQuotaInterval && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval")) {
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval", String(oauthLlmQuotaInterval));
-    }
-    var oauthProductQuotaTimeunit = context.getVariable("apiproduct.developer.quota.timeunit");
-    if (oauthProductQuotaTimeunit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit")) {
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit", String(oauthProductQuotaTimeunit));
-    }
-    var oauthLlmQuotaTimeunit = context.getVariable("apiproduct.developer.llmQuota.timeunit");
-    if (oauthLlmQuotaTimeunit && !context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit")) {
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit", String(oauthLlmQuotaTimeunit));
-    }
-
-    // Burst Rate & Concurrency Client Identifier Resolution
-    var rateLimitClientId = oauthUserId ||
-                            vaClientId ||
-                            oauthClientId ||
-                            devAppName ||
-                            context.getVariable("client.ip") ||
-                            "default_client";
-    context.setVariable("rate_limit_client_id", rateLimitClientId);
-
-    // Secondary Quota Window / Shared Team Budget Resolution (Token Claim -> App -> Developer -> API Product)
-    var teamQuotaLimit = context.getVariable("verifyapikey.VA-ApiKey.team_quota_limit") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.developer.team_quota_limit") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_limit") ||
-                         context.getVariable("apiproduct.team_quota_limit");
-    var secScope = context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_scope") ||
-                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_scope") ||
-                   context.getVariable("apiproduct.secondary_quota_scope") ||
-                   (teamQuotaLimit ? "team" : "user");
-    context.setVariable("secondary_quota_scope", secScope);
-
-    // If configured as a shared Team Budget (secScope === "team"), all team members share bucket "team:<identity_team>"
-    // unless the user has an active individual exception (quotaExceptionActive), which isolates their bucket so they
-    // can continue working even when the shared team budget is exhausted.
-    var secondaryQuotaIdentifier = (secScope === "team" && !quotaExceptionActive)
-                                   ? ("team:" + identityTeam)
-                                   : rateLimitClientId;
-    context.setVariable("secondary_quota_identifier", secondaryQuotaIdentifier);
-
-    var secLimit = (quotaExceptionActive ? primaryQuotaOverride : "") ||
-                   context.getVariable("accesstoken.secondary_quota_limit") ||
-                   context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_limit") ||
-                   context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_limit") ||
-                   teamQuotaLimit ||
-                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit") ||
-                   context.getVariable("apiproduct.secondary_quota_limit");
-    if (secLimit) {
-        var secLimitStr = String(secLimit);
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit", secLimitStr);
-        context.setVariable("secondary_quota_limit", secLimitStr);
-    }
-    var secInterval = context.getVariable("accesstoken.secondary_quota_interval") ||
-                      context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_interval") ||
-                      context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_interval") ||
-                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_interval") ||
-                      context.getVariable("apiproduct.team_quota_interval") ||
-                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval") ||
-                      context.getVariable("apiproduct.secondary_quota_interval");
-    if (secInterval) {
-        var secIntervalStr = String(secInterval);
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval", secIntervalStr);
-        context.setVariable("secondary_quota_interval", secIntervalStr);
-    }
-    var secUnit = context.getVariable("accesstoken.secondary_quota_unit") ||
-                  context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_unit") ||
-                  context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_unit") ||
-                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_unit") ||
-                  context.getVariable("apiproduct.team_quota_unit") ||
-                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit") ||
-                  context.getVariable("apiproduct.secondary_quota_unit");
-    if (secUnit) {
-        var secUnitStr = String(secUnit);
-        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit", secUnitStr);
-        context.setVariable("secondary_quota_unit", secUnitStr);
-    }
-
-    var burstRateLimit = context.getVariable("accesstoken.burst_rate") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate_limit") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate_limit") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate") ||
-                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate_limit") ||
-                         context.getVariable("apiproduct.burst_rate") ||
-                         context.getVariable("apiproduct.burst_rate_limit") ||
-                         context.getVariable("propertyset.config.default_burst_rate") ||
-                         "600pm";
-    context.setVariable("burst_rate_limit", burstRateLimit);
-
-    var concurrencyLimit = context.getVariable("accesstoken.concurrency_limit") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.concurrency_limit") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.developer.concurrency_limit") ||
-                           context.getVariable("verifyapikey.VA-ApiKey.apiproduct.concurrency_limit") ||
-                           context.getVariable("apiproduct.concurrency_limit") ||
-                           context.getVariable("propertyset.config.default_concurrency_limit") ||
-                           "20";
-    context.setVariable("concurrency_limit", String(concurrencyLimit));
-
-    // -------------------------------------------------------------------------
-    // 6. Context-Aware Model Armor Template Resolution (Request vs. Response)
-    // Precedence (evaluated independently for Request & Response phases):
-    //   1a. Identity Token Claim (OAuth/JWT/Agent token attribute)
-    //   1b. Identity Glob Rules (features.model_armor.identity_rules)
-    //   2.  Developer App / Developer Custom Attributes
-    //   3a. Persona Configuration (features.auth.personas / features.model_armor.personas)
-    //   3b. API Product Custom Attributes
-    //   4.  Model-Specific Configuration (models.<model>.model_armor)
-    //   5.  Global Default Configuration (features.model_armor)
-    // -------------------------------------------------------------------------
     function matchesArmorGlob(str, pattern) {
         if (pattern === "*" || str === pattern) return true;
         if (pattern.indexOf("*") === -1) return false;
@@ -715,6 +522,412 @@ try {
         return (isExact ? 40500 : 30000) + literalLen;
     }
 
+    var vaClientId = context.getVariable("verifyapikey.VA-ApiKey.client_id");
+    var oauthClientId = context.getVariable("client_id");
+    var devAppName = context.getVariable("developer.app.name");
+    var apiProductName = context.getVariable("apiproduct.name");
+
+    var oauthUserId = cleanTokenAttr(context.getVariable("accesstoken.user_id")) || cleanTokenAttr(context.getVariable("auth_user_id"));
+    var identityUserId = oauthUserId ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.email") ||
+                         context.getVariable("developer.email") ||
+                         vaClientId ||
+                         oauthClientId ||
+                         "anonymous";
+    var identityPersona = cleanTokenAttr(context.getVariable("accesstoken.persona")) ||
+                          cleanTokenAttr(context.getVariable("auth_persona")) ||
+                          context.getVariable("verifyapikey.VA-ApiKey.persona") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.developer.persona") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.apiproduct.persona") ||
+                          context.getVariable("apiproduct.persona") ||
+                          context.getVariable("verifyapikey.VA-ApiKey.apiproduct.name") ||
+                          apiProductName ||
+                          context.getVariable("propertyset.config.auth_persona_default") ||
+                          "default";
+
+    // Normalize API Product name "<gateway>-<persona>" to "<persona>" if matching configured persona
+    if (identityPersona && !context.getVariable("propertyset.config.persona." + identityPersona + ".match_claims")) {
+        var knownPersonasCsv = context.getVariable("propertyset.config.auth_personas_list") || "";
+        if (knownPersonasCsv) {
+            var knownPersonas = knownPersonasCsv.split(",");
+            var lowerIdPersona = String(identityPersona).toLowerCase();
+            for (var kp = 0; kp < knownPersonas.length; kp++) {
+                var candPersona = knownPersonas[kp].trim();
+                if (!candPersona) continue;
+                var suffix = "-" + candPersona.toLowerCase();
+                if (lowerIdPersona.length > suffix.length &&
+                    lowerIdPersona.lastIndexOf(suffix) === lowerIdPersona.length - suffix.length) {
+                    identityPersona = candPersona;
+                    break;
+                }
+            }
+        }
+    }
+
+    var identityTeam = cleanTokenAttr(context.getVariable("accesstoken.team")) ||
+                       cleanTokenAttr(context.getVariable("auth_team")) ||
+                       context.getVariable("verifyapikey.VA-ApiKey.team") ||
+                       context.getVariable("verifyapikey.VA-ApiKey.developer.team") ||
+                       context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team") ||
+                       context.getVariable("apiproduct.team") ||
+                       "default";
+    var identityAuthType = cleanTokenAttr(context.getVariable("accesstoken.auth_source")) ||
+                           cleanTokenAttr(context.getVariable("auth_token_type")) ||
+                           (vaClientId ? "apikey" : (oauthClientId ? "oauth" : "none"));
+
+    var safePersona = isSafeSegment(identityPersona) ? identityPersona : "default";
+    context.setVariable("identity_user_id", identityUserId);
+    context.setVariable("identity_persona", identityPersona);
+    context.setVariable("identity_team", identityTeam);
+    context.setVariable("identity_auth_type", identityAuthType);
+    context.setVariable("response.header.X-Gateway-Identity-Persona", safePersona);
+
+    // Evaluate Unified Identity & Exception Rules (Quotas, Team Budgets, Models, Rate Limits, Model Armor)
+    var ruleQuotaLimit = "";
+    var ruleTeamBudgetLimit = "";
+    var ruleAllowedModels = "";
+    var ruleBurstRate = "";
+    var ruleConcurrencyLimit = "";
+    var ruleReqTemplate = "";
+    var ruleRespTemplate = "";
+    var rulesCount = parseInt(context.getVariable("propertyset.config.model_armor_identity_rules_count") || "0", 10);
+    if (rulesCount > 0) {
+        var lowerUserId = String(identityUserId || "").toLowerCase();
+        var lowerTeam = String(identityTeam || "").toLowerCase();
+        var lowerPersona = String(safePersona || "").toLowerCase();
+        var identityCandidates = [lowerUserId];
+        if (lowerUserId.indexOf("principal://") === 0) {
+            identityCandidates.push(lowerUserId.replace(/^principal:\/\//, "spiffe://"));
+        } else if (lowerUserId.indexOf("spiffe://") === 0) {
+            identityCandidates.push(lowerUserId.replace(/^spiffe:\/\//, "principal://"));
+        }
+        if (lowerTeam && lowerTeam !== "default") {
+            identityCandidates.push("team:" + lowerTeam);
+            if (lowerTeam.indexOf("project:") === 0) {
+                identityCandidates.push(lowerTeam);
+            }
+        }
+        if (lowerPersona && lowerPersona !== "default") {
+            identityCandidates.push("persona:" + lowerPersona);
+        }
+
+        var bestQuotaScore = -1;
+        var bestTeamBudgetScore = -1;
+        var bestModelsScore = -1;
+        var bestBurstScore = -1;
+        var bestConcurrencyScore = -1;
+        var bestReqScore = -1;
+        var bestRespScore = -1;
+
+        for (var r = 0; r < rulesCount; r++) {
+            var rulePrefix = "propertyset.config.model_armor.rule." + r + ".";
+            var ruleMatchCsv = context.getVariable(rulePrefix + "match") || "";
+            if (!ruleMatchCsv) continue;
+            var rawRulePatterns = ruleMatchCsv.split(",");
+            var normRulePatterns = [];
+            for (var rpi = 0; rpi < rawRulePatterns.length; rpi++) {
+                var cleanPat = rawRulePatterns[rpi].replace(/^[\[\]"\s]+|[\[\]"\s]+$/g, "").toLowerCase();
+                if (cleanPat) normRulePatterns.push(cleanPat);
+            }
+            if (normRulePatterns.length === 0) continue;
+
+            var rQuota = context.getVariable(rulePrefix + "quota_limit") || "";
+            var rExpiresAt = context.getVariable(rulePrefix + "expires_at") || "";
+            var rTeamBudget = context.getVariable(rulePrefix + "team_budget_limit") || "";
+            var rModels = context.getVariable(rulePrefix + "models") || "";
+            var rBurst = context.getVariable(rulePrefix + "burst_rate") || "";
+            var rConcurrency = context.getVariable(rulePrefix + "concurrency_limit") || "";
+            var rShared = context.getVariable(rulePrefix + "template") || "";
+            var rReq = context.getVariable(rulePrefix + "request_template") || rShared;
+            var rResp = context.getVariable(rulePrefix + "response_template") || rShared;
+            var rQuotaValid = Boolean(rQuota) && !isTimestampExpired(rExpiresAt);
+
+            for (var ic = 0; ic < identityCandidates.length; ic++) {
+                var idCand = identityCandidates[ic];
+                if (!idCand) continue;
+                for (var rp = 0; rp < normRulePatterns.length; rp++) {
+                    var pat = normRulePatterns[rp];
+                    if (matchesArmorGlob(idCand, pat)) {
+                        var rScore = computeArmorRuleScore(idCand, pat);
+                        if (rQuotaValid && rScore > bestQuotaScore) {
+                            bestQuotaScore = rScore;
+                            ruleQuotaLimit = String(rQuota).trim();
+                        }
+                        if (rTeamBudget && rScore > bestTeamBudgetScore) {
+                            bestTeamBudgetScore = rScore;
+                            ruleTeamBudgetLimit = String(rTeamBudget).trim();
+                        }
+                        if (rModels && rScore > bestModelsScore) {
+                            bestModelsScore = rScore;
+                            ruleAllowedModels = String(rModels).trim();
+                        }
+                        if (rBurst && rScore > bestBurstScore) {
+                            bestBurstScore = rScore;
+                            ruleBurstRate = String(rBurst).trim();
+                        }
+                        if (rConcurrency && rScore > bestConcurrencyScore) {
+                            bestConcurrencyScore = rScore;
+                            ruleConcurrencyLimit = String(rConcurrency).trim();
+                        }
+                        if (rReq && rScore > bestReqScore) {
+                            bestReqScore = rScore;
+                            ruleReqTemplate = rReq;
+                        }
+                        if (rResp && rScore > bestRespScore) {
+                            bestRespScore = rScore;
+                            ruleRespTemplate = rResp;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Enforce Persona / Exception / API Product Model Allowlist
+    var personaPrefix = "propertyset.config.persona." + safePersona + ".";
+    var effectiveAllowedModels = cleanTokenAttr(context.getVariable("accesstoken.allowed_models")) ||
+                                 ruleAllowedModels ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.allowed_models") ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.developer.allowed_models") ||
+                                 context.getVariable(personaPrefix + "models") ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.apiproduct.allowed_models") ||
+                                 context.getVariable("apiproduct.allowed_models") ||
+                                 context.getVariable("apiproduct.allowed-models") ||
+                                 context.getVariable("apiproduct.custom.allowed_models") || "";
+
+    var trimmedAllowedModels = effectiveAllowedModels ? String(effectiveAllowedModels).trim() : "";
+    if (trimmedAllowedModels !== "") {
+        context.setVariable("allowed_models_list", trimmedAllowedModels);
+        if (trimmedAllowedModels === "*") {
+            context.setVariable("model_access_denied", "false");
+        } else {
+            var rawAllowParts = trimmedAllowedModels.split(",");
+            var normAllowPatterns = [];
+            var hasWildcardAll = false;
+            for (var ami = 0; ami < rawAllowParts.length; ami++) {
+                var aPat = rawAllowParts[ami].replace(/^[\[\]"\s]+|[\[\]"\s]+$/g, "").toLowerCase();
+                if (!aPat) continue;
+                if (aPat === "*") {
+                    hasWildcardAll = true;
+                    break;
+                }
+                normAllowPatterns.push(aPat);
+            }
+            function isModelInPrecomputedList(modelId) {
+                if (hasWildcardAll || normAllowPatterns.length === 0) return true;
+                var lowerModel = String(modelId || "").trim().toLowerCase();
+                for (var mi = 0; mi < normAllowPatterns.length; mi++) {
+                    if (matchesArmorGlob(lowerModel, normAllowPatterns[mi])) return true;
+                }
+                return false;
+            }
+            if (!isModelInPrecomputedList(primaryModel) && !isModelInPrecomputedList(requestedModel)) {
+                context.setVariable("model_access_denied", "true");
+                context.setVariable("private.auth.denied_detail", "Model '" + primaryModel + "' not in allowed_models (" + trimmedAllowedModels + ") for persona '" + safePersona + "'");
+                context.setVariable("auth_error_status", "403");
+                context.setVariable("auth_error_payload", JSON.stringify({
+                    error: {
+                        type: "permission_error",
+                        message: "Model '" + primaryModel + "' is not authorized for persona '" + safePersona + "'.",
+                        code: 403
+                    }
+                }));
+            } else {
+                context.setVariable("model_access_denied", "false");
+                if (fallbackModel && !isModelInPrecomputedList(fallbackModel)) {
+                    fallbackModel = "";
+                    context.setVariable("fallback_model", "");
+                    context.setVariable("allow_fallbacks", "false");
+                }
+            }
+        }
+    } else {
+        context.setVariable("model_access_denied", "false");
+    }
+
+    // Bridge OAuth / Imported Token identity & API Product quotas to VA-ApiKey variables
+    // so LLMTokenQuota (which references stepName="VA-ApiKey") enforces per-user buckets under the Persona product
+    if (oauthUserId || !vaClientId) {
+        var effectiveQuotaClientId = oauthUserId || vaClientId || oauthClientId || devAppName;
+        if (effectiveQuotaClientId) {
+            context.setVariable("verifyapikey.VA-ApiKey.client_id", effectiveQuotaClientId);
+            vaClientId = effectiveQuotaClientId;
+        }
+    }
+
+    var rawQuotaOverride = cleanTokenAttr(context.getVariable("accesstoken.quota_override")) ||
+                           cleanTokenAttr(context.getVariable("auth_quota_override")) ||
+                           context.getVariable("verifyapikey.VA-ApiKey.quota_override") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.quota_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.quota_limit");
+    var quotaOverrideExpiresAt = cleanTokenAttr(context.getVariable("accesstoken.quota_override_expires_at")) ||
+                                 cleanTokenAttr(context.getVariable("auth_quota_override_expires_at")) ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.quota_override_expires_at") ||
+                                 context.getVariable("verifyapikey.VA-ApiKey.developer.quota_override_expires_at");
+    var primaryQuotaOverride = "";
+    var quotaExceptionActive = false;
+    if (rawQuotaOverride && !isTimestampExpired(quotaOverrideExpiresAt)) {
+        primaryQuotaOverride = String(rawQuotaOverride);
+        quotaExceptionActive = true;
+    } else if (ruleQuotaLimit) {
+        primaryQuotaOverride = String(ruleQuotaLimit);
+        quotaExceptionActive = true;
+    }
+    context.setVariable("quota_exception_active", quotaExceptionActive ? "true" : "false");
+
+    var personaModelQuotaLimit = isSafeSegment(primaryModel)
+        ? context.getVariable(personaPrefix + "model_quota." + primaryModel)
+        : null;
+    var personaQuotaLimit = personaModelQuotaLimit || context.getVariable(personaPrefix + "quota_limit");
+    var personaQuotaInterval = context.getVariable(personaPrefix + "quota_interval");
+    var personaQuotaUnit = context.getVariable(personaPrefix + "quota_unit");
+
+    var vaProdQuotaLimit = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit");
+    var vaLlmQuotaLimit = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit");
+    var oauthProductQuotaLimit = context.getVariable("apiproduct.developer.quota.limit");
+    var oauthLlmQuotaLimit = context.getVariable("apiproduct.developer.llmQuota.limit");
+    if (primaryQuotaOverride) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(primaryQuotaOverride));
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(primaryQuotaOverride));
+    } else if (personaQuotaLimit) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(personaQuotaLimit));
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(personaQuotaLimit));
+    } else {
+        if (oauthProductQuotaLimit && !vaProdQuotaLimit) {
+            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.limit", String(oauthProductQuotaLimit));
+        }
+        if (oauthLlmQuotaLimit && !vaLlmQuotaLimit) {
+            context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit", String(oauthLlmQuotaLimit));
+        }
+    }
+    var vaProdQuotaInterval = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval");
+    var oauthProductQuotaInterval = personaQuotaInterval || context.getVariable("apiproduct.developer.quota.interval");
+    if (oauthProductQuotaInterval && (personaQuotaInterval || !vaProdQuotaInterval)) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.interval", String(oauthProductQuotaInterval));
+    }
+    var vaLlmQuotaInterval = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval");
+    var oauthLlmQuotaInterval = personaQuotaInterval || context.getVariable("apiproduct.developer.llmQuota.interval");
+    if (oauthLlmQuotaInterval && (personaQuotaInterval || !vaLlmQuotaInterval)) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.interval", String(oauthLlmQuotaInterval));
+    }
+    var vaProdQuotaTimeunit = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit");
+    var oauthProductQuotaTimeunit = personaQuotaUnit || context.getVariable("apiproduct.developer.quota.timeunit");
+    if (oauthProductQuotaTimeunit && (personaQuotaUnit || !vaProdQuotaTimeunit)) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.quota.timeunit", String(oauthProductQuotaTimeunit));
+    }
+    var vaLlmQuotaTimeunit = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit");
+    var oauthLlmQuotaTimeunit = personaQuotaUnit || context.getVariable("apiproduct.developer.llmQuota.timeunit");
+    if (oauthLlmQuotaTimeunit && (personaQuotaUnit || !vaLlmQuotaTimeunit)) {
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.timeunit", String(oauthLlmQuotaTimeunit));
+    }
+
+    // Burst Rate & Concurrency Client Identifier Resolution
+    var rateLimitClientId = oauthUserId ||
+                            vaClientId ||
+                            oauthClientId ||
+                            devAppName ||
+                            context.getVariable("client.ip") ||
+                            "default_client";
+    context.setVariable("rate_limit_client_id", rateLimitClientId);
+
+    // Secondary Quota Window / Shared Team Budget Resolution (Token Claim -> Exception Rule -> App -> Persona -> API Product)
+    var teamQuotaLimit = ruleTeamBudgetLimit ||
+                         context.getVariable("verifyapikey.VA-ApiKey.team_quota_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.team_quota_limit") ||
+                         context.getVariable(personaPrefix + "team_quota_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_limit") ||
+                         context.getVariable("apiproduct.team_quota_limit");
+    var secScope = context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_scope") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_scope") ||
+                   context.getVariable("apiproduct.secondary_quota_scope") ||
+                   (teamQuotaLimit ? "team" : "user");
+    context.setVariable("secondary_quota_scope", secScope);
+
+    // If configured as a shared Team Budget (secScope === "team"), all team members share bucket "team:<identity_team>"
+    // unless the user has an active individual exception (quotaExceptionActive), which isolates their bucket so they
+    // can continue working even when the shared team budget is exhausted.
+    var secondaryQuotaIdentifier = (secScope === "team" && !quotaExceptionActive)
+                                   ? ("team:" + identityTeam)
+                                   : rateLimitClientId;
+    context.setVariable("secondary_quota_identifier", secondaryQuotaIdentifier);
+
+    var secLimit = (quotaExceptionActive ? primaryQuotaOverride : "") ||
+                   context.getVariable("accesstoken.secondary_quota_limit") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_limit") ||
+                   context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_limit") ||
+                   teamQuotaLimit ||
+                   context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit") ||
+                   context.getVariable("apiproduct.secondary_quota_limit");
+    if (secLimit) {
+        var secLimitStr = String(secLimit);
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit", secLimitStr);
+        context.setVariable("secondary_quota_limit", secLimitStr);
+    }
+    var secInterval = context.getVariable("accesstoken.secondary_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_interval") ||
+                      context.getVariable(personaPrefix + "team_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_interval") ||
+                      context.getVariable("apiproduct.team_quota_interval") ||
+                      context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval") ||
+                      context.getVariable("apiproduct.secondary_quota_interval");
+    if (secInterval) {
+        var secIntervalStr = String(secInterval);
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval", secIntervalStr);
+        context.setVariable("secondary_quota_interval", secIntervalStr);
+    }
+    var secUnit = context.getVariable("accesstoken.secondary_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.secondary_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.developer.secondary_quota_unit") ||
+                  context.getVariable(personaPrefix + "team_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team_quota_unit") ||
+                  context.getVariable("apiproduct.team_quota_unit") ||
+                  context.getVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit") ||
+                  context.getVariable("apiproduct.secondary_quota_unit");
+    if (secUnit) {
+        var secUnitStr = String(secUnit);
+        context.setVariable("verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit", secUnitStr);
+        context.setVariable("secondary_quota_unit", secUnitStr);
+    }
+
+    var burstRateLimit = context.getVariable("accesstoken.burst_rate") ||
+                         ruleBurstRate ||
+                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.burst_rate_limit") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.developer.burst_rate_limit") ||
+                         context.getVariable(personaPrefix + "burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate") ||
+                         context.getVariable("verifyapikey.VA-ApiKey.apiproduct.burst_rate_limit") ||
+                         context.getVariable("apiproduct.burst_rate") ||
+                         context.getVariable("apiproduct.burst_rate_limit") ||
+                         context.getVariable("propertyset.config.default_burst_rate") ||
+                         "600pm";
+    context.setVariable("burst_rate_limit", burstRateLimit);
+
+    var concurrencyLimit = context.getVariable("accesstoken.concurrency_limit") ||
+                           ruleConcurrencyLimit ||
+                           context.getVariable("verifyapikey.VA-ApiKey.concurrency_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.developer.concurrency_limit") ||
+                           context.getVariable(personaPrefix + "concurrency_limit") ||
+                           context.getVariable("verifyapikey.VA-ApiKey.apiproduct.concurrency_limit") ||
+                           context.getVariable("apiproduct.concurrency_limit") ||
+                           context.getVariable("propertyset.config.default_concurrency_limit") ||
+                           "20";
+    context.setVariable("concurrency_limit", String(concurrencyLimit));
+
+    // -------------------------------------------------------------------------
+    // 6. Context-Aware Model Armor Template Resolution (Request vs. Response)
+    // Precedence (evaluated independently for Request & Response phases):
+    //   1a. Identity Token Claim (OAuth/JWT/Agent token attribute)
+    //   1b. Identity Glob Rules (exceptions / features.model_armor.identity_rules)
+    //   2.  Developer App / Developer Custom Attributes
+    //   3a. Persona Configuration (personas / features.model_armor.personas)
+    //   3b. API Product Custom Attributes
+    //   4.  Model-Specific Configuration (models.<model>.model_armor)
+    //   5.  Global Default Configuration (features.model_armor)
+    // -------------------------------------------------------------------------
     function parseArmorTemplateSpec(rawSpec, defaultProj, defaultLoc) {
         var clean = rawSpec ? String(rawSpec).trim() : "";
         var lower = clean.toLowerCase();
@@ -759,62 +972,6 @@ try {
     var globalArmorTemplate = context.getVariable("propertyset.config.model_armor_template") || "ai-gw-template";
     var globalArmorReqTemplate = context.getVariable("propertyset.config.model_armor_request_template") || globalArmorTemplate;
     var globalArmorRespTemplate = context.getVariable("propertyset.config.model_armor_response_template") || globalArmorTemplate;
-
-    // Evaluate Identity Glob Rules (Tier 1b)
-    var ruleReqTemplate = "";
-    var ruleRespTemplate = "";
-    var rulesCount = parseInt(context.getVariable("propertyset.config.model_armor_identity_rules_count") || "0", 10);
-    if (rulesCount > 0) {
-        var lowerUserId = String(identityUserId || "").toLowerCase();
-        var lowerTeam = String(identityTeam || "").toLowerCase();
-        var lowerPersona = String(identityPersona || "").toLowerCase();
-        var identityCandidates = [lowerUserId];
-        if (lowerUserId.indexOf("principal://") === 0) {
-            identityCandidates.push(lowerUserId.replace(/^principal:\/\//, "spiffe://"));
-        } else if (lowerUserId.indexOf("spiffe://") === 0) {
-            identityCandidates.push(lowerUserId.replace(/^spiffe:\/\//, "principal://"));
-        }
-        if (lowerTeam && lowerTeam !== "default") {
-            identityCandidates.push("team:" + lowerTeam);
-            if (lowerTeam.indexOf("project:") === 0) {
-                identityCandidates.push(lowerTeam);
-            }
-        }
-        if (lowerPersona && lowerPersona !== "default") {
-            identityCandidates.push("persona:" + lowerPersona);
-        }
-
-        var bestReqScore = -1;
-        var bestRespScore = -1;
-        for (var r = 0; r < rulesCount; r++) {
-            var ruleMatchCsv = context.getVariable("propertyset.config.model_armor.rule." + r + ".match") || "";
-            if (!ruleMatchCsv) continue;
-            var rulePatterns = ruleMatchCsv.split(",");
-            var rShared = context.getVariable("propertyset.config.model_armor.rule." + r + ".template") || "";
-            var rReq = context.getVariable("propertyset.config.model_armor.rule." + r + ".request_template") || rShared;
-            var rResp = context.getVariable("propertyset.config.model_armor.rule." + r + ".response_template") || rShared;
-
-            for (var ic = 0; ic < identityCandidates.length; ic++) {
-                var idCand = identityCandidates[ic];
-                if (!idCand) continue;
-                for (var rp = 0; rp < rulePatterns.length; rp++) {
-                    var pat = rulePatterns[rp].replace(/^[\[\]"\s]+|[\[\]"\s]+$/g, "").toLowerCase();
-                    if (!pat) continue;
-                    if (matchesArmorGlob(idCand, pat)) {
-                        var rScore = computeArmorRuleScore(idCand, pat);
-                        if (rReq && rScore > bestReqScore) {
-                            bestReqScore = rScore;
-                            ruleReqTemplate = rReq;
-                        }
-                        if (rResp && rScore > bestRespScore) {
-                            bestRespScore = rScore;
-                            ruleRespTemplate = rResp;
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     // Resolve Request & Response Phase Templates via lazy short-circuiting
     var sharedClaimArmor = cleanTokenAttr(context.getVariable("accesstoken.model_armor_template"));

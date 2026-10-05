@@ -114,19 +114,69 @@ features:
       quota_override_claim: "ai_quota_override"
       token_ttl_ms: 3600000
     default_persona: ""                    # Optional fallback persona if an authenticated user's role claim doesn't match
+    # default_client_id: ""                # Optional shared Developer App client_id fallback across all personas
     personas:
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business"]
-        client_id: ""                      # Apigee Developer App client_id bound to the Knowledge Worker API Product
+        client_id: ""                      # Apigee Developer App client_id (or run: bash scripts/sync-personas.sh)
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        # quota:
+        #   limit: 50000
+        #   interval: 4
+        #   unit: "hour"
+        # team_budget:
+        #   limit: 2000000
+        #   interval: 7
+        #   unit: "day"
+        # rate_limits:
+        #   burst_rate: "60pm"
+        #   concurrency_limit: 5
+        # model_armor:
+        #   request_template: "strict-pii-sdp-prompt"
+        #   response_template: "strict-rai-response"
       developer:
         match_claims: ["developer", "engineering", "swe", "data-science"]
         client_id: ""                      # Apigee Developer App client_id bound to the Developer API Product
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
+        # quota:
+        #   limit: 250000
+        #   interval: 4
+        #   unit: "hour"
+        #   per_model:
+        #     claude-sonnet-4-6: 50000
+        # team_budget:
+        #   limit: 10000000
+        #   interval: 7
+        #   unit: "day"
       it:
         match_claims: ["it", "platform-admin", "sre", "devops", "secops"]
         client_id: ""                      # Apigee Developer App client_id bound to the IT/Platform API Product
+        # models: ["*"]
+        # quota:
+        #   limit: 500000
+        #   interval: 4
+        #   unit: "hour"
       agent:
         match_claims: ["agent", "service-account", "automation"]
         client_id: ""                      # Apigee Developer App client_id bound to the Autonomous Agent API Product
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "text-embedding-005"]
+        # quota:
+        #   limit: 1000000
+        #   interval: 1
+        #   unit: "day"
+    # Optional Individual, Agent, or Team Exceptions (Quotas, Auto-Expiration, Team Budgets, Models, Model Armor):
+    # exceptions:
+    #   - match: ["alice@company.com"]
+    #     quota_limit: 500000              # Raises primary quota AND isolates Alice from shared team budget exhaustion
+    #     expires_at: "2026-10-15T00:00:00Z" # Automatically reverts to baseline persona quota after timestamp
+    #     models: ["*"]                    # Temporarily grant access to all catalog models
+    #   - match: ["team:Search-Research"]
+    #     team_budget_limit: 50000000      # Raises shared 7-day pool for the entire Search-Research team
+    #   - match: ["*@pci-vault.iam.gserviceaccount.com"]
+    #     quota_limit: 2000000
+    #     model_armor:
+    #       request_template: "pci-strict-sdp-prompt"
+    #       response_template: "pci-strict-sdp-response"
 
 # ------------------------------------------------------------------------------
 # Proxy Endpoints / Supported Protocols

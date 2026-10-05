@@ -6,24 +6,37 @@ Once you have organized your consumers into **AI Products**, you can layer on to
 
 ## 1. Choose Your Consumption Controls
 
-Click any tab below to see how to configure that control on your **AI Products** or in `values.yaml`:
+Click any tab below to see how to configure that control declaratively in `values.yaml` (or via Apigee API Product attributes):
 
 === "1. Per-User & Per-Model Token Quotas"
-    **What it does:** Sets a rolling token allowance (for example, `500,000 tokens per 4 hours`) for each individual user belonging to an **AI Product**.
+    **What it does:** Sets a rolling token allowance (for example, `500,000 tokens per 4 hours`) for each individual user belonging to a **Persona / AI Product**, plus optional model-specific caps for expensive frontier models.
 
-    * **Standard AI Product Quota:** Set the LLM Token Quota directly on the Apigee API Product. Every user mapped to that product receives their own isolated rolling counter.
-    * **Per-Model Quota:** Want to cap expensive frontier models (such as `claude-opus-4-6` or `gpt-5.4` at `50,000 tokens / 4h`) while leaving fast models (`gemini-3.1-flash-lite`) unlimited? Add a model-specific **LLM Operation Quota** on the API Product. Unquoted models automatically run without throttling.
+    * **Standard Persona Quota:** Declared under `features.auth.personas.<name>.quota`. Every user mapped to that persona receives their own isolated rolling counter (`quota_client_id`).
+    * **Per-Model Quota (`per_model`):** Want to cap expensive frontier models (such as `claude-sonnet-4-6` at `50,000 tokens / 4h`) while leaving fast models (`gemini-3.1-flash-lite`) uncapped up to the 500k allowance? Add `per_model` under the persona's `quota` block:
 
     ```yaml
     features:
       quotas:
         enabled: true
+      auth:
+        personas:
+          developer:
+            models: ["*"]                         # Expands to all concrete catalog models in llmOperationGroup
+            quota:
+              limit: 500000                       # 500k tokens per 4 hours per individual engineer
+              interval: 4
+              time_unit: "hour"
+              per_model:
+                claude-sonnet-4-6: 50000          # Max 50k tokens / 4h on Claude Sonnet 4.6
+                gemini-3.1-pro-preview: 100000    # Max 100k tokens / 4h on Gemini 3.1 Pro
     ```
+
+    *(Note: Both the proxy bundle's `config.properties` and `./scripts/sync-personas.sh`—which writes each concrete model's `llmTokenQuota` into the Apigee API Product's `llmOperationGroup.operationConfigs`—enforce these per-model caps automatically).*
 
 === "2. Shared Team Budgets & Dual Windows"
     **What it does:** Enforces a second rolling token window—either as a **7-day weekly cap per user** or as a **Shared Team Budget** across everyone in a department (such as `eng-ml`).
 
-    1. Enable the secondary window in `values.yaml`:
+    1. Enable the secondary window and declare `team_budget` on the persona (or override a specific department under `exceptions`) in `values.yaml`:
        ```yaml
        features:
          quotas:
@@ -33,34 +46,57 @@ Click any tab below to see how to configure that control on your **AI Products**
              allow_count: 10000000
              interval: 7
              time_unit: "day"
+         auth:
+           personas:
+             developer:
+               team_budget:
+                 limit: 25000000      # 25M shared 7-day token pool per department
+                 interval: 7
+                 time_unit: "day"
+           exceptions:
+             # Optional: give a specific department (`team:ml-research`) a 100M 7-day pool
+             - match: ["team:ml-research"]
+               team_budget_limit: 100000000
        ```
-    2. **To pool tokens across a department/team:** Add custom attributes `team_quota_limit` (e.g., `10000000`), `team_quota_interval` (`7`), and `team_quota_unit` (`day`) on the AI Product or Developer App. All users in that department will draw from the shared team pool while also respecting their individual 4-hour primary quota.
+    2. All users in a department (`dc_identity_team`) draw from that department's shared pool while also respecting their individual 4-hour primary quota.
 
-=== "3. Temporary Individual Exceptions"
-    **What it does:** Grants a specific engineer or application a temporary token boost (for example, `5,000,000 tokens` until Friday at 5:00 PM UTC) that **automatically expires** and reverts to their standard AI Product tier.
+=== "3. Temporary Individual & Team Exceptions"
+    **What it does:** Grants a specific engineer, Service Account, SPIFFE agent, or department a temporary token boost (for example, `5,000,000 tokens` until Friday at 5:00 PM UTC) or unlocks specific models, and **automatically expires** back to their standard persona tier when `expires_at` passes.
 
-    Set two custom attributes on the Developer or Developer App:
-    * `quota_override`: `"5000000"`
-    * `quota_override_expires_at`: `"2026-12-31T17:00:00Z"`
+    Declare the exception directly in `values.yaml` under `features.auth.exceptions`:
+    ```yaml
+    features:
+      auth:
+        exceptions:
+          - match: ["alice@corp.example.com"]
+            quota_limit: 5000000                  # 5M token allowance
+            expires_at: "2026-12-31T17:00:00Z"    # Auto-expires in memory at this UTC timestamp
+            models: ["*"]                         # Unlocks all catalog models while active
+    ```
 
-    While the exception is active, the user gets the elevated limit and is not blocked if their team's shared pool is exhausted. Once the timestamp passes, the gateway automatically reverts them to their standard AI Product quota—no manual cleanup required.
+    * **Zero Manual Cleanup:** While the exception is active, the user gets the elevated limit and is **not blocked** if their team's shared pool is exhausted (`is_quota_exception_active = "true"`). Once `expires_at` passes, the gateway automatically reverts them to their standard persona quota on the very next request.
+    * *(Alternatively, you can set custom attributes `quota_override` and `quota_override_expires_at` on a Developer or Developer App in Apigee).*
 
 === "4. Burst & Stream Concurrency Limits"
-    **What it does:** Protects backend capacity from sudden request spikes (`burst`) or runaway clients opening dozens of simultaneous streaming connections (`concurrency`). Both are opt-in in `values.yaml`:
+    **What it does:** Protects backend capacity from sudden request spikes (`burst`) or runaway clients opening dozens of simultaneous streaming connections (`concurrency`). Both are opt-in globally in `values.yaml` and can be customized per persona or exception:
 
     ```yaml
     features:
       rate_limits:
         burst:
           enabled: true
-          rate: "600pm"        # Smooths request arrival spikes (e.g. 600 requests/minute per user)
+          rate: "600pm"        # Global fallback: 600 requests/minute per user
         concurrency:
           enabled: true
-          limit: 20            # Max simultaneous open SSE streams per user
+          limit: 20            # Global fallback: 20 simultaneous open SSE streams per user
           ttl_minutes: 1       # Auto-releases slot after 1 min if a client disconnects mid-stream
+      auth:
+        personas:
+          agent:
+            rate_limits:
+              burst: "1200pm"  # Higher spike limit for autonomous agents
+              concurrency: 50
     ```
-
-    You can also override these per **AI Product** using custom attributes `burst_rate` (e.g. `"1200pm"`) and `concurrency_limit` (e.g. `"50"`).
 
 ---
 

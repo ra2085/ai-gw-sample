@@ -308,6 +308,7 @@ try {
     if (isVerified) {
         var claimValues = normalizeClaimValues(rawPersonaClaim);
         var personasCsv = context.getVariable("propertyset.config.auth_personas_list") || "knowledge-worker,developer,it,agent";
+        var defaultClientIdFallback = context.getVariable("propertyset.config.auth_default_client_id") || "";
         var personas = personasCsv.split(",");
         var matchedPersona = "";
         var personaClientId = "";
@@ -315,10 +316,11 @@ try {
 
         for (var i = 0; i < personas.length; i++) {
             var pName = personas[i].trim();
-            if (!pName) continue;
+            if (!pName || !/^[A-Za-z0-9._-]+$/.test(pName)) continue;
 
             var candidateClientId = context.getVariable("propertyset.config.persona." + pName + ".client_id") ||
-                                    context.getVariable("propertyset.config.persona_" + pName + "_client_id");
+                                    context.getVariable("propertyset.config.persona_" + pName + "_client_id") ||
+                                    defaultClientIdFallback;
             if (!candidateClientId || String(candidateClientId).trim() === "") continue;
 
             var matchClaimsCsv = context.getVariable("propertyset.config.persona." + pName + ".match_claims") || pName;
@@ -348,11 +350,14 @@ try {
             var defaultPersona = context.getVariable("propertyset.config.auth_persona_default");
             if (defaultPersona && String(defaultPersona).trim() !== "") {
                 var defName = String(defaultPersona).trim();
-                var defClientId = context.getVariable("propertyset.config.persona." + defName + ".client_id") ||
-                                  context.getVariable("propertyset.config.persona_" + defName + "_client_id");
-                if (defClientId && String(defClientId).trim() !== "") {
-                    matchedPersona = defName;
-                    personaClientId = String(defClientId).trim();
+                if (/^[A-Za-z0-9._-]+$/.test(defName)) {
+                    var defClientId = context.getVariable("propertyset.config.persona." + defName + ".client_id") ||
+                                      context.getVariable("propertyset.config.persona_" + defName + "_client_id") ||
+                                      defaultClientIdFallback;
+                    if (defClientId && String(defClientId).trim() !== "") {
+                        matchedPersona = defName;
+                        personaClientId = String(defClientId).trim();
+                    }
                 }
             }
         }

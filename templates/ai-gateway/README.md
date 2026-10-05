@@ -96,9 +96,9 @@ models:
 
 ---
 
-## 🎛 Feature Toggles
+## 🎛 Feature Toggles, Personas & Exceptions
 
-You can toggle features on or off in `values.yaml`:
+Configure features, unified Personas (AI Products), and individual/team Exceptions in `values.yaml`:
 
 ```yaml
 features:
@@ -114,5 +114,37 @@ features:
     enabled: true
   auth:
     enabled: true
-    type: "apikey"
+    allow_bearer_api_key: true
+    personas:
+      knowledge-worker:
+        match_claims: ["knowledge-worker", "general", "business-*"]
+        models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        quota:
+          limit: 50000
+          interval: 4
+          unit: "hour"
+      developer:
+        match_claims: ["developer", "engineering", "swe-*"]
+        models: ["*"]
+        quota:
+          limit: 250000
+          interval: 4
+          unit: "hour"
+          per_model:
+            claude-sonnet-4-6: 50000
+    exceptions:
+      - match: ["alice@company.com"]
+        quota_limit: 500000
+        expires_at: "2026-12-31T23:59:59Z"
+        models: ["*"]
+```
+
+To safely preview or upsert the corresponding Apigee API Products (`llmOperationGroup.operationConfigs`) and Developer Apps:
+
+```bash
+# Preview API Product & Developer App payloads (zero network calls)
+bash ./scripts/sync-personas.sh --values ./templates/ai-gateway/values.yaml --org "$PROJECT_ID" --env "$APIGEE_ENV" --dry-run
+
+# Apply additive create-or-update (preserves existing Consumer Keys)
+bash ./scripts/sync-personas.sh --values ./templates/ai-gateway/values.yaml --org "$PROJECT_ID" --env "$APIGEE_ENV"
 ```
