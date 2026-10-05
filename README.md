@@ -56,7 +56,7 @@ models:
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
 ```
 
-### 2. Render & Deploy
+### 2. Render, Deploy & Provision AI Products
 
 ```bash
 # 1. Compile the Apigee proxy bundle from YAML
@@ -75,6 +75,12 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
+
+# 3. Safely provision Apigee API Products (llmOperationGroup) & Developer App keys
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
 ```
 
 ---

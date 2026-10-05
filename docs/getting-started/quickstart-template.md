@@ -8,6 +8,7 @@ Get an enterprise AI Gateway running in 5 minutes using a single **15-line `valu
 > 2. Authenticate with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
 > 3. Create the deployment Service Account with `roles/aiplatform.user`.
 > 4. Create the 9 telemetry Data Collectors in your Apigee organization.
+> 5. Provision your AI Products and Persona Developer Apps with `bash ./scripts/sync-personas.sh`.
 
 ---
 
@@ -43,9 +44,9 @@ models:
 
 ---
 
-## 2. Render & Deploy to Apigee
+## 2. Render, Deploy & Provision AI Products
 
-Compile your YAML configuration into an Apigee bundle and deploy it to your environment:
+Compile your YAML configuration into an Apigee bundle, deploy the proxy, and run `scripts/sync-personas.sh` to automatically create your Apigee API Products (`llmOperationGroup`) and Developer App keys:
 
 ```bash
 # 1. Render the Apigee bundle from YAML
@@ -54,7 +55,7 @@ apigee-go-gen render apiproxy \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
 
-# 2. Deploy to Apigee X or Apigee Hybrid
+# 2. Deploy the proxy to Apigee X or Apigee Hybrid
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 
 apigeecli apis create bundle \
@@ -66,6 +67,12 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
+
+# 3. Provision API Products (llmOperationGroup) & Developer Apps (outputs your client_id / $API_KEY)
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
 ```
 
 ---
