@@ -16,7 +16,7 @@ Get an enterprise AI Gateway running in 5 minutes using a single **15-line `valu
 
 ```yaml
 gateway:
-  name: "ai-gateway-quickstart"
+  name: "ai-gateway"
   project_id: "your-gcp-project-id"
 
 models:
@@ -74,6 +74,8 @@ bash ./scripts/sync-personas.sh \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV"
 ```
+
+* **Default AI Products Provisioned:** Because `values.quickstart.yaml` omits a custom `personas` block, `sync-personas.sh` automatically provisions the **4 built-in AI Products** (`ai-gateway-knowledge-worker`, `ai-gateway-developer`, `ai-gateway-it`, and `ai-gateway-agent`) and their Developer Apps (`*-app`). Each product is pre-configured with `llmOperationGroup` token counters (**1M tokens / hour** default limit) for every model in your `models` list and prints a ready-to-use `$API_KEY` (`client_id`) for testing.
 
 ---
 
