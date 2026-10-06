@@ -133,18 +133,6 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
               concurrency: 50
     ```
 
-??? info "Under the Hood: How Apigee Isolates Counters Across All Auth Methods"
-    You never have to configure Apigee quota policies manually—`JS-resolve-model-location` normalizes identity claims across all 4 authentication options (**API Key**, **Apigee OAuth**, **GCP SPIFFE / Service Accounts**, and **IdP JWT / Opaque Tokens**) into three strictly isolated `<LLMTokenQuota>` counter namespaces:
-
-    | Counter Pair | `SharedName` | `<Identifier>` | `<LLMModelSource>` | Scope & Purpose |
-    | :--- | :--- | :--- | :--- | :--- |
-    | **`LTQ-EnforceOnly` / `LTQ-CountOnly`** | `llm-token-counter` | `rate_limit_client_id` *(User email, SPIFFE principal, or App ID)* | `{model}` | **Valve 1 (Per-User & Per-Model):** Matches concrete model entries in the API Product's `llmOperationGroup` and enforces `primary_quota_limit` (`tokens` or `micro-USD`). |
-    | **`LTQ-SecondaryEnforceOnly` / `LTQ-SecondaryCountOnly`** | `llm-token-counter-secondary` | `secondary_quota_identifier` *(`team:<dept>` or personal ID when `bypass_team_budget: true`)* | `{secondary_quota_scope}` *(`team` or `user`)* | **Valve 2 (Cross-Model Team Pool / 2nd Window):** Aggregates spend or tokens across all models without colliding with per-model API Product operations. |
-    | **`LTQ-CircuitBreakerCheck` / `LTQ-CircuitBreakerCount`** | `llm-circuit-breaker` | `primary_model` / `tried_primary_model` | `{circuit_breaker_checked}` | **Failover Error Budget:** Tracks upstream `429`/`5xx` errors per primary model in a rolling window to trip the circuit `OPEN`. |
-
-    * **Micro-USD Precision without Apigee Developer Onboarding:** In USD mode (`limit_usd` / `team_budget.limit_usd`), the gateway converts dollar limits into integer **micro-dollars** (`$1.00 = 1,000,000` micro-USD) and deducts `tx_cost_micro_usd` on every response (including SSE streams)—giving every SSO user and SPIFFE agent an isolated USD wallet without registering individual Apigee Developer entities.
-    * **Syncing API Product Quotas:** Running `./scripts/sync-personas.sh` automatically provisions each persona's API Product and expands `models` + `per_model` / `per_model_usd` into Apigee X's `llmOperationGroup.operationConfigs`.
-
 ---
 
 ## 3. Invoice-Accurate Cost Attribution
