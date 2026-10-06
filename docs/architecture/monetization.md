@@ -25,6 +25,27 @@ flowchart LR
 * **Valve 2 — Shared Team Pool (Opt-In):** Caps total spend across an entire department (e.g., `eng-ml`, `sales`) across **all models combined**. You can even mix units (for example, a **4-hour Token limit per user** + a **30-day $USD budget per team**).
 * **Auto-Expiring Exceptions:** Temporarily boost an individual's allowance, top up a team's shared pool, or grant an emergency bypass (`bypass_team_budget: true`) until an `expires_at` timestamp—without creating separate API Products or remembering to roll changes back.
 
+### Independent Units & Precedence at a Glance
+
+**Valve 1 (Personal)** and **Valve 2 (Team Pool)** have **independent units (`Tokens` or `$USD`) and independent time windows**. You can mix them freely, and an active **Exception** can even switch units for a specific user or team:
+
+#### 1. Precedence Order (Highest $\to$ Lowest Priority)
+
+| Valve | 🥇 1st Priority (Wins First) | 🥈 2nd Priority | 🥉 3rd Priority (Baseline) |
+| :--- | :--- | :--- | :--- |
+| **Valve 1: Personal Allowance** | **Active Individual Exception**<br>(`quota_limit_usd` or `quota_limit` until `expires_at`) | **Per-Model Cap**<br>(`per_model_usd` or `per_model` on the model) | **Persona Quota**<br>(`quota.limit_usd` or `quota.limit`) |
+| **Valve 2: Shared Team Pool** | **Emergency Bypass** (`bypass_team_budget: true`)<br>*or* **Active Team Exception** (`team_budget_limit_usd` / `team_budget_limit`) | **Persona Team Budget**<br>(`team_budget.limit_usd` or `team_budget.limit`) | **Global Secondary Fallback**<br>(`secondary_window.allow_usd` / `allow_count`) |
+
+#### 2. Supported Hybrid Combinations (`Tokens` $\times$ `$USD`)
+
+| Mode | Valve 1: Personal | Valve 2: Team Pool | Best For |
+| :--- | :---: | :---: | :--- |
+| **All-USD** | `$USD` *(e.g. $15 / day)* | `$USD` *(e.g. $250 / 30d)* | Strict financial chargeback at both the engineer and department level. |
+| **All-Token** | `Tokens` *(e.g. 500k / 4h)* | `Tokens` *(e.g. 25M / 7d)* | Pure capacity and throughput pacing without pricing tables. |
+| **Hybrid (Token Pacing + Team $USD)** | `Tokens` *(e.g. 500k / 4h)* | `$USD` *(e.g. $250 / 30d)* | Developers pace usage in tokens (`Claude Code`), while Finance caps monthly department spend in `$USD`. |
+| **Hybrid (Personal $USD + Team Tokens)** | `$USD` *(e.g. $15 / day)* | `Tokens` *(e.g. 50M / 7d)* | Cap individual dollar spend on frontier models while sharing a weekly token reservation across a team. |
+| **Cross-Unit Exception** | *Overrides Valve 1 in `$USD` or `Tokens`* | *Keeps Valve 2 unit* | Even on a Token-based persona, you can grant one user a temporary `$50.00 USD` exception (`quota_limit_usd: 50.00`), or vice versa. |
+
 ---
 
 ## 2. Copy-Paste Recipes
