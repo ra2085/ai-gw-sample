@@ -107,6 +107,7 @@ try {
     var secondaryQuotaMode = context.getVariable("secondary_quota_mode") || "tokens";
 
     // 5. Export context variables for headers, analytics data collectors, Virtual USD Spend Wallets, and Apigee Monetization Rating Engine
+    context.setVariable("uncached_prompt_tokens", uncachedPromptTokens.toFixed(0));
     context.setVariable("cache_read_tokens", cacheReadTokens.toFixed(0));
     context.setVariable("cache_write_tokens", cacheWriteTokens.toFixed(0));
     context.setVariable("thinking_tokens", thinkingTokens.toFixed(0));

@@ -13,6 +13,26 @@ DataCapture:
         DataCollector: dc_prompt_token_count
     - Capture:
         Collect:
+          .ref: uncached_prompt_tokens
+          .default: 0
+        DataCollector: dc_uncached_prompt_token_count
+    - Capture:
+        Collect:
+          .ref: cache_read_tokens
+          .default: 0
+        DataCollector: dc_cache_read_token_count
+    - Capture:
+        Collect:
+          .ref: cache_write_tokens
+          .default: 0
+        DataCollector: dc_cache_write_token_count
+    - Capture:
+        Collect:
+          .ref: thinking_tokens
+          .default: 0
+        DataCollector: dc_thinking_token_count
+    - Capture:
+        Collect:
           .ref: completion_tokens
           .default: 0
         DataCollector: dc_completion_token_count
@@ -31,6 +51,31 @@ DataCapture:
           .ref: requested_model
           .default: direct
         DataCollector: dc_requested_model
+    - Capture:
+        Collect:
+          .ref: tx_uncached_prompt_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_uncached_prompt_cost_usd
+    - Capture:
+        Collect:
+          .ref: tx_cache_read_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_cache_read_cost_usd
+    - Capture:
+        Collect:
+          .ref: tx_cache_write_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_cache_write_cost_usd
+    - Capture:
+        Collect:
+          .ref: tx_prompt_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_prompt_cost_usd
+    - Capture:
+        Collect:
+          .ref: tx_completion_cost_usd
+          .default: 0.000000
+        DataCollector: dc_tx_completion_cost_usd
     - Capture:
         Collect:
           .ref: tx_cost_usd

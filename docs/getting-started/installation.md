@@ -130,15 +130,24 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 Apigee captures real-time token metrics, micro-transaction costs, and identity attribution (`user_id`, `persona`, `team`) into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
 
-Run this loop once per organization to create all **9 required Data Collectors**:
+Run this loop once per organization to create all **18 required Data Collectors** (covering granular token types, per-type USD costs, model routing, and identity attribution):
 
 ```bash
 for dc in \
   "dc_prompt_token_count:INTEGER" \
+  "dc_uncached_prompt_token_count:INTEGER" \
+  "dc_cache_read_token_count:INTEGER" \
+  "dc_cache_write_token_count:INTEGER" \
+  "dc_thinking_token_count:INTEGER" \
   "dc_completion_token_count:INTEGER" \
   "dc_total_token_count:INTEGER" \
   "dc_model:STRING" \
   "dc_requested_model:STRING" \
+  "dc_tx_uncached_prompt_cost_usd:FLOAT" \
+  "dc_tx_cache_read_cost_usd:FLOAT" \
+  "dc_tx_cache_write_cost_usd:FLOAT" \
+  "dc_tx_prompt_cost_usd:FLOAT" \
+  "dc_tx_completion_cost_usd:FLOAT" \
   "dc_tx_cost_usd:FLOAT" \
   "dc_identity_user_id:STRING" \
   "dc_identity_persona:STRING" \
