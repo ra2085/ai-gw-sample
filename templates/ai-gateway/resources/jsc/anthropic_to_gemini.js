@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var contentStr = context.getVariable("request.content");
     if (contentStr) {
@@ -185,3 +188,5 @@ try {
 } catch (e) {
     print("Error translating Anthropic to Gemini request: " + e);
 }
+
+})();

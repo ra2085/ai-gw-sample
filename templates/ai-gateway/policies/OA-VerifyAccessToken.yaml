@@ -1,0 +1,13 @@
+OAuthV2:
+  .continueOnError: true
+  .enabled: true
+  .name: OA-VerifyAccessToken
+  DisplayName: OA-VerifyAccessToken
+  Properties: {}
+  Attributes: {}
+  ExternalAuthorization: false
+  Operation: VerifyAccessToken
+  SupportedGrantTypes: {}
+  GenerateResponse:
+    .enabled: true
+  Tokens: {}

@@ -5,5 +5,5 @@ OASValidation:
   DisplayName: OAS-VerifyOpenAI
   OASResource: oas://openai.yaml
   Options:
-    AllowUnspecifiedParameters: false
+    AllowUnspecifiedParameters: true
   Source: request

@@ -18,6 +18,10 @@ ExtractVariables:
         .name: prompt
         .type: string
         JSONPath: '{propertyset.extract_expressions.prompt_exp}'
+    - Variable:
+        .name: judge_plugin_id
+        .type: string
+        JSONPath: $.plugins[0].id
   Source:
     .clearPayload: false
     -Data: request

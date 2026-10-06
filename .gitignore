@@ -26,3 +26,4 @@ tests/
 cloud-run-mocks/
 mocks/
 mock-servers/
+.agents

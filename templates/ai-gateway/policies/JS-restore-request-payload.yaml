@@ -1,0 +1,8 @@
+Javascript:
+  .continueOnError: false
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-restore-request-payload
+  DisplayName: JS-restore-request-payload
+  Properties: {}
+  ResourceURL: jsc://restore_request_payload.js

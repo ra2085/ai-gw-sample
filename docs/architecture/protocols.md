@@ -1,64 +1,53 @@
-# Protocol Normalization & Transcoding
+# Client Endpoints & Protocols
 
-The AI Gateway decouples client application SDKs from backend model implementations through real-time bidirectional translation.
-
+The AI Gateway decouples client SDKs and developer CLI tools (`Claude Code`, `Codex`, OpenAI SDK, Anthropic SDK, Google GenAI SDK) from backend model providers through automatic request and streaming SSE translation.
 
 ---
 
-## 1. Supported Ingress Endpoints & 3×3 Transcoding Matrix
+## 1. Endpoint & Provider Matrix
 
-| Ingress Client Endpoint | Target Backend: **OpenAI**<br>*(vLLM / Azure / DeepSeek)* | Target Backend: **Anthropic**<br>*(Claude API / Vertex)* | Target Backend: **Gemini**<br>*(Google Vertex AI)* |
+Any client endpoint can call any configured model provider:
+
+| Client Endpoint | Google Gemini & Embeddings | Anthropic Claude | OpenAI, MaaS, Azure & vLLM |
 | :--- | :---: | :---: | :---: |
-| **Claude SDK**<br>`POST /v1/messages` | ✅ **Full Transcoding**<br>*(Claude &rarr; OpenAI schema + SSE)* | ✅ **Native Passthrough**<br>*(Direct routing + auth injection)* | ✅ **Full Transcoding**<br>*(Claude &rarr; Gemini schema + SSE)* |
-| **OpenAI SDK**<br>`POST /v1/chat/completions` | ✅ **Native Passthrough**<br>*(Direct routing + auth injection)* | ✅ **Full Transcoding**<br>*(OpenAI &rarr; Claude schema + SSE)* | ✅ **Full Transcoding**<br>*(OpenAI &rarr; Gemini schema + SSE)* |
-| **Vertex AI SDK**<br>`POST /ai-gateway` | ℹ️ **Via OpenAI Endpoint**<br>*(Clients use `/v1/chat/completions`)* | ✅ **Native Passthrough**<br>*(Direct to Claude `:rawPredict`)* | ✅ **Native Passthrough**<br>*(Direct to Gemini `:generateContent`)* |
-| **Catalog Discovery**<br>`GET /v1/models` | ✅ **OpenAI Format** | ✅ **Anthropic Format** | ✅ **Dynamic Catalog** |
+| **`POST /v1/messages`**<br>*(Claude Code, Anthropic SDK)* | Automatic translation | Native format | Automatic translation |
+| **`POST /v1/chat/completions`**<br>*(Codex, OpenAI SDK)* | Automatic translation | Automatic translation | Native format |
+| **`POST /v1/embeddings`**<br>*(OpenAI Embeddings SDK)* | Automatic translation | N/A | Native format |
+| **`POST /ai-gateway`**<br>*(Vertex AI / Google GenAI SDK)* | Native format | Native format | Use `/v1/chat/completions` |
+| **`GET /v1/models`**<br>*(Model Discovery)* | Dynamic catalog | Dynamic catalog | Dynamic catalog |
 
 ---
 
+## 2. Developer CLI & SDK Capabilities
 
-## 2. Request Translation Pipeline
+Click a tab below to see how each client protocol is supported:
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Client
-    participant Proxy as Apigee AI Gateway
-    participant Vertex as Google Vertex AI
+=== "Anthropic Messages (`POST /v1/messages`)"
 
-    Client->>Proxy: POST /v1/messages (Anthropic Format)
-    Note over Proxy: JS-anthropic-to-gemini converts messages, system prompts, tool calls, and base64 images
-    Proxy->>Vertex: POST .../models/gemini-3.5-flash:streamGenerateContent?alt=sse
-    Vertex-->>Proxy: SSE Chunks (Gemini format)
-    Note over Proxy: JS-combine-resp & EventFlow translate chunk delta events to Anthropic SSE format
-    Proxy-->>Client: HTTP 200 OK (Anthropic content_block_delta stream)
-```
+    Designed for **Claude Code** and the **Anthropic SDK**. Can target Anthropic Claude natively or automatically translate requests and SSE streams to Google Gemini, OpenAI, or Vertex Model Garden MaaS.
 
----
+    * **Extended Thinking:** Preserves `thinking` (`{type: "thinking", thinking: "...", signature: "..."}`) and `redacted_thinking` blocks across multi-turn agentic loops, mapping `thinking.budget_tokens` to Gemini `thinkingConfig.thinkingBudget` or OpenAI `reasoning_effort`.
+    * **Tool Use & Function Calling:** Translates Anthropic `tools`, `tool_choice`, `tool_use`, and `tool_result` blocks (including structured array content) to and from Gemini and OpenAI tool formats.
+    * **Multimodal & Document Blocks:** Supports base64 images (`image/jpeg`, `image/png`, `image/webp`) and PDF/text `document` blocks.
+    * **Prompt Caching:** Preserves `cache_control: {"type": "ephemeral"}` breakpoints and returns cached token counts in response usage metadata.
 
-## 3. Streaming Support (SSE Transcoding)
+=== "OpenAI Chat Completions (`POST /v1/chat/completions`)"
 
-Both streaming (`stream: true`) and non-streaming requests are supported across all protocols:
-* **Anthropic SSE:** Translates `message_start`, `content_block_start`, `content_block_delta`, `message_delta`, and `message_stop`.
-* **Gemini SSE:** Parses chunk candidates and normalizes usage metadata from stream trailers.
-* **Token Accumulation:** Token consumption is aggregated in real time in `EventFlow` to accurately decrement quotas and calculate micro-costs on completion.
+    Designed for **Codex**, **GitHub/Cursor IDE assistants**, **LangChain**, and the **OpenAI SDK**. Can target OpenAI, MaaS, Azure, and vLLM natively, or automatically translate requests and SSE streams to Google Gemini and Anthropic Claude.
 
----
+    * **Streaming SSE Normalization:** Translates backend stream deltas (including content, reasoning tokens, and tool call arguments) into standard OpenAI `chat.completion.chunk` SSE events (`data: {...}\n\n` followed by `data: [DONE]\n\n`).
+    * **Reasoning Effort & Tool Calls:** Maps `reasoning_effort` (`low`, `medium`, `high`) and parallel `tool_calls` across providers.
 
-## 4. Publisher vs. Wire Protocol Decoupling
+=== "Vector Embeddings (`POST /v1/embeddings`)"
 
-The gateway strictly separates **Publishers** (who hosts or creates the model: Meta, DeepSeek, Mistral, Azure, Google, Anthropic, internal vLLM) from **Wire Protocols** (the HTTP/JSON format: `openai`, `anthropic`, `gemini`).
+    Provides a unified OpenAI-compatible `/v1/embeddings` interface across both **Direct OpenAI / vLLM** and **Google Vertex AI (`text-embedding-005`, `text-multilingual-embedding-002`)**:
 
-### Publisher vs. Protocol Mapping Matrix
+    * **OpenAI / vLLM Models:** Forwards the OpenAI `/v1/embeddings` request directly and injects the appropriate backend credential.
+    * **Vertex AI Embedding Models:** Automatically translates OpenAI `{"model": "text-embedding-005", "input": ["..."], "dimensions": 768}` payloads into Vertex AI `:predict` instances and normalizes the response back into an OpenAI `{"object": "list", "data": [{"object": "embedding", ...}], "usage": {...}}` payload.
 
-| Publisher (`publisher`) | Example Models | Wire Protocol (`format`) | Client Transcoding Support |
-| :--- | :--- | :---: | :--- |
-| **OpenAI / Azure** | `gpt-4o`, `o3-mini` | `openai` | Full passthrough for OpenAI clients; real-time transcoding for Claude clients. |
-| **Meta / DeepSeek / Mistral** | `llama-3-70b`, `deepseek-r1`, `mistral-large` | `openai` | Full passthrough for OpenAI clients; real-time transcoding for Claude clients. |
-| **Self-Hosted (vLLM / Ollama)** | Any open weights cluster | `openai` | Full passthrough for OpenAI clients; real-time transcoding for Claude clients. |
-| **Anthropic Direct / Bedrock** | `claude-3-7-sonnet`, `claude-haiku-4-5` | `anthropic` | Full passthrough for Claude clients; real-time transcoding for OpenAI clients. |
-| **Google Vertex AI** | `gemini-2.5-pro`, `gemini-2.5-flash` | `gemini` | Real-time transcoding for Claude & OpenAI clients; native for Vertex SDK. |
+=== "Vertex AI Native (`POST /ai-gateway`)"
 
-For detailed configuration patterns, recipes, and upstream authentication, see the [Custom URLs & Multi-Protocol Guide](../template-guide/custom-urls.md).
+    Designed for applications built on the **Google GenAI SDK**, **Vertex AI SDK**, or **Agent Development Kit (ADK)** that send native Vertex AI URL paths:
 
-
+    * Supports `:generateContent`, `:streamGenerateContent`, `:rawPredict`, and `:streamRawPredict`.
+    * Applies the same AI Product authentication, token quotas, shared team budgets, Model Armor safety scans, and USD cost attribution as `/v1/messages` and `/v1/chat/completions`.

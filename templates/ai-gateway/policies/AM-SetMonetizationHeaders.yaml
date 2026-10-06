@@ -9,8 +9,17 @@ AssignMessage:
           .name: X-Gateway-Prompt-Tokens
           -Data: '{prompt_tokens}'
       - Header:
+          .name: X-Gateway-Cache-Read-Tokens
+          -Data: '{cache_read_tokens}'
+      - Header:
+          .name: X-Gateway-Cache-Write-Tokens
+          -Data: '{cache_write_tokens}'
+      - Header:
           .name: X-Gateway-Completion-Tokens
           -Data: '{completion_tokens}'
+      - Header:
+          .name: X-Gateway-Thinking-Tokens
+          -Data: '{thinking_tokens}'
       - Header:
           .name: X-Gateway-Total-Tokens
           -Data: '{usage_total_tokens}'
@@ -18,14 +27,29 @@ AssignMessage:
           .name: X-Gateway-Prompt-Cost-USD
           -Data: '{tx_prompt_cost_usd}'
       - Header:
+          .name: X-Gateway-Cache-Read-Cost-USD
+          -Data: '{tx_cache_read_cost_usd}'
+      - Header:
           .name: X-Gateway-Completion-Cost-USD
           -Data: '{tx_completion_cost_usd}'
       - Header:
           .name: X-Gateway-Total-Cost-USD
           -Data: '{tx_cost_usd}'
       - Header:
+          .name: X-Gateway-Total-Cost-Micro-USD
+          -Data: '{tx_cost_micro_usd}'
+      - Header:
           .name: X-Gateway-Cost-Currency
           -Data: '{tx_currency}'
+      - Header:
+          .name: X-Gateway-Identity-User
+          -Data: '{identity_user_id}'
+      - Header:
+          .name: X-Gateway-Identity-Persona
+          -Data: '{identity_persona}'
+      - Header:
+          .name: X-Gateway-Identity-Team
+          -Data: '{identity_team}'
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

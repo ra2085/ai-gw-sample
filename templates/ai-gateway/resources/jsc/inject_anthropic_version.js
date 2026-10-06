@@ -1,8 +1,26 @@
+(function () {
+'use strict';
+
 try {
     var customUrl = context.getVariable("model_custom_url");
     if (customUrl) {
         context.setVariable("target.url", customUrl);
     }
+    var model = context.getVariable("model") || "claude-haiku-4-5";
+    var upstreamModel = context.getVariable("propertyset.model_locations." + model + ".upstream_model");
+    var configuredAnthropicVersion = context.getVariable("propertyset.model_locations." + model + ".anthropic_version");
+    var configuredAnthropicBeta = context.getVariable("propertyset.model_locations." + model + ".anthropic_beta");
+
+    if (customUrl) {
+        if (!context.getVariable("request.header.anthropic-version")) {
+            context.setVariable("request.header.anthropic-version", configuredAnthropicVersion || "2023-06-01");
+        }
+        if (configuredAnthropicBeta && !context.getVariable("request.header.anthropic-beta")) {
+            context.setVariable("request.header.anthropic-beta", configuredAnthropicBeta);
+        }
+    }
+
+    var isDirectAnthropicApi = customUrl && customUrl.indexOf("api.anthropic.com") !== -1;
     var requestFormat = context.getVariable("request_format") || "claude";
     var content = context.getVariable("request.content");
     if (content) {
@@ -11,10 +29,12 @@ try {
         if (requestFormat === "openai") {
             // Transcode OpenAI request -> Anthropic schema
             var anthropicBody = {
-                anthropic_version: "vertex-2023-10-16",
                 max_tokens: body.max_tokens || body.max_completion_tokens || 4096,
                 messages: []
             };
+            if (!isDirectAnthropicApi) {
+                anthropicBody.anthropic_version = configuredAnthropicVersion || "vertex-2023-10-16";
+            }
 
             if (body.temperature !== undefined) {
                 anthropicBody.temperature = body.temperature;
@@ -88,12 +108,18 @@ try {
 
             // If non-streaming and no customUrl, route to :rawPredict on Vertex AI
             var isStream = body.stream === true || body.stream === "true" || context.getVariable("stream") === "true";
+            if (isStream) {
+                anthropicBody.stream = true;
+            }
+            if (customUrl) {
+                anthropicBody.model = upstreamModel || model || body.model;
+            }
             if (!customUrl && !isStream) {
                 var project = context.getVariable("propertyset.config.project_id");
                 var endpointHost = context.getVariable("endpoint_host") || "aiplatform.googleapis.com";
                 var modelLocation = context.getVariable("model_location") || "us-east5";
-                var model = context.getVariable("model") || "claude-haiku-4-5";
-                var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/anthropic/models/" + model + ":rawPredict";
+                var targetModel = upstreamModel || model;
+                var targetUrl = "https://" + endpointHost + "/v1/projects/" + project + "/locations/" + modelLocation + "/publishers/anthropic/models/" + targetModel + ":rawPredict";
                 context.setVariable("target.url", targetUrl);
             }
 
@@ -103,13 +129,18 @@ try {
             // Remove gateway/non-standard top-level fields not accepted by Anthropic
             if (!customUrl) {
                 delete body.model;
+            } else {
+                body.model = upstreamModel || model || body.model;
             }
             delete body.models;
             delete body.plugins;
             delete body.provider;
 
-            // Ensure required anthropic_version is present
-            body.anthropic_version = "vertex-2023-10-16";
+            if (isDirectAnthropicApi) {
+                delete body.anthropic_version;
+            } else {
+                body.anthropic_version = configuredAnthropicVersion || "vertex-2023-10-16";
+            }
 
             context.setVariable("request.content", JSON.stringify(body));
         }
@@ -118,4 +149,4 @@ try {
     print("Error in inject_anthropic_version: " + e);
 }
 
-
+})();

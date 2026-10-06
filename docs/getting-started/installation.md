@@ -128,22 +128,61 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ## 5. Create Data Collectors (Required One-Time Organization Setup)
 
-Apigee captures real-time token metrics and transaction costs into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
+Apigee captures real-time token metrics, micro-transaction costs, and identity attribution (`user_id`, `persona`, `team`) into **Data Collectors**. If these Data Collectors do not exist in your Apigee organization, Apigee will reject the proxy deployment.
 
-Run this loop once per organization to create all 6 required Data Collectors:
+Run this loop once per organization to create all **18 required Data Collectors** (covering granular token types, per-type USD costs, model routing, and identity attribution):
 
 ```bash
 for dc in \
   "dc_prompt_token_count:INTEGER" \
+  "dc_uncached_prompt_token_count:INTEGER" \
+  "dc_cache_read_token_count:INTEGER" \
+  "dc_cache_write_token_count:INTEGER" \
+  "dc_thinking_token_count:INTEGER" \
   "dc_completion_token_count:INTEGER" \
   "dc_total_token_count:INTEGER" \
   "dc_model:STRING" \
   "dc_requested_model:STRING" \
-  "dc_tx_cost_usd:FLOAT"; do
+  "dc_tx_uncached_prompt_cost_usd:FLOAT" \
+  "dc_tx_cache_read_cost_usd:FLOAT" \
+  "dc_tx_cache_write_cost_usd:FLOAT" \
+  "dc_tx_prompt_cost_usd:FLOAT" \
+  "dc_tx_completion_cost_usd:FLOAT" \
+  "dc_tx_cost_usd:FLOAT" \
+  "dc_identity_user_id:STRING" \
+  "dc_identity_persona:STRING" \
+  "dc_identity_team:STRING"; do
   IFS=":" read -r name type <<< "$dc"
   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
 done
 ```
 
+---
 
+## 6. Provision AI Products & Persona Apps (`scripts/sync-personas.sh`)
+
+To enforce per-model token counters (`LLMTokenQuota`) and authenticate API Keys or SSO/Agent tokens, Apigee requires **API Products** (configured with `llmOperationGroup` model quotas), a **Developer**, and **Developer Apps** (`client_id` / Consumer Keys).
+
+Instead of creating these manually in the Apigee UI, run [`scripts/sync-personas.sh`](https://github.com/ra2085/ai-gw-sample/blob/main/scripts/sync-personas.sh) to automatically provision or update them directly from your `values.yaml`:
+
+```bash
+# 1. Preview the API Products (llmOperationGroup) & Developer Apps (zero network calls)
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV" \
+    --dry-run
+
+# 2. Create or update the Developer, API Products, and Developer Apps in Apigee
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
+```
+
+* **What it creates:**
+  1. A dedicated Persona owner Developer (`ai-gateway-personas@<PROJECT_ID>.iam.gserviceaccount.com`).
+  2. An Apigee **API Product** per persona (`<proxy>-<persona>`, e.g., `ai-gateway-developer`, `ai-gateway-knowledge-worker`) with `llmOperationGroup.operationConfigs` populated for every concrete allowed model in your catalog and any `per_model` token quota limits.
+  3. A **Developer App** per persona (`<proxy>-<persona>-app`) and prints a ready-to-paste `values.yaml` snippet containing each app's `client_id` (Consumer Key), which also serves as an `$API_KEY` for direct CLI testing.
+* **Safe to re-run at any time:** The script is strictly additive (create-or-update only), never deletes existing products or apps, and preserves existing Consumer Keys without rotating them.
 

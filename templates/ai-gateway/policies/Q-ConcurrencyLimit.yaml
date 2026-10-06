@@ -1,0 +1,15 @@
+Quota:
+  .continueOnError: false
+  .enabled: true
+  .name: Q-ConcurrencyLimit
+  .type: rollingwindow
+  DisplayName: Q-ConcurrencyLimit
+  Identifier:
+    .ref: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.identifier_ref }}{{ $.Values.features.rate_limits.concurrency.identifier_ref }}{{ else }}rate_limit_client_id{{ end }}
+  Allow:
+    .count: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
+    .countRef: concurrency_limit
+  Interval: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.ttl_minutes }}{{ $.Values.features.rate_limits.concurrency.ttl_minutes }}{{ else }}1{{ end }}
+  TimeUnit: minute
+  Distributed: true
+  Synchronous: true

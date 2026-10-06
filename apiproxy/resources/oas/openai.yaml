@@ -51,9 +51,9 @@ components:
   schemas:
     OpenAIRequest:
       type: object
+      additionalProperties: true
       required:
         - model
-        - messages
       properties:
         model:
           type: string
@@ -63,21 +63,80 @@ components:
           type: boolean
           description: Enable SSE streaming response.
           default: false
+        stream_options:
+          type: object
+          additionalProperties: true
+        max_tokens:
+          type: integer
+        max_completion_tokens:
+          type: integer
+        temperature:
+          type: number
+        top_p:
+          type: number
+        reasoning_effort:
+          type: string
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tool_choice:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+        parallel_tool_calls:
+          type: boolean
+        response_format:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
         messages:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
               - role
-              - content
             properties:
               role:
                 type: string
-                enum: [user, assistant, system]
+                enum: [user, assistant, system, developer, tool, function]
                 example: user
               content:
+                nullable: true
+                oneOf:
+                  - type: string
+                    example: Explain gravity in one sentence.
+                  - type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+              name:
                 type: string
-                example: Explain gravity in one sentence.
+              tool_call_id:
+                type: string
+              tool_calls:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+        input:
+          description: Input text or array of strings to embed (OpenAI /v1/embeddings format).
+        dimensions:
+          type: integer
+          description: Optional output embedding dimensionality.
+        encoding_format:
+          type: string
+          enum: [float, base64]
+        task_type:
+          type: string
+          description: Optional Vertex AI embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
+        user:
+          type: string
     OpenAIResponse:
       type: object
       properties:

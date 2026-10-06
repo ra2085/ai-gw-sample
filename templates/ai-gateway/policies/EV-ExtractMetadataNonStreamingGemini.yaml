@@ -1,5 +1,5 @@
 ExtractVariables:
-  .continueOnError: false
+  .continueOnError: true
   .enabled: true
   .name: EV-ExtractMetadataNonStreamingGemini
   DisplayName: EV-ExtractMetadataNonStreamingGemini
@@ -13,6 +13,14 @@ ExtractVariables:
         .name: completion_tokens
         .type: integer
         JSONPath: $.usageMetadata.candidatesTokenCount
+    - Variable:
+        .name: cached_content_tokens
+        .type: integer
+        JSONPath: $.usageMetadata.cachedContentTokenCount
+    - Variable:
+        .name: thoughts_tokens
+        .type: integer
+        JSONPath: $.usageMetadata.thoughtsTokenCount
   Source:
     .clearPayload: false
     -Data: response

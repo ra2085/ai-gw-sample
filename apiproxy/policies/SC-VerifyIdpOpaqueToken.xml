@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ServiceCallout continueOnError="true" enabled="true" name="SC-VerifyIdpOpaqueToken">
+  <DisplayName>SC-VerifyIdpOpaqueToken</DisplayName>
+  <Properties/>
+  <Request clearPayload="true" variable="idpOpaqueVerifyRequest">
+    <IgnoreUnresolvedVariables>false</IgnoreUnresolvedVariables>
+    <Set>
+      <Headers>
+        <Header name="Authorization">Bearer {auth_bearer_token}</Header>
+        <Header name="Accept">application/json</Header>
+      </Headers>
+      <Verb>GET</Verb>
+    </Set>
+  </Request>
+  <Response>idpOpaqueVerifyResponse</Response>
+  <HTTPTargetConnection>
+    <Properties>
+      <Property name="connect.timeout.millis">2000</Property>
+      <Property name="io.timeout.millis">3000</Property>
+      <Property name="keepalive.timeout.millis">50000</Property>
+    </Properties>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
+      <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
+    <URL>https://workshop.iloveapi.management/mock/oauth2/v1/userinfo</URL>
+  </HTTPTargetConnection>
+</ServiceCallout>

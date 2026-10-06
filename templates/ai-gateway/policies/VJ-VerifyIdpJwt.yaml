@@ -1,0 +1,16 @@
+VerifyJWT:
+  .continueOnError: true
+  .enabled: true
+  .name: VJ-VerifyIdpJwt
+  DisplayName: VJ-VerifyIdpJwt
+  Algorithm: RS256
+  Source: auth_bearer_token
+  IgnoreUnresolvedVariables: true
+  IgnoreCriticalHeaders: false
+  IgnoreIssuedAt: false
+  TimeAllowance: 30s
+  PublicKey:
+    JWKS:
+      .uriRef: propertyset.config.auth_idp_jwt_jwks_uri
+  Issuer:
+    .ref: propertyset.config.auth_idp_jwt_issuer

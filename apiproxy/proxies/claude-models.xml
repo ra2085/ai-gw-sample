@@ -1,30 +1,74 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ProxyEndpoint name="claude-models">
-  <Description>Anthropic Models API Proxy Endpoint</Description>
+  <Description>Anthropic &amp; OpenAI Models API Catalog Proxy Endpoint</Description>
   <FaultRules/>
   <PreFlow name="PreFlow">
     <Request>
       <Step>
-        <Condition>!(request.header.Authorization Matches "Bearer *")</Condition>
+        <Name>JS-extract-auth-credentials</Name>
+      </Step>
+      <Step>
         <Name>VA-ApiKey</Name>
+        <Condition>(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")</Condition>
+      </Step>
+      <Step>
+        <Name>OA-VerifyAccessToken</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")</Condition>
+      </Step>
+      <Step>
+        <Name>SC-VerifyAgentToken</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")</Condition>
+      </Step>
+      <Step>
+        <Name>SC-VerifyIdpOpaqueToken</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")</Condition>
+      </Step>
+      <Step>
+        <Name>VJ-VerifyIdpJwt</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")</Condition>
+      </Step>
+      <Step>
+        <Name>JS-resolve-auth-persona</Name>
+        <Condition>(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))</Condition>
+      </Step>
+      <Step>
+        <Name>OA-ImportExternalToken</Name>
+        <Condition>auth_ready_to_import = "true"</Condition>
+      </Step>
+      <Step>
+        <Name>OA-SaveTokenAttributes</Name>
+        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
+      </Step>
+      <Step>
+        <Name>JS-restore-request-payload</Name>
+        <Condition>auth_ready_to_import = "true"</Condition>
+      </Step>
+      <Step>
+        <Name>OA-VerifyAccessToken</Name>
+        <Condition>(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")</Condition>
+      </Step>
+      <Step>
+        <Name>VA-ApiKey</Name>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))</Condition>
+      </Step>
+      <Step>
+        <Name>RF-Unauthorized</Name>
+        <Condition>(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")</Condition>
       </Step>
       <Step>
         <Name>MLC-EnforceMonetizationLimits</Name>
       </Step>
       <Step>
         <Name>AM-NormalizePathSuffix</Name>
+        <Condition>(proxy.pathsuffix = "") or (proxy.pathsuffix = null)</Condition>
       </Step>
     </Request>
     <Response/>
   </PreFlow>
-  <PostFlow name="PostFlow">
-    <Request/>
-    <Response/>
-  </PostFlow>
   <Flows>
     <Flow name="listModels">
       <Description>List available models</Description>
-      <Condition>(request.verb = "GET") AND ((proxy.pathsuffix MatchesPath "") OR (proxy.pathsuffix MatchesPath "/"))</Condition>
+      <Condition>(request.verb = "GET") AND ((proxy.pathsuffix = "") OR (proxy.pathsuffix = "/"))</Condition>
       <Request/>
       <Response>
         <Step>
@@ -43,6 +87,10 @@
       </Response>
     </Flow>
   </Flows>
+  <PostFlow name="PostFlow">
+    <Request/>
+    <Response/>
+  </PostFlow>
   <HTTPProxyConnection>
     <BasePath>/v1/models</BasePath>
   </HTTPProxyConnection>

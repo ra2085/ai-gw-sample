@@ -51,6 +51,7 @@ components:
   schemas:
     ClaudeRequest:
       type: object
+      additionalProperties: true
       required:
         - model
         - max_tokens
@@ -68,10 +69,46 @@ components:
           type: boolean
           description: Enable SSE streaming response.
           default: false
+        system:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+        temperature:
+          type: number
+        top_p:
+          type: number
+        top_k:
+          type: integer
+        stop_sequences:
+          type: array
+          items:
+            type: string
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tool_choice:
+          type: object
+          additionalProperties: true
+        thinking:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        service_tier:
+          type: string
+        anthropic_version:
+          type: string
         messages:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
               - role
               - content
@@ -81,8 +118,47 @@ components:
                 enum: [user, assistant]
                 example: user
               content:
-                type: string
-                example: Explain gravity in one sentence.
+                oneOf:
+                  - type: string
+                    example: Explain gravity in one sentence.
+                  - type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                      properties:
+                        type:
+                          type: string
+                          description: Content block type (text, image, document, tool_use, tool_result, thinking, redacted_thinking).
+                        text:
+                          type: string
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        input:
+                          type: object
+                          additionalProperties: true
+                        tool_use_id:
+                          type: string
+                        content:
+                          oneOf:
+                            - type: string
+                            - type: array
+                              items:
+                                type: object
+                                additionalProperties: true
+                        is_error:
+                          type: boolean
+                        source:
+                          type: object
+                          additionalProperties: true
+                        cache_control:
+                          type: object
+                          additionalProperties: true
+                        thinking:
+                          type: string
+                        signature:
+                          type: string
     ClaudeResponse:
       type: object
       properties:

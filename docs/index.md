@@ -1,139 +1,84 @@
-# <img src="img/Apigee-512-color.png" alt="Apigee Logo" width="40" style="vertical-align: middle; margin-right: 8px;" /> Apigee AI Gateway
+# <img src="img/Apigee-512-color.png" alt="Apigee Logo" width="40" style="vertical-align: middle; margin-right: 8px;" /> Apigee Enterprise AI Gateway
 
+The **Apigee Enterprise AI Gateway** is a declarative framework for operating and governing AI traffic on Google Cloud Apigee.
 
-Welcome to the documentation for the **Enterprise AI Gateway** on Google Cloud Apigee.
-
-The AI Gateway provides a unified, production-grade control plane for generative AI workloads across Anthropic Claude, OpenAI, Google Gemini on Vertex AI, and self-hosted models (vLLM, Ollama, Groq, Azure OpenAI) — configured declaratively through simple YAML.
-
+Instead of building custom API proxies from scratch for every model provider and client SDK, you define your gateway in a single [`values.yaml`](template-guide/configuration.md) file and organize consumption around **AI Products**.
 
 ---
 
-## Progressive Adoption Journey
-
-The repository is designed to let you start simple and add capabilities as your requirements grow:
-
-```mermaid
-graph LR
-    Step1["1. Quickstart<br/><b>5-Minute Setup</b><br/>Deploy with Gemini & Claude"] --> Step2["2. Add Models<br/><b>Custom Endpoints</b><br/>vLLM, Ollama, Azure, DeepSeek"]
-    Step2 --> Step3["3. Enterprise Features<br/><b>Security & Governance</b><br/>Model Armor, Quotas, Monetization"]
-    Step3 --> Step4["4. Advanced Routing<br/><b>Smart Router & Judge</b><br/>Cost optimization & dynamic triage"]
-```
-
-1. **[Quickstart (5 Minutes)](getting-started/quickstart-template.md)**: Deploy a working gateway with 15 lines of YAML supporting Gemini and Claude.
-2. **[Configuration Reference (`values.yaml`)](template-guide/configuration.md)**: Complete reference of all template schema options, metadata, and defaults.
-3. **[Custom Providers & URLs](template-guide/custom-urls.md)**: Connect external APIs (Azure, DeepSeek) and private clusters (vLLM, Ollama) with custom auth.
-4. **[Enterprise Feature Toggles](template-guide/feature-flags.md)**: Enable Model Armor prompt/response sanitization, token quotas, and monetization.
-5. **[Smart Routing & LLM as a Judge](architecture/routing.md)**: Automatically route prompts based on cost tiers and complexity.
-
-
----
-
-## Core Capabilities
+## Core Concepts
 
 <div class="grid cards" markdown>
 
--   :material-swap-horizontal: **Universal Protocol Normalization**
-    
-    ---
-    
-    Accepts Claude (`/v1/messages`), Gemini (`/ai-gateway`), or OpenAI (`/v1/chat/completions`) schemas and automatically transcodes them across any backend provider with real-time SSE streaming.
+-   **1. Declarative Gateway Configuration (`values.yaml`)**
 
--   :material-routes: **Smart Routing & LLM as a Judge**
-    
     ---
-    
-    Dynamically routes requests using cost tiers (`low`, `medium`, `high`, `max`), fallback chains, or real-time prompt complexity classification powered by Gemini 3.1 Flash-Lite.
 
--   :material-shield-check: **Enterprise Security (GCP Model Armor)**
-    
-    ---
-    
-    Inspects and sanitizes user prompts and model completions against sensitive data leakage, toxic content, and prompt injection attacks with automated de-identification.
+    Define your model catalog, routing rules, and security guardrails in a single YAML file. The framework compiles a complete, production-ready Apigee bundle in seconds—start in 15 lines of YAML and turn on advanced capabilities as your needs grow.
 
--   :material-credit-card-outline: **Token Monetization & Quotas**
-    
-    ---
-    
-    Enforces prepaid wallet credit limits in pre-flight, calculates exact token consumption costs in real-time, and integrates directly with Apigee rate plans and quotas.
+-   **2. The AI Product Model (Personas & Multi-Tenancy)**
 
--   :material-tune: **Declarative Configuration**
-    
     ---
-    
-    Single `values.yaml` file drives the entire gateway bundle generation, supporting custom URLs, regional endpoints, and modular feature toggling.
 
--   :material-chart-box: **Telemetry & Observability**
-    
+    Package model access, token budgets, and rate limits into reusable **AI Products** (backed by Apigee API Products) aligned to how your organization works—such as **Knowledge Workers**, **Developers**, **Lead AI Engineers**, or **Autonomous Agents**.
+
+-   **3. Universal Client & Model Compatibility**
+
     ---
-    
-    Injects standard observability headers and logs detailed token counts, model identifiers, and transaction costs into Apigee Analytics Data Collectors.
+
+    Developers and agents connect using their preferred tools (`Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, or Google GenAI SDK), and the gateway translates requests and streams across **Vertex AI (Gemini, Claude, Llama, Mistral)**, **Direct OpenAI**, and **self-hosted models**.
+
+-   **4. Invoice-Accurate Cost Attribution & Spend Control**
+
+    ---
+
+    Calculate exact dollar costs (including prompt cache read/write rates and internal reasoning tokens) across every model, AI Product persona, and department, with out-of-the-box Looker Studio dashboards.
 
 </div>
 
 ---
 
-## Architecture Overview
-
-```mermaid
-graph LR
-    subgraph Clients["Client Applications"]
-        C1["OpenAI SDK"]
-        C2["Anthropic Claude SDK"]
-        C3["Vertex AI SDK"]
-    end
-
-    subgraph Gateway["Apigee AI Gateway"]
-        direction TB
-        G1["Universal Protocol Normalization"]
-        G2["Model Armor Security & PII Sanitization"]
-        G3["Smart Routing & Cost Optimization"]
-        G4["Token Quotas & Monetization"]
-    end
-
-    subgraph Providers["Backend LLM Providers"]
-        P1["Google Vertex AI (Gemini & Claude)"]
-        P2["Third-Party APIs (OpenAI, Azure, DeepSeek)"]
-        P3["Self-Hosted Clusters (vLLM, Ollama)"]
-    end
-
-    Clients --> Gateway
-    Gateway --> Providers
-```
-
-> Looking for the complete 25-step policy execution sequence? See the [Pipeline Execution Flow (Appendix)](proxy-deep-dive/bundle-structure.md#3-appendix-end-to-end-pipeline-execution-flow).
-
----
-
-## Documentation & Template Guides
+## How the Framework Fits Together
 
 <div class="grid cards" markdown>
 
--   :material-file-code-outline: **[Configuration Reference](template-guide/configuration.md)**
-    
-    ---
-    
-    Complete schema specification for `values.yaml` covering gateway metadata, endpoints, models, routing tiers, and pricing.
+-   **1. Who Calls the Gateway (Any SDK or Identity)**
 
--   :material-server-network: **[Custom Providers & URLs](template-guide/custom-urls.md)**
-    
     ---
-    
-    How to connect self-hosted LLMs (vLLM, Ollama), third-party providers (DeepSeek, Azure OpenAI), and upstream bearer/header authentication.
 
--   :material-toggle-switch: **[Feature Toggles](template-guide/feature-flags.md)**
-    
-    ---
-    
-    Enable or disable Model Armor security, token monetization, rate quotas, and LLM Judge evaluation.
+    * **Developers & CLI Tools:** `Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, Google GenAI SDK
+    * **Internal Apps & Portals:** Corporate SSO (`Okta`, `Entra ID`, `Ping`) & Apigee OAuth / API Keys
+    * **Autonomous Agents:** Vertex AI Agent Engine (`SPIFFE` `.system.id.goog`) & GCP Service Accounts
 
--   :material-rocket-launch: **[5-Minute Quickstart](getting-started/quickstart-template.md)**
-    
+-   **2. How You Govern (Apigee AI Products)**
+
     ---
-    
-    Deploy a working AI Gateway bundle using the minimal 15-line starter configuration.
+
+    * **Lead Engineer:** High USD / Token budget • All frontier models (`claude-opus-4-6`, `gemini-3.1-pro`)
+    * **Standard Developer:** Personal daily cap + shared department pool • Coding & reasoning models
+    * **Knowledge Worker:** Standard budget • Fast, cost-efficient models (`gemini-3.5-flash`, `claude-haiku-4-5`)
+    * **Autonomous Agent:** Dedicated service quota • Scoped task models • Burst & stream concurrency limits
+
+-   **3. Where Models Run (Multi-Cloud & Self-Hosted)**
+
+    ---
+
+    * **Google Cloud Vertex AI:** Gemini, Anthropic Claude, Embeddings & Model Garden MaaS (`Llama`, `Mistral`, `Qwen`)
+    * **Direct Cloud Providers:** OpenAI, Anthropic & Azure OpenAI (isolated keys per app or PropertySet)
+    * **Self-Hosted Clusters:** Custom `vLLM`, `Ollama` & private endpoints on GKE or Cloud Run
 
 </div>
 
+---
 
+## Explore the Guides
 
+| Step | Guide | What You Will Accomplish |
+| :--- | :--- | :--- |
+| **Step 1** | **[5-Minute Quickstart](getting-started/quickstart-template.md)** | Render and deploy a working AI Gateway from a minimal 15-line `values.quickstart.yaml` file. |
+| **Step 2** | **[AI Products, Tenancy & Auth](architecture/security.md)** | Design your **AI Product** tiers for personas and teams, and connect API Keys, Corporate SSO (Okta / Entra / Ping), or GCP Agent identities. |
+| **Step 3** | **[Models & Providers](template-guide/custom-urls.md)** | Add Vertex AI Gemini & Claude, Model Garden MaaS (Llama, Mistral), Direct OpenAI & Anthropic (`provider_keys` PropertySet), Embeddings, or self-hosted vLLM. |
+| **Step 4** | **[Quotas, Budgets & Cost Control](architecture/monetization.md)** | Configure rolling token allowances, per-model caps, shared department budgets, temporary overrides, and **Invoice-Accurate Cost Attribution**. |
+| **Step 5** | **[Smart Routing & Content Safety](architecture/routing.md)** | Set up transparent model aliases, cost tiers, fallback chains, complexity-based routing (`auto:judge`), and GCP Model Armor sanitization. |
+| **Step 6** | **[Analytics & Looker Studio Dashboards](operations/looker-studio-dashboard.md)** | Share multi-bucket cost chargeback, **Prompt Cache ROI**, team/peer consumption, developer self-service, and security governance dashboards across platform personas. |
 

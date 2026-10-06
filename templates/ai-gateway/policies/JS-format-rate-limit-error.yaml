@@ -1,0 +1,7 @@
+Javascript:
+  .continueOnError: true
+  .enabled: true
+  .timeLimit: 200
+  .name: JS-format-rate-limit-error
+  DisplayName: JS-format-rate-limit-error
+  ResourceURL: jsc://format_rate_limit_error.js

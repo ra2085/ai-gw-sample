@@ -14,8 +14,8 @@
 models.catalog={{ $modelNames | join "," }}
 
 # Global defaults
-default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-2.5-flash{{ end }}
-default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-2.5-flash{{ end }}
+default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
+default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-3.1-flash-lite{{ end }}
 default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
 default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
 default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Values.defaults.format }}{{ else }}gemini{{ end }}
@@ -25,11 +25,11 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
 # ==============================================================================
 tier.low={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 tier.medium={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
-tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-haiku-4-5" }}{{ else }}claude-haiku-4-5{{ end }}
+tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
+tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-sonnet-4-6" }}{{ else }}claude-sonnet-4-6{{ end }}
 
-task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
-task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-2.5-pro" }}{{ else }}gemini-2.5-pro{{ end }}
+task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
+task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
 task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
 task.classifier_model={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
@@ -49,8 +49,8 @@ alias.{{ $alias }}={{ $target }}
 {{- range $.Values.models }}
 # --- {{ .displayName | default .name }} ---
 {{ .name }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
-{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
-{{ .name }}.endpoint={{ .region | default "global" }}
+{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
+{{ .name }}.endpoint={{ .endpoint | default .region | default "global" }}
 {{ .name }}.model={{ .region | default "global" }}
 {{ .name }}.format={{ .format | default "gemini" }}
 {{ .name }}.display_name={{ .displayName | default .name }}
@@ -60,6 +60,21 @@ alias.{{ $alias }}={{ $target }}
 {{- end }}
 {{- if .custom_url }}
 {{ .name }}.url={{ .custom_url }}
+{{- end }}
+{{- if .upstream_model }}
+{{ .name }}.upstream_model={{ .upstream_model }}
+{{- end }}
+{{- if .openai_org_id }}
+{{ .name }}.openai_org_id={{ .openai_org_id }}
+{{- end }}
+{{- if .openai_project_id }}
+{{ .name }}.openai_project_id={{ .openai_project_id }}
+{{- end }}
+{{- if .anthropic_version }}
+{{ .name }}.anthropic_version={{ .anthropic_version }}
+{{- end }}
+{{- if .anthropic_beta }}
+{{ .name }}.anthropic_beta={{ .anthropic_beta }}
 {{- end }}
 {{- if .auth }}
 {{- if .auth.type }}
@@ -73,6 +88,17 @@ alias.{{ $alias }}={{ $target }}
 {{- end }}
 {{- if .auth.token }}
 {{ .name }}.auth_token={{ .auth.token }}
+{{- end }}
+{{- end }}
+{{- if .model_armor }}
+{{- if .model_armor.template }}
+{{ .name }}.model_armor_template={{ .model_armor.template }}
+{{- end }}
+{{- if .model_armor.request_template }}
+{{ .name }}.model_armor_request_template={{ .model_armor.request_template }}
+{{- end }}
+{{- if .model_armor.response_template }}
+{{ .name }}.model_armor_response_template={{ .model_armor.response_template }}
 {{- end }}
 {{- end }}
 
@@ -94,13 +120,27 @@ default_openai.model=us
 {{- define "generate_monetization_rates_properties" -}}
 # Default fallback pricing parameters
 default.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
+platform.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
 default.markup={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
+platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
+default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_input_rate }}{{ $.Values.features.monetization.default_input_rate }}{{ else }}0.10{{ end }}
+default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_output_rate }}{{ $.Values.features.monetization.default_output_rate }}{{ else }}0.40{{ end }}
 
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
 {{- if .pricing }}
+{{ .name }}.input_rate_per_m={{ .pricing.input_rate }}
+{{ .name }}.output_rate_per_m={{ .pricing.output_rate }}
 {{ .name }}.input_rate={{ .pricing.input_rate }}
 {{ .name }}.output_rate={{ .pricing.output_rate }}
+{{- if .pricing.cache_read_rate }}
+{{ .name }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
+{{ .name }}.cache_read_rate={{ .pricing.cache_read_rate }}
+{{- end }}
+{{- if .pricing.cache_write_rate }}
+{{ .name }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
+{{ .name }}.cache_write_rate={{ .pricing.cache_write_rate }}
+{{- end }}
 {{- if .pricing.markup }}
 {{ .name }}.markup={{ .pricing.markup }}
 {{- end }}
@@ -117,6 +157,298 @@ project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.
 model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
 model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
+model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
+model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
+default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
+default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
+cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
+cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
+cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
+openai_base_url={{ $.Values.gateway.openai_base_url }}
+{{- end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_api_key }}
+openai_api_key={{ $.Values.gateway.openai_api_key }}
+{{- end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_org_id }}
+openai_org_id={{ $.Values.gateway.openai_org_id }}
+{{- end }}
+{{- if and $.Values.gateway $.Values.gateway.openai_project_id }}
+openai_project_id={{ $.Values.gateway.openai_project_id }}
+{{- end }}
+{{- $auth := dict }}
+{{- if $.Values.auth }}
+{{- $auth = $.Values.auth }}
+{{- else if and $.Values.features $.Values.features.auth }}
+{{- $auth = $.Values.features.auth }}
+{{- end }}
+
+# Authentication & Persona-Based Token Import Configuration
+auth_allow_bearer_api_key={{ if hasKey $auth "allow_bearer_api_key" }}{{ $auth.allow_bearer_api_key }}{{ else }}true{{ end }}
+auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
+auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain }}{{ else }}.system.id.goog{{ end }}
+auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix }}{{ else }}.iam.gserviceaccount.com{{ end }}
+auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
+auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+auth_idp_opaque_enabled={{ if and $auth.idp_opaque (hasKey $auth.idp_opaque "enabled") }}{{ $auth.idp_opaque.enabled }}{{ else }}false{{ end }}
+auth_idp_opaque_userinfo_url={{ if and $auth.idp_opaque $auth.idp_opaque.userinfo_url }}{{ $auth.idp_opaque.userinfo_url }}{{ else }}https://idp.example.com/oauth2/v1/userinfo{{ end }}
+auth_idp_opaque_user_claim={{ if and $auth.idp_opaque $auth.idp_opaque.user_claim }}{{ $auth.idp_opaque.user_claim }}{{ else }}email{{ end }}
+auth_idp_opaque_persona_claim={{ if and $auth.idp_opaque $auth.idp_opaque.persona_claim }}{{ $auth.idp_opaque.persona_claim }}{{ else }}role{{ end }}
+auth_idp_opaque_team_claim={{ if and $auth.idp_opaque $auth.idp_opaque.team_claim }}{{ $auth.idp_opaque.team_claim }}{{ else }}department{{ end }}
+auth_idp_opaque_quota_override_claim={{ if and $auth.idp_opaque $auth.idp_opaque.quota_override_claim }}{{ $auth.idp_opaque.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
+auth_idp_opaque_token_ttl_ms={{ if and $auth.idp_opaque $auth.idp_opaque.token_ttl_ms }}{{ $auth.idp_opaque.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+auth_idp_jwt_enabled={{ if and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") }}{{ $auth.idp_jwt.enabled }}{{ else }}false{{ end }}
+auth_idp_jwt_jwks_uri={{ if and $auth.idp_jwt $auth.idp_jwt.jwks_uri }}{{ $auth.idp_jwt.jwks_uri }}{{ else }}https://idp.example.com/oauth2/v1/keys{{ end }}
+auth_idp_jwt_issuer={{ if and $auth.idp_jwt $auth.idp_jwt.issuer }}{{ $auth.idp_jwt.issuer }}{{ else }}https://idp.example.com{{ end }}
+auth_idp_jwt_user_claim={{ if and $auth.idp_jwt $auth.idp_jwt.user_claim }}{{ $auth.idp_jwt.user_claim }}{{ else }}email{{ end }}
+auth_idp_jwt_persona_claim={{ if and $auth.idp_jwt $auth.idp_jwt.persona_claim }}{{ $auth.idp_jwt.persona_claim }}{{ else }}role{{ end }}
+auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $auth.idp_jwt.team_claim }}{{ else }}department{{ end }}
+auth_idp_jwt_quota_override_claim={{ if and $auth.idp_jwt $auth.idp_jwt.quota_override_claim }}{{ $auth.idp_jwt.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
+auth_idp_jwt_token_ttl_ms={{ if and $auth.idp_jwt $auth.idp_jwt.token_ttl_ms }}{{ $auth.idp_jwt.token_ttl_ms }}{{ else }}3600000{{ end }}
+
+{{- $defaultClientId := $auth.default_client_id | default "" }}
+{{- if $defaultClientId }}
+auth_default_client_id={{ $defaultClientId }}
+{{- end }}
+{{- $personas := dict }}
+{{- if $.Values.personas }}
+{{- $personas = $.Values.personas }}
+{{- else if $auth.personas }}
+{{- $personas = $auth.personas }}
+{{- end }}
+{{- if $personas }}
+{{- $pNames := list -}}
+{{- range $pName, $_ := $personas -}}
+  {{- $pNames = append $pNames $pName -}}
+{{- end }}
+auth_personas_list={{ $pNames | sortAlpha | join "," }}
+auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
+{{- range $pName, $pCfg := $personas }}
+persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
+persona.{{ $pName }}.client_id={{ $pCfg.client_id | default $defaultClientId }}
+{{- if or $pCfg.display_name $pCfg.displayName }}
+persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayName }}
+{{- end }}
+{{- if or $pCfg.models $pCfg.allowed_models }}
+persona.{{ $pName }}.models={{ if $pCfg.models }}{{ if kindIs "slice" $pCfg.models }}{{ $pCfg.models | join "," }}{{ else }}{{ $pCfg.models }}{{ end }}{{ else if kindIs "slice" $pCfg.allowed_models }}{{ $pCfg.allowed_models | join "," }}{{ else }}{{ $pCfg.allowed_models }}{{ end }}
+{{- end }}
+{{- if $pCfg.quota }}
+{{- if $pCfg.quota.limit_usd }}
+persona.{{ $pName }}.quota_mode=usd
+persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota.limit_usd }}
+persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota.limit_usd 1000000) }}
+{{- else if $pCfg.quota.limit }}
+{{- if $pCfg.quota.mode }}
+persona.{{ $pName }}.quota_mode={{ $pCfg.quota.mode }}
+{{- end }}
+persona.{{ $pName }}.quota_limit={{ $pCfg.quota.limit }}
+{{- end }}
+{{- if $pCfg.quota.interval }}
+persona.{{ $pName }}.quota_interval={{ $pCfg.quota.interval }}
+{{- end }}
+{{- if or $pCfg.quota.unit $pCfg.quota.time_unit }}
+persona.{{ $pName }}.quota_unit={{ $pCfg.quota.unit | default $pCfg.quota.time_unit }}
+{{- end }}
+{{- if $pCfg.quota.per_model_usd }}
+{{- $pmUsdList := list -}}
+{{- range $mName, $mLimitUsd := $pCfg.quota.per_model_usd }}
+{{- $mMicro := printf "%.0f" (mulf $mLimitUsd 1000000) -}}
+persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mMicro }}
+{{- $pmUsdList = append $pmUsdList (printf "%s:%s" $mName $mMicro) -}}
+{{- end }}
+{{- if $pmUsdList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmUsdList | sortAlpha | join "," }}
+{{- end }}
+{{- else if $pCfg.quota.per_model }}
+{{- $pmList := list -}}
+{{- range $mName, $mLimit := $pCfg.quota.per_model }}
+persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mLimit }}
+{{- $pmList = append $pmList (printf "%s:%v" $mName $mLimit) -}}
+{{- end }}
+{{- if $pmList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmList | sortAlpha | join "," }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.quota_limit_usd }}
+persona.{{ $pName }}.quota_mode=usd
+persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota_limit_usd }}
+persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota_limit_usd 1000000) }}
+{{- else if $pCfg.quota_limit }}
+persona.{{ $pName }}.quota_limit={{ $pCfg.quota_limit }}
+{{- end }}
+{{- if $pCfg.quota_interval }}
+persona.{{ $pName }}.quota_interval={{ $pCfg.quota_interval }}
+{{- end }}
+{{- if or $pCfg.quota_unit $pCfg.quota_time_unit }}
+persona.{{ $pName }}.quota_unit={{ $pCfg.quota_unit | default $pCfg.quota_time_unit }}
+{{- end }}
+{{- if $pCfg.team_budget }}
+{{- if $pCfg.team_budget.limit_usd }}
+persona.{{ $pName }}.team_quota_mode=usd
+persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_budget.limit_usd }}
+persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_budget.limit_usd 1000000) }}
+{{- else if $pCfg.team_budget.limit }}
+{{- if $pCfg.team_budget.mode }}
+persona.{{ $pName }}.team_quota_mode={{ $pCfg.team_budget.mode }}
+{{- end }}
+persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_budget.limit }}
+{{- end }}
+{{- if $pCfg.team_budget.interval }}
+persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_budget.interval }}
+{{- end }}
+{{- if or $pCfg.team_budget.unit $pCfg.team_budget.time_unit }}
+persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_budget.unit | default $pCfg.team_budget.time_unit }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.team_quota_limit_usd }}
+persona.{{ $pName }}.team_quota_mode=usd
+persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_quota_limit_usd }}
+persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_quota_limit_usd 1000000) }}
+{{- else if $pCfg.team_quota_limit }}
+persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_quota_limit }}
+{{- end }}
+{{- if $pCfg.team_quota_interval }}
+persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_quota_interval }}
+{{- end }}
+{{- if $pCfg.team_quota_unit }}
+persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_quota_unit }}
+{{- end }}
+{{- if $pCfg.rate_limits }}
+{{- if or $pCfg.rate_limits.burst_rate $pCfg.rate_limits.burst }}
+persona.{{ $pName }}.burst_rate={{ $pCfg.rate_limits.burst_rate | default $pCfg.rate_limits.burst }}
+{{- end }}
+{{- if or $pCfg.rate_limits.concurrency_limit $pCfg.rate_limits.concurrency }}
+persona.{{ $pName }}.concurrency_limit={{ $pCfg.rate_limits.concurrency_limit | default $pCfg.rate_limits.concurrency }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.burst_rate }}
+persona.{{ $pName }}.burst_rate={{ $pCfg.burst_rate }}
+{{- end }}
+{{- if $pCfg.concurrency_limit }}
+persona.{{ $pName }}.concurrency_limit={{ $pCfg.concurrency_limit }}
+{{- end }}
+{{- if $pCfg.model_armor }}
+{{- if $pCfg.model_armor.template }}
+model_armor.persona.{{ $pName }}.template={{ $pCfg.model_armor.template }}
+{{- end }}
+{{- if $pCfg.model_armor.request_template }}
+model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor.request_template }}
+{{- end }}
+{{- if $pCfg.model_armor.response_template }}
+model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor.response_template }}
+{{- end }}
+{{- end }}
+{{- if $pCfg.model_armor_template }}
+model_armor.persona.{{ $pName }}.template={{ $pCfg.model_armor_template }}
+{{- end }}
+{{- if $pCfg.model_armor_request_template }}
+model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor_request_template }}
+{{- end }}
+{{- if $pCfg.model_armor_response_template }}
+model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor_response_template }}
+{{- end }}
+{{- end }}
+{{- else }}
+auth_personas_list=knowledge-worker,developer,it,agent
+auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
+persona.knowledge-worker.match_claims=knowledge-worker,general,business
+persona.knowledge-worker.client_id={{ $defaultClientId }}
+persona.developer.match_claims=developer,engineering,swe,data-science
+persona.developer.client_id={{ $defaultClientId }}
+persona.it.match_claims=it,platform-admin,sre,devops,secops
+persona.it.client_id={{ $defaultClientId }}
+persona.agent.match_claims=agent,service-account,automation
+persona.agent.client_id={{ $defaultClientId }}
+{{- end }}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas }}
+{{- range $maPersona, $maCfg := $.Values.features.model_armor.personas }}
+{{- if $maCfg.template }}
+model_armor.persona.{{ $maPersona }}.template={{ $maCfg.template }}
+{{- end }}
+{{- if $maCfg.request_template }}
+model_armor.persona.{{ $maPersona }}.request_template={{ $maCfg.request_template }}
+{{- end }}
+{{- if $maCfg.response_template }}
+model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_template }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- $allRules := list -}}
+{{- if $.Values.exceptions -}}
+  {{- range $.Values.exceptions -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if $auth.exceptions -}}
+  {{- range $auth.exceptions -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.identity_rules -}}
+  {{- range $.Values.features.model_armor.identity_rules -}}
+    {{- $allRules = append $allRules . -}}
+  {{- end -}}
+{{- end -}}
+{{- if gt (len $allRules) 0 }}
+model_armor_identity_rules_count={{ len $allRules }}
+{{- range $idx, $rule := $allRules }}
+model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
+{{- if $rule.quota_limit_usd }}
+model_armor.rule.{{ $idx }}.quota_mode=usd
+model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rule.quota_limit_usd }}
+model_armor.rule.{{ $idx }}.quota_limit={{ printf "%.0f" (mulf $rule.quota_limit_usd 1000000) }}
+{{- else if $rule.quota_limit }}
+model_armor.rule.{{ $idx }}.quota_limit={{ $rule.quota_limit }}
+{{- end }}
+{{- if $rule.expires_at }}
+model_armor.rule.{{ $idx }}.expires_at={{ $rule.expires_at }}
+{{- end }}
+{{- if $rule.bypass_team_budget }}
+model_armor.rule.{{ $idx }}.bypass_team_budget={{ $rule.bypass_team_budget }}
+{{- end }}
+{{- if or $rule.team_budget_limit_usd $rule.team_quota_limit_usd }}
+{{- $tbUsd := $rule.team_budget_limit_usd | default $rule.team_quota_limit_usd }}
+model_armor.rule.{{ $idx }}.team_budget_mode=usd
+model_armor.rule.{{ $idx }}.team_quota_mode=usd
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ printf "%.0f" (mulf $tbUsd 1000000) }}
+{{- else if or $rule.team_budget_limit $rule.team_quota_limit }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit | default $rule.team_quota_limit }}
+{{- end }}
+{{- if or $rule.models $rule.allowed_models }}
+model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $rule.models }}{{ $rule.models | join "," }}{{ else }}{{ $rule.models }}{{ end }}{{ else if kindIs "slice" $rule.allowed_models }}{{ $rule.allowed_models | join "," }}{{ else }}{{ $rule.allowed_models }}{{ end }}
+{{- end }}
+{{- if $rule.burst_rate }}
+model_armor.rule.{{ $idx }}.burst_rate={{ $rule.burst_rate }}
+{{- end }}
+{{- if $rule.concurrency_limit }}
+model_armor.rule.{{ $idx }}.concurrency_limit={{ $rule.concurrency_limit }}
+{{- end }}
+{{- if $rule.model_armor }}
+{{- if $rule.model_armor.template }}
+model_armor.rule.{{ $idx }}.template={{ $rule.model_armor.template }}
+{{- end }}
+{{- if $rule.model_armor.request_template }}
+model_armor.rule.{{ $idx }}.request_template={{ $rule.model_armor.request_template }}
+{{- end }}
+{{- if $rule.model_armor.response_template }}
+model_armor.rule.{{ $idx }}.response_template={{ $rule.model_armor.response_template }}
+{{- end }}
+{{- end }}
+{{- if $rule.template }}
+model_armor.rule.{{ $idx }}.template={{ $rule.template }}
+{{- end }}
+{{- if $rule.request_template }}
+model_armor.rule.{{ $idx }}.request_template={{ $rule.request_template }}
+{{- end }}
+{{- if $rule.response_template }}
+model_armor.rule.{{ $idx }}.response_template={{ $rule.response_template }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end -}}
 
 
@@ -128,5 +460,86 @@ prompt_exp=$.messages[?(@.role=='user')].content
 buffer_size=50
 {{- end -}}
 
+{{/*
+  Helper: auth_preflow_steps
+  Renders the unified 4-option Auth & Persona Token Import PreFlow steps
+*/}}
+{{- define "auth_preflow_steps" -}}
+- Step:
+    Name: JS-extract-auth-credentials
+- Step:
+    Condition: '(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")'
+    Name: VA-ApiKey
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")'
+    Name: OA-VerifyAccessToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
+    Name: SC-VerifyAgentToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
+    Name: SC-VerifyIdpOpaqueToken
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
+    Name: VJ-VerifyIdpJwt
+- Step:
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
+    Name: JS-resolve-auth-persona
+- Step:
+    Condition: 'auth_ready_to_import = "true"'
+    Name: OA-ImportExternalToken
+- Step:
+    Condition: '(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")'
+    Name: OA-SaveTokenAttributes
+- Step:
+    Condition: 'auth_ready_to_import = "true"'
+    Name: JS-restore-request-payload
+- Step:
+    Condition: '(auth_ready_to_import = "true") and (oauthV2.OA-ImportExternalToken.failed = "false")'
+    Name: OA-VerifyAccessToken
+- Step:
+    Condition: '(verifyapikey.VA-ApiKey.failed != "false") and ((oauthV2.OA-VerifyAccessToken.failed = "false") or (auth_ready_to_import = "true"))'
+    Name: VA-ApiKey
+- Step:
+    Condition: '(verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed != "false")'
+    Name: RF-Unauthorized
+{{- end -}}
+
+{{/*
+  Helper: circuit_breaker_preflow_steps
+  Checks rolling-window circuit breaker state for primary_model in PreFlow and promotes fallback_model when OPEN
+*/}}
+{{- define "circuit_breaker_preflow_steps" -}}
+- Step:
+    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCheck
+- Step:
+    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Name: JS-resolve-model-location
+{{- end -}}
+
+{{/*
+  Helper: fallback_postflow_steps
+  Increments rolling-window circuit breaker error count on upstream 429/5xx and executes fallback model retry
+*/}}
+{{- define "fallback_postflow_steps" -}}
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCount
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: JS-prepare-fallback-request
+- Step:
+    Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
+    Name: SC-FallbackGoogleIAM
+- Step:
+    Condition: '(fallback_ready = "true") and (fallback_use_google_iam != "true")'
+    Name: SC-FallbackExternal
+- Step:
+    Condition: 'fallback_ready = "true"'
+    Name: JS-apply-fallback-response
+{{- end -}}
+
 {{- define "blank" -}}{{- end -}}
+
 

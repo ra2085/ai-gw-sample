@@ -15,24 +15,173 @@ gateway:
 features:
   monetization:
     enabled: true
+    enforce_apigee_wallet: true            # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer billing wallets
     default_currency: "USD"
     default_markup: 1.0
   model_armor:
     enabled: true
     location: "global"
-    template: "ai-gateway-filter"
-
+    template: "ai-gateway-filter"               # Global fallback template (used for both request & response unless overridden)
+    request_template: "ai-gateway-filter"       # Default user prompt sanitization template (or "none" to skip request scanning)
+    response_template: "ai-gateway-filter"      # Default model response sanitization template (or "none" to skip response scanning)
+    # Optional context-aware template enforcement by Persona or Identity/Team glob pattern:
+    # personas:
+    #   knowledge-worker:
+    #     request_template: "strict-pii-sdp-prompt"
+    #     response_template: "strict-rai-response"
+    #   developer:
+    #     request_template: "dev-secrets-dlp-prompt"
+    #     response_template: "dev-malicious-uri-response"
+    #   it:
+    #     template: "it-ops-standard-filter"
+    #   agent:
+    #     request_template: "agent-jailbreak-shield"
+    #     response_template: "none"
+    # identity_rules:
+    #   - match: ["*@pci-vault.iam.gserviceaccount.com", "team:finance"]
+    #     request_template: "pci-strict-sdp-prompt"
+    #     response_template: "pci-strict-sdp-response"
+    #   - match: "principal://agents.global.org-*.system.id.goog/*/reasoningEngines/public-*"
+    #     request_template: "public-agent-prompt-filter"
+    #     response_template: "public-agent-response-filter"
 
   llm_judge:
     enabled: true
     classifier_model: "gemini-3.1-flash-lite"
+  circuit_breaker:
+    enabled: true
+    shared_name: "llm-circuit-breaker"
+    error_threshold: 3                   # Trip circuit OPEN after N upstream 429/5xx errors on a primary model
+    window_interval: 1                   # Rolling recovery window duration
+    window_unit: "minute"                # Rolling recovery window unit (minute, hour, day)
   quotas:
     enabled: true
+    # Primary window uses auth-agnostic dynamic quota variables (primary_quota_limit / primary_quota_interval / primary_quota_unit)
+    # isolated by SharedName: "llm-token-counter", Identifier: "rate_limit_client_id", and LLMModelSource: "{model}".
+    # Supports either token budgets (`limit`) or Virtual USD Spend Wallets (`limit_usd`, tracked in micro-USD: $1.00 = 1,000,000).
+    # Enable secondary_window only when a dual rolling window or shared Team Budget (e.g., 4h per-user + 7d team pool) is required.
+    secondary_window:
+      enabled: false
+      shared_name: "llm-token-counter-secondary"
+      identifier_ref: "secondary_quota_identifier"
+      allow_count: 1000000
+      # allow_usd: 100.00                  # Optional fallback team/secondary spend cap in USD (converted to micro-USD)
+      allow_ref: "secondary_quota_limit"
+      interval: 7
+      interval_ref: "secondary_quota_interval"
+      time_unit: "day"
+      time_unit_ref: "secondary_quota_unit"
+  rate_limits:
+    # Opt-in per-application burst and concurrency rate limits (both disabled by default).
+    # When enabled, limits can be overridden at runtime with zero proxy redeployment via
+    # API Product, Developer, or Developer App custom attributes (burst_rate / concurrency_limit).
+    burst:
+      enabled: false
+      rate: "600pm"                        # Fallback default (<N>ps or <N>pm) when no custom attribute is set
+      identifier_ref: "rate_limit_client_id"
+      use_effective_count: true
+    concurrency:
+      enabled: false
+      limit: 20                            # Fallback max simultaneous in-flight requests per application
+      identifier_ref: "rate_limit_client_id"
+      ttl_minutes: 1                       # Dead-man switch window (minutes) to auto-expire leaked slots on client disconnect
   cors:
     enabled: true
   auth:
     enabled: true
-    type: "apikey" # apikey | none
+    allow_bearer_api_key: true             # Option 1: Allow passing Apigee API Key inside Authorization: Bearer <api-key>
+    apigee_oauth:
+      enabled: true                        # Option 2: Native Apigee OAuth 2.0 Token verification (<1ms L1 cache)
+    agent_identity:
+      enabled: false                       # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
+      tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
+      allowed_trust_domain: ".system.id.goog"          # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
+      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
+      persona: "agent"
+      token_ttl_ms: 3600000
+    idp_opaque:
+      enabled: false                       # Option 4a: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP Opaque Token
+      userinfo_url: "https://idp.example.com/oauth2/v1/userinfo"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    idp_jwt:
+      enabled: false                       # Option 4b: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP JWT
+      jwks_uri: "https://idp.example.com/oauth2/v1/keys"
+      issuer: "https://idp.example.com"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    default_persona: ""                    # Optional fallback persona if an authenticated user's role claim doesn't match
+    # default_client_id: ""                # Optional shared Developer App client_id fallback across all personas
+    personas:
+      knowledge-worker:
+        match_claims: ["knowledge-worker", "general", "business"]
+        client_id: ""                      # Apigee Developer App client_id (or run: bash scripts/sync-personas.sh)
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        # quota:
+        #   limit: 50000                   # Token budget (or use limit_usd: 5.00 for a $5.00 Virtual USD Spend Wallet)
+        #   interval: 4
+        #   unit: "hour"
+        # team_budget:
+        #   limit: 2000000                 # Shared team token pool (or use limit_usd: 100.00 for a $100.00 team USD pool)
+        #   interval: 7
+        #   unit: "day"
+        # rate_limits:
+        #   burst_rate: "60pm"
+        #   concurrency_limit: 5
+        # model_armor:
+        #   request_template: "strict-pii-sdp-prompt"
+        #   response_template: "strict-rai-response"
+      developer:
+        match_claims: ["developer", "engineering", "swe", "data-science"]
+        client_id: ""                      # Apigee Developer App client_id bound to the Developer API Product
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
+        # quota:
+        #   limit: 250000                  # Or use limit_usd: 25.00 (and per_model_usd: { claude-sonnet-4-6: 10.00 })
+        #   interval: 4
+        #   unit: "hour"
+        #   per_model:
+        #     claude-sonnet-4-6: 50000
+        # team_budget:
+        #   limit: 10000000                # Or use limit_usd: 500.00
+        #   interval: 7
+        #   unit: "day"
+      it:
+        match_claims: ["it", "platform-admin", "sre", "devops", "secops"]
+        client_id: ""                      # Apigee Developer App client_id bound to the IT/Platform API Product
+        # models: ["*"]
+        # quota:
+        #   limit: 500000
+        #   interval: 4
+        #   unit: "hour"
+      agent:
+        match_claims: ["agent", "service-account", "automation"]
+        client_id: ""                      # Apigee Developer App client_id bound to the Autonomous Agent API Product
+        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "text-embedding-005"]
+        # quota:
+        #   limit: 1000000
+        #   interval: 1
+        #   unit: "day"
+    # Optional Individual, Agent, or Team Exceptions (Quotas, Auto-Expiration, Team Budgets, Models, Model Armor):
+    # exceptions:
+    #   - match: ["alice@company.com"]
+    #     quota_limit: 500000              # Or quota_limit_usd: 50.00; raises personal limit while still drawing from shared team pool
+    #     # bypass_team_budget: true       # Optional emergency bypass: isolates Alice from an exhausted shared team pool
+    #     expires_at: "2026-10-15T00:00:00Z" # Automatically reverts to baseline persona quota after timestamp
+    #     models: ["*"]                    # Temporarily grant access to all catalog models
+    #   - match: ["team:Search-Research"]
+    #     team_budget_limit: 50000000      # Or team_budget_limit_usd: 1000.00; raises shared 7-day pool for the entire Search-Research team
+    #     expires_at: "2026-10-31T23:59:59Z" # Optional auto-expiration for temporary department top-ups
+    #   - match: ["*@pci-vault.iam.gserviceaccount.com"]
+    #     quota_limit: 2000000
+    #     model_armor:
+    #       request_template: "pci-strict-sdp-prompt"
+    #       response_template: "pci-strict-sdp-response"
 
 # ------------------------------------------------------------------------------
 # Proxy Endpoints / Supported Protocols
@@ -50,6 +199,10 @@ endpoints:
     enabled: true
     name: "openai-compat"
     base_path: "/v1/chat/completions"
+  openai_embeddings:
+    enabled: true
+    name: "openai-embeddings"
+    base_path: "/v1/embeddings"
   models_catalog:
     enabled: true
     name: "claude-models"
@@ -73,11 +226,11 @@ routing:
   tiers:
     low: "gemini-3.1-flash-lite"
     medium: "gemini-3.5-flash"
-    high: "gemini-2.5-pro"
-    max: "claude-haiku-4-5"
+    high: "gemini-3.1-pro-preview"
+    max: "claude-sonnet-4-6"
   tasks:
-    coding: "gemini-2.5-pro"
-    reasoning: "gemini-2.5-pro"
+    coding: "gemini-3.1-pro-preview"
+    reasoning: "gemini-3.1-pro-preview"
     summarization: "gemini-3.1-flash-lite"
     simple_chat: "gemini-3.5-flash"
     classifier_model: "gemini-3.1-flash-lite"
@@ -85,16 +238,19 @@ routing:
     # Legacy Gemini Aliases
     "gemini-1.5-flash": "gemini-3.5-flash"
     "gemini-1.5-flash-001": "gemini-3.5-flash"
-    "gemini-1.5-pro": "gemini-2.5-pro"
-    "gemini-1.5-pro-001": "gemini-2.5-pro"
-    "gemini-3.1-pro": "gemini-2.5-pro"
+    "gemini-1.5-pro": "gemini-3.1-pro-preview"
+    "gemini-1.5-pro-001": "gemini-3.1-pro-preview"
+    "gemini-3.1-pro": "gemini-3.1-pro-preview"
     "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
     # Claude Aliases
-    "claude-3-5-sonnet": "claude-haiku-4-5"
+    "claude-3-5-sonnet": "claude-sonnet-4-6"
     "claude-3-5-haiku": "claude-haiku-4-5"
-    # OpenAI & Auto Aliases
-    "gpt-4o": "gemini-2.5-pro"
+    # OpenAI & Embedding Aliases
+    "gpt-4o": "gemini-3.1-pro-preview"
     "gpt-4o-mini": "gemini-3.1-flash-lite"
+    "text-embedding-3-small": "text-embedding-005"
+    "text-embedding-3-large": "text-embedding-005"
+    "text-embedding-ada-002": "text-embedding-005"
     "auto": "gemini-3.5-flash"
     "gateway/auto": "gemini-3.5-flash"
     "auto:judge": "gemini-3.5-flash"
@@ -105,27 +261,29 @@ routing:
 # ------------------------------------------------------------------------------
 models:
   # --- Gemini 3.x Series ---
-  - name: "gemini-3.7-flash"
-    displayName: "Gemini 3.7 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2025-02-15T00:00:00Z"
-    pricing:
-      input_rate: 0.150
-      output_rate: 0.600
-
   - name: "gemini-3.5-flash"
     displayName: "Gemini 3.5 Flash"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2025-01-10T00:00:00Z"
+    created_at: "2026-03-01T00:00:00Z"
     pricing:
-      input_rate: 0.100
-      output_rate: 0.400
+      input_rate: 1.500
+      output_rate: 9.000
+      cache_read_rate: 0.150
+
+  - name: "gemini-3.1-pro-preview"
+    displayName: "Gemini 3.1 Pro Preview"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-05-01T00:00:00Z"
+    pricing:
+      input_rate: 2.000
+      output_rate: 12.000
+      cache_read_rate: 0.200
 
   - name: "gemini-3.1-flash-lite"
     displayName: "Gemini 3.1 Flash-Lite"
@@ -135,54 +293,109 @@ models:
     region: "global"
     created_at: "2026-05-07T00:00:00Z"
     pricing:
-      input_rate: 0.075
-      output_rate: 0.300
-
-  # --- Gemini 2.5 Series ---
-  - name: "gemini-2.5-pro"
-    displayName: "Gemini 2.5 Pro"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2024-11-01T00:00:00Z"
-    pricing:
-      input_rate: 1.250
-      output_rate: 5.000
-
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2024-11-01T00:00:00Z"
-    pricing:
-      input_rate: 0.100
-      output_rate: 0.400
+      input_rate: 0.250
+      output_rate: 1.500
+      cache_read_rate: 0.025
 
   # --- Anthropic Claude Models ---
-  - name: "claude-haiku-4-5"
-    displayName: "Claude 4.5 Haiku"
+  - name: "claude-sonnet-4-6"
+    displayName: "Claude Sonnet 4.6"
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
-    region: "us-east5"
+    region: "global"
+    created_at: "2026-04-01T00:00:00Z"
+    pricing:
+      input_rate: 3.000
+      output_rate: 15.000
+      cache_read_rate: 0.300
+      cache_write_rate: 3.750
+
+  - name: "claude-haiku-4-5"
+    displayName: "Claude Haiku 4.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"
     created_at: "2025-10-01T00:00:00Z"
     pricing:
       input_rate: 1.000
       output_rate: 5.000
+      cache_read_rate: 0.100
+      cache_write_rate: 1.250
 
-  # --- Example Custom Model with Custom Target URL & Format ---
+  # --- Vertex AI Text Embedding Models (No Prompt Caching) ---
+  - name: "text-embedding-005"
+    displayName: "Vertex Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "gemini"
+    region: "us-central1"
+    created_at: "2024-11-01T00:00:00Z"
+    pricing:
+      input_rate: 0.025
+      output_rate: 0.000
+
+  # --- Recipe 1: Vertex AI Model Garden (MaaS - OpenAI Format, GCP IAM Auth) ---
+  # - name: "llama-3.3-70b-instruct-maas"
+  #   displayName: "Llama 3.3 70B Instruct (Vertex MaaS)"
+  #   publisher: "meta"
+  #   target: "gemini-openai-compat"
+  #   format: "openai"
+  #   region: "us-central1"
+  #   pricing:
+  #     input_rate: 0.720
+  #     output_rate: 0.720
+
+  # --- Recipe 2: Direct OpenAI (api.openai.com - Bearer Token Reference) ---
+  # - name: "gpt-5.4"
+  #   displayName: "OpenAI GPT-5.4"
+  #   publisher: "openai"
+  #   target: "openai-custom"
+  #   format: "openai"
+  #   custom_url: "https://api.openai.com/v1/chat/completions"
+  #   # Optional: only needed for legacy multi-org/multi-project keys (not needed for sk-proj-* keys)
+  #   # openai_org_id: "org-your-openai-org"
+  #   # openai_project_id: "proj-your-openai-project"
+  #   auth:
+  #     type: "bearer"
+  #     token_ref: "propertyset.provider_keys.openai_api_key"
+  #   pricing:
+  #     input_rate: 2.500
+  #     output_rate: 15.000
+  #     cache_read_rate: 0.250
+
+  # --- Recipe 3: Direct Anthropic (api.anthropic.com - x-api-key Header Reference) ---
+  # - name: "claude-direct-sonnet"
+  #   displayName: "Claude Sonnet 4.6 (Direct Anthropic)"
+  #   publisher: "anthropic"
+  #   target: "claude"
+  #   format: "anthropic"
+  #   custom_url: "https://api.anthropic.com/v1/messages"
+  #   upstream_model: "claude-sonnet-4-6"
+  #   anthropic_version: "2023-06-01"
+  #   anthropic_beta: "prompt-caching-2024-07-31"
+  #   auth:
+  #     type: "header"
+  #     header_name: "x-api-key"
+  #     token_ref: "propertyset.provider_keys.anthropic_api_key"
+  #   pricing:
+  #     input_rate: 3.000
+  #     output_rate: 15.000
+  #     cache_read_rate: 0.300
+  #     cache_write_rate: 3.750
+
+  # --- Recipe 4: Self-Hosted / External Model (vLLM, Ollama, Azure OpenAI, LiteLLM) ---
   # - name: "custom-llama-3"
   #   displayName: "Llama 3 70B (vLLM)"
   #   publisher: "custom"
-  #   target: "gemini-openai-compat"
+  #   target: "openai-custom"
   #   format: "openai"
   #   custom_url: "https://vllm.internal.corp/v1/chat/completions"
+  #   upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
   #   auth:
   #     type: "bearer"
-  #     token_ref: "propertyset.config.vllm_api_key"
+  #     token_ref: "propertyset.provider_keys.vllm_api_key"
   #   pricing:
   #     input_rate: 0.050
   #     output_rate: 0.150

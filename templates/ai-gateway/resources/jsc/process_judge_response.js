@@ -1,3 +1,6 @@
+(function () {
+'use strict';
+
 try {
     var triggerJudge = context.getVariable("trigger_judge");
     
@@ -53,3 +56,5 @@ try {
 } catch (e) {
     print("Error processing LLM judge response: " + e);
 }
+
+})();

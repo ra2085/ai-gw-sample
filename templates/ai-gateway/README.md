@@ -75,29 +75,30 @@ models:
     format: "openai"                            # openai | anthropic | gemini | passthrough
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
     auth:
-      type: "bearer"                            # bearer | header | none
-      token_ref: "propertyset.config.vllm_api_key"
+      type: "bearer"                            # api_key | bearer | header | none
+      token_ref: "propertyset.provider_keys.vllm_api_key"
     pricing:
       input_rate: 0.050
       output_rate: 0.150
 
   # Regional Vertex AI Model
-  - name: "gemini-2.5-pro-eu"
-    displayName: "Gemini 2.5 Pro (Europe)"
+  - name: "gemini-3.1-pro-eu"
+    displayName: "Gemini 3.1 Pro (Europe)"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "europe-west1"                      # Automatically routes to europe-west1-aiplatform.googleapis.com
     pricing:
-      input_rate: 1.250
-      output_rate: 5.000
+      input_rate: 2.000
+      output_rate: 12.000
+      cache_read_rate: 0.200
 ```
 
 ---
 
-## 🎛 Feature Toggles
+## 🎛 Feature Toggles, Personas & Exceptions
 
-You can toggle features on or off in `values.yaml`:
+Configure features, unified Personas (AI Products), and individual/team Exceptions in `values.yaml`:
 
 ```yaml
 features:
@@ -113,5 +114,37 @@ features:
     enabled: true
   auth:
     enabled: true
-    type: "apikey"
+    allow_bearer_api_key: true
+    personas:
+      knowledge-worker:
+        match_claims: ["knowledge-worker", "general", "business-*"]
+        models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        quota:
+          limit: 50000
+          interval: 4
+          unit: "hour"
+      developer:
+        match_claims: ["developer", "engineering", "swe-*"]
+        models: ["*"]
+        quota:
+          limit: 250000
+          interval: 4
+          unit: "hour"
+          per_model:
+            claude-sonnet-4-6: 50000
+    exceptions:
+      - match: ["alice@company.com"]
+        quota_limit: 500000
+        expires_at: "2026-12-31T23:59:59Z"
+        models: ["*"]
+```
+
+To safely preview or upsert the corresponding Apigee API Products (`llmOperationGroup.operationConfigs`) and Developer Apps:
+
+```bash
+# Preview API Product & Developer App payloads (zero network calls)
+bash ./scripts/sync-personas.sh --values ./templates/ai-gateway/values.yaml --org "$PROJECT_ID" --env "$APIGEE_ENV" --dry-run
+
+# Apply additive create-or-update (preserves existing Consumer Keys)
+bash ./scripts/sync-personas.sh --values ./templates/ai-gateway/values.yaml --org "$PROJECT_ID" --env "$APIGEE_ENV"
 ```

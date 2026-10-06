@@ -1,0 +1,42 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-RateLimitError
+  DisplayName: AM-RateLimitError
+  Set:
+    Headers:
+      - Header:
+          .name: Content-Type
+          -Data: application/json
+      - Header:
+          .name: Retry-After
+          -Data: '{ratelimit_retry_after}'
+      - Header:
+          .name: X-RateLimit-Constraint
+          -Data: '{ratelimit_constraint}'
+      - Header:
+          .name: x-ratelimit-limit-requests
+          -Data: '{ratelimit_limit_requests}'
+      - Header:
+          .name: x-ratelimit-remaining-requests
+          -Data: '{ratelimit_remaining_requests}'
+      - Header:
+          .name: x-ratelimit-limit-tokens
+          -Data: '{ratelimit_limit_tokens}'
+      - Header:
+          .name: x-ratelimit-remaining-tokens
+          -Data: '{ratelimit_remaining_tokens}'
+      - Header:
+          .name: x-ratelimit-reset
+          -Data: '{ratelimit_retry_after}s'
+    Payload:
+      .contentType: application/json
+      -Data: '{ratelimit_error_payload}'
+    StatusCode: 429
+    ReasonPhrase: Too Many Requests
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: response
+    -Data: error

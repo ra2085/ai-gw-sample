@@ -5,5 +5,5 @@ OASValidation:
   DisplayName: OAS-VerifyGemini
   OASResource: oas://gemini.yaml
   Options:
-    AllowUnspecifiedParameters: false
+    AllowUnspecifiedParameters: true
   Source: request

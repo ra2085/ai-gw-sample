@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VerifyJWT continueOnError="true" enabled="true" name="VJ-VerifyIdpJwt">
+  <DisplayName>VJ-VerifyIdpJwt</DisplayName>
+  <Algorithm>RS256</Algorithm>
+  <Source>auth_bearer_token</Source>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <IgnoreCriticalHeaders>false</IgnoreCriticalHeaders>
+  <IgnoreIssuedAt>false</IgnoreIssuedAt>
+  <TimeAllowance>30s</TimeAllowance>
+  <PublicKey>
+    <JWKS uriRef="propertyset.config.auth_idp_jwt_jwks_uri"/>
+  </PublicKey>
+  <Issuer ref="propertyset.config.auth_idp_jwt_issuer"/>
+</VerifyJWT>

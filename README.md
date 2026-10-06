@@ -1,91 +1,34 @@
 # <img src="img/Apigee-512-color.png" alt="Apigee Logo" width="40" style="vertical-align: middle; margin-right: 8px;" /> Apigee Enterprise AI Gateway (`ai-gateway`)
 
-
 [![Documentation](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://ra2085.github.io/ai-gw-sample/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-An enterprise-grade, production-ready **AI Gateway** on Google Cloud Apigee, featuring **Universal Protocol Normalization**, **Smart Routing & LLM as a Judge**, **GCP Model Armor Security**, **Token Quotas**, and **Apigee Monetization with Real-Time Micro-Transactions Tracking**.
+A declarative **Enterprise AI Gateway framework** on Google Cloud Apigee. Define your models, **AI Products** (personas and tenant boundaries), authentication, token quotas, **Invoice-Accurate Cost Attribution**, and routing rules in a single `values.yaml` file—without writing or maintaining raw Apigee XML policies.
+
+Full documentation is available at **[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**.
 
 ---
 
-## Documentation Site
+## Core Concept: The AI Product Model
 
-Full guides, architecture specifications, and API references are available on our documentation site:
+Instead of managing per-user rules or separate proxies for every model provider, the gateway organizes access around **AI Products** (Apigee API Products). An AI Product defines a consumer tier or tenant boundary:
 
-**[https://ra2085.github.io/ai-gw-sample/](https://ra2085.github.io/ai-gw-sample/)**
+| AI Product Example | Target Consumers | Allowed Models | Default Token Quota |
+| :--- | :--- | :--- | :--- |
+| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Codex`) | All models (including `claude-opus-4-6` & `gemini-3.1-pro-preview`) | 500,000 tokens / 4 hours |
+| **`power-developer`** | Senior Developers | `claude-sonnet-4-6`, `gemini-3.1-pro-preview`, `gemini-3.5-flash` | 200,000 tokens / 4 hours |
+| **`developer-default`** | Standard Engineering Org | Fast / Economy models (`gemini-3.5-flash`, `claude-haiku-4-5`) | 50,000 tokens / 4 hours |
+| **`autonomous-agent`** | CI/CD Pipelines & Cloud Run Agents | Approved workflow models + shared department budget | 1,000,000 tokens / hour |
 
----
-
-## Progressive Adoption Journey
-
-The repository is organized for a progressive learning curve:
-
-1. **[Quickstart (5 Minutes)](docs/getting-started/quickstart-template.md)**: Deploy a working gateway with minimal configuration supporting Gemini and Claude.
-2. **[Configuration Reference](docs/template-guide/configuration.md)**: Full schema reference of all `values.yaml` options, endpoints, and defaults.
-3. **[Custom Providers & URLs](docs/template-guide/custom-urls.md)**: Bring your own models (Azure, DeepSeek, Mistral, Ollama, vLLM) with custom auth.
-4. **[Enterprise Feature Toggles](docs/template-guide/feature-flags.md)**: Turn on Model Armor security, token quotas, and monetization as needed.
-5. **[Smart Routing & LLM Judge](docs/architecture/routing.md)**: Enable AI-driven complexity classification and cost tier routing.
-
-
----
-
-## Key Highlights
-
-* **Universal Protocol Normalization:** Query Anthropic Claude, Google Gemini on Vertex AI, or self-hosted OpenAI models using Anthropic (`/v1/messages`), Gemini (`/ai-gateway`), or OpenAI (`/v1/chat/completions`) schemas with real-time SSE streaming translation.
-* **Smart Routing & LLM Judge:** Optimize cost and performance using abstract cost tiers (`low`, `medium`, `high`, `max`), fallback chains, or real-time prompt complexity classification powered by Gemini 3.1 Flash-Lite.
-* **Enterprise Security:** Automated prompt and response sanitization via GCP Model Armor to prevent data leakage and prompt injection.
-* **Token Monetization:** Pre-flight prepaid wallet balance verification and real-time micro-transaction token billing.
-* **Custom URLs & Multi-Cloud LLMs:** Declare custom target URLs and formats (`openai`, `anthropic`, `gemini`) in `values.yaml` to route to self-hosted vLLM/Ollama or Azure OpenAI instances.
-* **Declarative Configuration:** Define models, pricing, and features in a single `values.yaml` file to generate a complete Apigee proxy bundle.
-
-
----
-
-## Architecture Overview
-
-```mermaid
-graph LR
-    subgraph Clients["Client Applications"]
-        C1["OpenAI SDK"]
-        C2["Anthropic Claude SDK"]
-        C3["Vertex AI SDK"]
-    end
-
-    subgraph Gateway["Apigee AI Gateway"]
-        direction TB
-        G1["Universal Protocol Normalization"]
-        G2["Model Armor Security & PII Sanitization"]
-        G3["Smart Routing & Cost Optimization"]
-        G4["Token Quotas & Monetization"]
-    end
-
-    subgraph Providers["Backend LLM Providers"]
-        P1["Google Vertex AI (Gemini & Claude)"]
-        P2["Third-Party APIs (OpenAI, Azure, DeepSeek)"]
-        P3["Self-Hosted Clusters (vLLM, Ollama)"]
-    end
-
-    Clients --> Gateway
-    Gateway --> Providers
-```
-
-> Looking for the complete 25-step policy execution sequence? See the [Pipeline Execution Flow (Appendix)](https://ra2085.github.io/ai-gw-sample/proxy-deep-dive/bundle-structure/#3-appendix-end-to-end-pipeline-execution-flow).
-
+With 3–5 AI Products, you can govern **10,000+ developers and autonomous agents** while enforcing isolated per-user token counters, per-model caps, shared team budgets, and context-aware Model Armor safety policies.
 
 ---
 
 ## Quickstart (5 Minutes)
 
-> **Prerequisites:** 
-> 1. Install [`apigee-go-gen`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigee-go-gen-template-generator) and [`apigeecli`](https://ra2085.github.io/ai-gw-sample/getting-started/installation/#install-apigeecli-deployment-cli).
-> 2. Ensure the 6 required telemetry Data Collectors exist in your Apigee org (`apigeecli datacollectors create ...`).
-> 3. Have a Google Cloud Service Account with `roles/aiplatform.user` for deployment (`-s "$SERVICE_ACCOUNT"`).
-> 
-> See the [Installation & Prerequisites Guide](https://ra2085.github.io/ai-gw-sample/getting-started/installation/) for 1-line setup scripts.
+> **Prerequisites:** Complete the one-time setup in **[Prerequisites & Setup](docs/getting-started/installation.md)** (`apigee-go-gen`, `apigeecli`, Google Cloud Service Account with `roles/aiplatform.user`, and telemetry Data Collectors).
 
-
-### 1. Define Your Gateway in `values.quickstart.yaml`
-
+### 1. Define Your Gateway (`values.quickstart.yaml`)
 
 ```yaml
 gateway:
@@ -93,8 +36,8 @@ gateway:
   project_id: "your-gcp-project-id"
 
 models:
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
     publisher: "google"
     format: "gemini"
     region: "global"
@@ -106,23 +49,23 @@ models:
     format: "anthropic"
     region: "us-east5"
 
-  # Optional: Custom Self-Hosted Model in 4 lines
+  # Optional: Self-Hosted or External OpenAI-Compatible Model
   - name: "my-vllm-model"
     displayName: "Llama 3 (Self-Hosted)"
     format: "openai"
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
 ```
 
-### 2. Render and Deploy
+### 2. Render, Deploy & Provision AI Products
 
 ```bash
-# Render bundle using apigee-go-gen
+# 1. Compile the Apigee proxy bundle from YAML
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
 
-# Deploy to Apigee (requires Service Account for Vertex AI IAM authentication)
+# 2. Deploy to Apigee X / Hybrid
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
@@ -132,25 +75,23 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
-```
 
+# 3. Safely provision Apigee API Products (llmOperationGroup) & Developer App keys
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
+```
 
 ---
 
-## Documentation Index
+## Documentation Navigation
 
-Explore the complete guides on the **[Documentation Site](https://ra2085.github.io/ai-gw-sample/)**:
+The documentation is organized into four task-oriented sections:
 
-| Section | Description |
-| :--- | :--- |
-| **[5-Minute Quickstart](https://ra2085.github.io/ai-gw-sample/getting-started/quickstart-template/)** | Get a gateway running immediately with minimal configuration. |
-| **[Choose Your Workflow](https://ra2085.github.io/ai-gw-sample/getting-started/choose-workflow/)** | Declarative Template approach vs. Native Proxy structure. |
-| **[Custom Providers & URLs](https://ra2085.github.io/ai-gw-sample/template-guide/custom-urls/)** | Connect self-hosted vLLM/Ollama, Azure OpenAI, or DeepSeek endpoints. |
-| **[Configuration Reference](https://ra2085.github.io/ai-gw-sample/template-guide/configuration/)** | Schema reference for models, pricing, feature flags, and routing tiers. |
-| **[Feature Toggles](https://ra2085.github.io/ai-gw-sample/template-guide/feature-flags/)** | Enable or disable security, quotas, judge, and monetization modules. |
-| **[Protocol Normalization](https://ra2085.github.io/ai-gw-sample/architecture/protocols/)** | Deep dive into Anthropic, Gemini, and OpenAI request/response/SSE transcoding. |
-| **[Smart Routing & LLM Judge](https://ra2085.github.io/ai-gw-sample/architecture/routing/)** | Real-time prompt complexity classifier and fallback chains. |
-| **[Enterprise Security](https://ra2085.github.io/ai-gw-sample/architecture/security/)** | Prompt and response sanitization with GCP Model Armor. |
-| **[Token Monetization](https://ra2085.github.io/ai-gw-sample/architecture/monetization/)** | Pre-flight wallet balance checks and real-time micro-cost rating engine. |
-| **[Deployment & CI/CD](https://ra2085.github.io/ai-gw-sample/operations/deployment/)** | Service accounts, deployment automation, and automated test suites. |
-
+| Section | Guides | What You Will Find |
+| :--- | :--- | :--- |
+| **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal 15-line YAML quickstart, and one-time CLI/IAM setup. |
+| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI & Anthropic (`provider_keys` PropertySet), token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
+| **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md) | Complete schema table, feature toggles, and client SDK compatibility matrix. |
+| **4. Analytics & Operations** | • [Analytics & Looker Studio Dashboards](docs/operations/looker-studio-dashboard.md)<br>• [Telemetry & Headers](docs/operations/telemetry.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Looker Studio persona dashboards (multi-bucket FinOps chargeback, Prompt Cache ROI, team/peer insights, developer self-service, security & quota governance, Judge ROI), response headers (`X-Gateway-*`, `X-RateLimit-*`), and CI/CD deployment. |

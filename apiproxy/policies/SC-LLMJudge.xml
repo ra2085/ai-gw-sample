@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <ServiceCallout continueOnError="true" enabled="true" name="SC-LLMJudge">
   <DisplayName>SC-LLMJudge</DisplayName>
   <Properties/>
@@ -22,8 +22,15 @@
       </GoogleAccessToken>
     </Authentication>
     <Properties>
+      <Property name="connect.timeout.millis">2000</Property>
       <Property name="io.timeout.millis">5000</Property>
+      <Property name="keepalive.timeout.millis">50000</Property>
     </Properties>
+    <SSLInfo>
+      <Enabled>true</Enabled>
+      <Enforce>true</Enforce>
+      <IgnoreValidationErrors>false</IgnoreValidationErrors>
+    </SSLInfo>
     <URL>https://aiplatform.googleapis.com/v1/projects/{propertyset.config.project_id}/locations/global/publishers/google/models/{propertyset.model_locations.task.classifier_model}:generateContent</URL>
   </HTTPTargetConnection>
 </ServiceCallout>

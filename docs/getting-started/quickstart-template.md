@@ -1,31 +1,28 @@
-# Quickstart: 5-Minute Minimal Template
+# 5-Minute Quickstart
 
-Want to get an enterprise-grade AI Gateway up and running immediately? You don't need to touch complex XML policies or configure dozens of separate files.
-
-With the **AI Gateway Template**, a simple **15-line YAML file** is all you need to generate a full, production-ready Apigee gateway with universal protocol normalization, token monetization, and custom backend model routing.
+Get an enterprise AI Gateway running in 5 minutes using a single **15-line `values.quickstart.yaml` file**.
 
 > [!IMPORTANT]
-> **Prerequisites:** Before deploying, make sure you have completed all setup steps in the **[Installation & Setup Guide](installation.md)**:
-> 1. Installed CLI tools (`apigee-go-gen` and `apigeecli`).
-> 2. Authenticated with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
-> 3. Created the deployment Service Account (`roles/aiplatform.user`).
-> 4. Created the 6 required telemetry Data Collectors in your Apigee organization.
-
+> **Prerequisites:** Complete the one-time setup in **[Prerequisites & Setup](installation.md)** before deploying:
+> 1. Install `apigee-go-gen` and `apigeecli`.
+> 2. Authenticate with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
+> 3. Create the deployment Service Account with `roles/aiplatform.user`.
+> 4. Create the 18 telemetry Data Collectors in your Apigee organization.
+> 5. Provision your AI Products and Persona Developer Apps with `bash ./scripts/sync-personas.sh`.
 
 ---
 
-## The Minimal `values.quickstart.yaml`
-
+## 1. Define Your Models (`values.quickstart.yaml`)
 
 ```yaml
 gateway:
-  name: "ai-gateway-quickstart"
+  name: "ai-gateway"
   project_id: "your-gcp-project-id"
 
 models:
   # 1. Google Gemini on Vertex AI
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
     publisher: "google"
     format: "gemini"
     region: "global"
@@ -38,7 +35,7 @@ models:
     format: "anthropic"
     region: "us-east5"
 
-  # 3. Optional: Self-Hosted Model (OpenAI format)
+  # 3. Optional: Self-Hosted or External Model (OpenAI format)
   - name: "my-vllm-model"
     displayName: "Llama 3 (Self-Hosted)"
     format: "openai"
@@ -47,47 +44,19 @@ models:
 
 ---
 
-## What Happens Under the Hood
+## 2. Render, Deploy & Provision AI Products
 
-When you execute:
+Compile your YAML configuration into an Apigee bundle, deploy the proxy, and run `scripts/sync-personas.sh` to automatically create your Apigee API Products (`llmOperationGroup`) and Developer App keys:
 
 ```bash
+# 1. Render the Apigee bundle from YAML
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.quickstart.yaml \
     --output ./out/ai-gateway.zip
-```
 
-`apigee-go-gen` automatically compiles your YAML into a complete **Apigee API proxy bundle**:
-
-```mermaid
-graph LR
-    YAML["values.quickstart.yaml<br/>(15 lines of simple YAML)"]
-    Engine["apigee-go-gen"]
-    Bundle["Compiled Apigee Bundle<br/>• 4 Proxy Endpoints (/v1/messages, /ai-gateway, /v1/chat/completions, /v1/models)<br/>• 4 Target Endpoints with IAM Token Auth<br/>• Security, Quota, and Translation Policies<br/>• Dynamic Propertysets & Micro-Cost Rating Engine<br/>• Streaming EventFlow SSE Handlers"]
-
-    YAML --> Engine
-    Engine --> Bundle
-```
-
----
-
-## Deploy to Apigee
-
-> [!TIP]
-> **First-time deployment in this organization?** Ensure the 6 required telemetry Data Collectors exist:
-> ```bash
-> for dc in "dc_prompt_token_count:INTEGER" "dc_completion_token_count:INTEGER" "dc_total_token_count:INTEGER" "dc_model:STRING" "dc_requested_model:STRING" "dc_tx_cost_usd:FLOAT"; do
->   IFS=":" read -r name type <<< "$dc"
->   apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
-> done
-> ```
-
-Deploy the generated `.zip` bundle to your Apigee environment. A Service Account with the **Vertex AI User** role (`roles/aiplatform.user`) is required at deploy time (`-s` / `--sa`) because the proxy's TargetEndpoints use Google Cloud IAM authentication to call Vertex AI:
-
-```bash
+# 2. Deploy the proxy to Apigee X or Apigee Hybrid
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
-
 
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
@@ -98,24 +67,72 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
+
+# 3. Provision API Products (llmOperationGroup) & Developer Apps (outputs your client_id / $API_KEY)
+bash ./scripts/sync-personas.sh \
+    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
 ```
 
-
+* **Default AI Products Provisioned:** Because `values.quickstart.yaml` omits a custom `personas` block, `sync-personas.sh` automatically provisions the **4 built-in AI Products** (`ai-gateway-knowledge-worker`, `ai-gateway-developer`, `ai-gateway-it`, and `ai-gateway-agent`) and their Developer Apps (`*-app`). Each product is pre-configured with `llmOperationGroup` token counters (**1M tokens / hour** default limit) for every model in your `models` list and prints a ready-to-use `$API_KEY` (`client_id`) for testing.
 
 ---
 
-## Test Your Gateway
+## 3. Call Any Model from Any SDK or CLI
 
-Now, any client SDK can communicate with your models:
+Once deployed, developers can call any model in your catalog using their preferred client SDK or CLI tool. Click a tab below for ready-to-run examples:
 
-```bash
-# Call Gemini or Claude using Anthropic SDK format
-curl -X POST "https://$APIGEE_HOSTNAME/v1/messages" \
-  -H "x-apikey: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gemini-2.5-flash",
-    "messages": [{"role": "user", "content": "Explain quantum computing in one sentence."}]
-  }'
-```
+=== "Claude Code / Anthropic SDK (`/v1/messages`)"
 
+    Call Gemini, Claude, or OpenAI models using the standard Anthropic Messages API:
+
+    ```bash
+    curl -X POST "https://$APIGEE_HOSTNAME/v1/messages" \
+      -H "x-api-key: $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "gemini-3.5-flash",
+        "max_tokens": 256,
+        "messages": [{"role": "user", "content": "Explain quantum computing in one sentence."}]
+      }'
+    ```
+
+=== "Codex / OpenAI SDK (`/v1/chat/completions`)"
+
+    Call Gemini, Claude, MaaS, or OpenAI models using the standard OpenAI Chat Completions API:
+
+    ```bash
+    curl -X POST "https://$APIGEE_HOSTNAME/v1/chat/completions" \
+      -H "x-apikey: $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "claude-haiku-4-5",
+        "messages": [{"role": "user", "content": "Write a haiku about API gateways."}]
+      }'
+    ```
+
+=== "Embeddings SDK (`/v1/embeddings`)"
+
+    Generate vector embeddings using Vertex AI (`text-embedding-005`) or OpenAI (`text-embedding-3-small`):
+
+    ```bash
+    curl -X POST "https://$APIGEE_HOSTNAME/v1/embeddings" \
+      -H "x-apikey: $API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "text-embedding-005",
+        "input": ["Apigee Enterprise AI Gateway"]
+      }'
+    ```
+
+---
+
+## 4. Next Steps: Layer On Enterprise Governance
+
+Explore the **Guides** tab to enable enterprise controls via `values.yaml`:
+
+1. **[AI Products, Tenancy & Auth](../architecture/security.md):** Define AI Products (`lead-ai-engineer`, `power-developer`, `developer-default`, `autonomous-agent`) and connect Corporate SSO, API Keys, or Google Cloud Agent tokens.
+2. **[Models & Providers](../template-guide/custom-urls.md):** Add Vertex Model Garden MaaS (`meta/llama-*`, `mistralai/*`), Direct OpenAI & Anthropic (`api.openai.com`, `api.anthropic.com` using Apigee PropertySet key references), or self-hosted endpoints.
+3. **[Quotas, Budgets & Cost Control](../architecture/monetization.md):** Configure per-user and per-model token quotas, shared team budgets, temporary exceptions, and **Invoice-Accurate Cost Attribution**.
+4. **[Smart Routing & Content Safety](../architecture/routing.md):** Enable model aliases, cost tiers, automatic complexity routing (`auto:judge`), and Google Cloud Model Armor.

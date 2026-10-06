@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AssignMessage continueOnError="false" enabled="true" name="AM-RateLimitError">
+  <DisplayName>AM-RateLimitError</DisplayName>
+  <Set>
+    <Headers>
+      <Header name="Content-Type">application/json</Header>
+      <Header name="Retry-After">{ratelimit_retry_after}</Header>
+      <Header name="X-RateLimit-Constraint">{ratelimit_constraint}</Header>
+      <Header name="x-ratelimit-limit-requests">{ratelimit_limit_requests}</Header>
+      <Header name="x-ratelimit-remaining-requests">{ratelimit_remaining_requests}</Header>
+      <Header name="x-ratelimit-limit-tokens">{ratelimit_limit_tokens}</Header>
+      <Header name="x-ratelimit-remaining-tokens">{ratelimit_remaining_tokens}</Header>
+      <Header name="x-ratelimit-reset">{ratelimit_retry_after}s</Header>
+    </Headers>
+    <Payload contentType="application/json">{ratelimit_error_payload}</Payload>
+    <StatusCode>429</StatusCode>
+    <ReasonPhrase>Too Many Requests</ReasonPhrase>
+  </Set>
+  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
+  <AssignTo createNew="false" transport="http" type="response">error</AssignTo>
+</AssignMessage>
