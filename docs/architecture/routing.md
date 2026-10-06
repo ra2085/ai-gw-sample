@@ -80,7 +80,7 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     ```
 
     **How the Two-Stage Failover & Circuit Breaker Works:**
-    1. **Circuit `CLOSED` (First $N$ Upstream Errors — Transparent Failover):**
+    1. **Circuit `CLOSED` (First N Upstream Errors — Transparent Failover):**
        - When the primary model returns `HTTP 429` or `5xx`, the gateway increments a rolling error counter for that model and automatically retries the request against the fallback model—transcoding the request and response across providers if needed (`200 OK`, `X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: CLOSED`).
        - Token quotas, cost attribution, and Model Armor safety checks are applied against the fallback model that actually served the response.
     2. **Circuit `OPEN` (Sustained Outage — Zero-Latency Promotion):**

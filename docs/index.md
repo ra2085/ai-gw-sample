@@ -40,30 +40,73 @@ Instead of building custom API proxies from scratch for every model provider and
 
 ## How the Framework Fits Together
 
-```mermaid
-graph LR
-    subgraph Callers["Who Calls the Gateway"]
-        C1["Developers & CLI Tools<br/>(Claude Code, Codex, SDKs)"]
-        C2["Internal Apps & Portals<br/>(Corporate SSO / OAuth)"]
-        C3["Autonomous Agents<br/>(Vertex AI, Cloud Run, GKE)"]
-    end
+<div class="arch-flow">
+  <div class="arch-stage">
+    <div class="arch-stage-title">1. Who Calls the Gateway (Any SDK or Identity)</div>
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="arch-card-title">Developers & CLI Tools</div>
+        <div class="arch-card-sub">Claude Code, Codex, Anthropic SDK, OpenAI SDK, Google GenAI SDK</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Internal Apps & Portals</div>
+        <div class="arch-card-sub">Corporate SSO (Okta, Entra ID, Ping JWT / Opaque) & Apigee OAuth / API Keys</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Autonomous Agents</div>
+        <div class="arch-card-sub">Vertex AI Agent Engine (SPIFFE <code>.system.id.goog</code>) & GCP Service Accounts</div>
+      </div>
+    </div>
+  </div>
 
-    subgraph Products["How You Govern (AI Products)"]
-        P1["AI Product: Lead Engineer<br/>High Token Budget • All Frontier Models"]
-        P2["AI Product: Standard Developer<br/>Balanced Budget • Coding & Chat Models"]
-        P3["AI Product: Knowledge Worker<br/>Standard Budget • Fast & Cost-Efficient Models"]
-        P4["AI Product: Autonomous Agent<br/>Dedicated Service Quota • Scoped Models"]
-    end
+  <div class="arch-connector">
+    <span class="arch-connector-pill">↓ Authenticated & Mapped by SSO Group, SPIFFE Principal, or App Key ↓</span>
+  </div>
 
-    subgraph Backends["Where Models Run"]
-        B1["Google Vertex AI<br/>(Gemini, Claude, Embeddings, MaaS)"]
-        B2["Direct OpenAI, Anthropic & Azure<br/>(Apigee PropertySet Key Isolation)"]
-        B3["Self-Hosted Clusters<br/>(vLLM, Ollama)"]
-    end
+  <div class="arch-stage arch-stage--highlight">
+    <div class="arch-stage-title">2. How You Govern (Apigee AI Products & Guardrails)</div>
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="arch-card-title">AI Product: Lead Engineer</div>
+        <div class="arch-card-sub">High USD / Token Allowance • All Frontier Models (Claude Opus, Gemini Pro, GPT-5.4)</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">AI Product: Standard Developer</div>
+        <div class="arch-card-sub">Personal Daily Cap + Shared Team Pool • Coding & Reasoning Models</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">AI Product: Knowledge Worker</div>
+        <div class="arch-card-sub">Standard Budget • Fast, Cost-Efficient Models (Gemini Flash, Claude Haiku)</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">AI Product: Autonomous Agent</div>
+        <div class="arch-card-sub">Dedicated Service Quota • Scoped Task Models • Burst & Concurrency Limits</div>
+      </div>
+    </div>
+  </div>
 
-    Callers -->|"Mapped by Group, App, or Identity"| Products
-    Products -->|"Routed, Sanitized & Rated"| Backends
-```
+  <div class="arch-connector">
+    <span class="arch-connector-pill">↓ Protocol-Transcoded, Sanitized (Model Armor), Circuit-Broken & Cost-Rated ↓</span>
+  </div>
+
+  <div class="arch-stage">
+    <div class="arch-stage-title">3. Where Models Run (Multi-Cloud & Self-Hosted Backends)</div>
+    <div class="arch-grid">
+      <div class="arch-card">
+        <div class="arch-card-title">Google Cloud Vertex AI</div>
+        <div class="arch-card-sub">Gemini, Anthropic Claude, Embeddings & Model Garden MaaS (Llama, Mistral, Qwen)</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Direct Cloud Providers</div>
+        <div class="arch-card-sub">Direct OpenAI, Anthropic & Azure OpenAI (Isolated PropertySet / Per-App Keys)</div>
+      </div>
+      <div class="arch-card">
+        <div class="arch-card-title">Self-Hosted Clusters</div>
+        <div class="arch-card-sub">Custom vLLM, Ollama & Private Endpoints on GKE or Cloud Run</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 ---
 
