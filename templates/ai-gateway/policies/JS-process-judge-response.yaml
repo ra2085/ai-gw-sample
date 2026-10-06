@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-process-judge-response
   DisplayName: JS-process-judge-response
-  Properties: {}
-  ResourceURL: jsc://process_judge_response.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: process_judge_response
+    - Property:
+        .name: error_prefix
+        -Data: judge.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

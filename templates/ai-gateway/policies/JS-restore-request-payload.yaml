@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-restore-request-payload
   DisplayName: JS-restore-request-payload
-  Properties: {}
-  ResourceURL: jsc://restore_request_payload.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: restore_request_payload
+    - Property:
+        .name: error_prefix
+        -Data: restore.
+  ClassName: com.google.apigee.callouts.AuthAndPersonaCallout
+  ResourceURL: java://ai-gateway-callouts.jar

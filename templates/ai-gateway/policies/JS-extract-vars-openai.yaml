@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-extract-vars-openai
   DisplayName: JS-extract-vars-openai
-  Properties: {}
-  ResourceURL: jsc://extract_vars_openai.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: extract_vars_openai
+    - Property:
+        .name: error_prefix
+        -Data: router.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

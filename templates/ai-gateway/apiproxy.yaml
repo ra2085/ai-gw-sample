@@ -139,11 +139,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -316,11 +316,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -480,11 +480,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -632,11 +632,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -769,11 +769,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $.Values.features.quotas.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -850,11 +850,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $.Values.features.quotas.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -938,11 +938,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $.Values.features.quotas.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -1026,11 +1026,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $.Values.features.quotas.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -1111,11 +1111,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $.Values.features.quotas.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if and $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
           - Step:
-              Condition: usage_total_tokens != null and apiproduct.name != null
+              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -1167,73 +1167,13 @@ Resources:
       Type: properties
       Path: ./resources/properties/extract_expressions.properties
 
-  # JavaScript Resources
+  # Java Callouts (Stateless BaseCallout Subclasses) & EventFlow SSE JavaScript
   - Resource:
-      Type: jsc
-      Path: ./resources/jsc/anthropic_to_gemini.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/apply_fallback_response.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/calculate_monetization_cost.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/calculate_tokens_non_streaming.js
+      Type: java
+      Path: ./resources/java/ai-gateway-callouts.jar
   - Resource:
       Type: jsc
       Path: ./resources/jsc/combine_resp.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/extract_auth_credentials.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/extract_prompt.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/extract_vars_gemini.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/extract_vars_openai.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/format_rate_limit_error.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/gemini_to_anthropic_resp.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/inject_anthropic_version.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/inject_deidentified_finding.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/models_endpoint.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/prepare_fallback_request.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/prepare_judge_request.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/process_judge_response.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/resolve_auth_persona.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/resolve_model_location.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/restore_request_payload.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/anthropic_to_openai_resp.js
-  - Resource:
-      Type: jsc
-      Path: ./resources/jsc/restore_model_openai.js
 
 
   # OpenAPI Specs

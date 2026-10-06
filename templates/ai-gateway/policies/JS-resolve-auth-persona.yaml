@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-resolve-auth-persona
   DisplayName: JS-resolve-auth-persona
-  Properties: {}
-  ResourceURL: jsc://resolve_auth_persona.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: resolve_auth_persona
+    - Property:
+        .name: error_prefix
+        -Data: persona.
+  ClassName: com.google.apigee.callouts.AuthAndPersonaCallout
+  ResourceURL: java://ai-gateway-callouts.jar

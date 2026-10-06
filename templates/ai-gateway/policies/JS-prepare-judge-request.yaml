@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-prepare-judge-request
   DisplayName: JS-prepare-judge-request
-  Properties: {}
-  ResourceURL: jsc://prepare_judge_request.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: prepare_judge_request
+    - Property:
+        .name: error_prefix
+        -Data: judge.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

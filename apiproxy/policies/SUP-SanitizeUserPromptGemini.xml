@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<SanitizeUserPrompt async="false" continueOnError="false" enabled="true" name="SUP-SanitizeUserPromptGemini">
-  <IgnoreUnresolvedVariables>true</IgnoreUnresolvedVariables>
-  <DisplayName>SUP-SanitizeUserPromptGemini</DisplayName>
-  <ModelArmor>
-    <TemplateName>projects/{model_armor_request_project_id}/locations/{model_armor_request_location}/templates/{model_armor_request_template}</TemplateName>
-  </ModelArmor>
-  <UserPromptSource>{gemini_text_prompt}</UserPromptSource>
-</SanitizeUserPrompt>

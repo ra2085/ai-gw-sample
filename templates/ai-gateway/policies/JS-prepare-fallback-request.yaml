@@ -1,8 +1,14 @@
-Javascript:
-  .continueOnError: true
+JavaCallout:
+  .continueOnError: false
   .enabled: true
   .name: JS-prepare-fallback-request
-  .timeLimit: 200
   DisplayName: JS-prepare-fallback-request
-  Properties: {}
-  ResourceURL: jsc://prepare_fallback_request.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: prepare_fallback_request
+    - Property:
+        .name: error_prefix
+        -Data: fallback.
+  ClassName: com.google.apigee.callouts.FallbackAndErrorCallout
+  ResourceURL: java://ai-gateway-callouts.jar

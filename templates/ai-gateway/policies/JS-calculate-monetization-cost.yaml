@@ -1,8 +1,14 @@
-Javascript:
-  .continueOnError: true
+JavaCallout:
+  .continueOnError: false
   .enabled: true
   .name: JS-calculate-monetization-cost
-  .timeLimit: 200
   DisplayName: JS-calculate-monetization-cost
-  Properties: {}
-  ResourceURL: jsc://calculate_monetization_cost.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: calculate_monetization_cost
+    - Property:
+        .name: error_prefix
+        -Data: cost.
+  ClassName: com.google.apigee.callouts.ResponseTranscoderAndCostCallout
+  ResourceURL: java://ai-gateway-callouts.jar

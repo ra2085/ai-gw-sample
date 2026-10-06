@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Javascript continueOnError="true" enabled="true" name="JS-prepare-fallback-request" timeLimit="200">
-  <DisplayName>JS-prepare-fallback-request</DisplayName>
-  <Properties/>
-  <ResourceURL>jsc://prepare_fallback_request.js</ResourceURL>
-</Javascript>

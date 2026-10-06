@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-inject-anthropic-version
   DisplayName: JS-inject-anthropic-version
-  Properties: {}
-  ResourceURL: jsc://inject_anthropic_version.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: inject_anthropic_version
+    - Property:
+        .name: error_prefix
+        -Data: router.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar
