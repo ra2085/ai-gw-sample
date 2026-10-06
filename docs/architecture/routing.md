@@ -66,7 +66,6 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     features:
       circuit_breaker:
         enabled: true
-        shared_name: "llm-circuit-breaker"
         error_threshold: 3       # Number of upstream 429/5xx errors that trips the circuit OPEN
         window_interval: 1       # Rolling window duration before automatic self-healing recovery
         window_unit: "minute"    # minute | hour | day
@@ -81,14 +80,13 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
     ```
 
     **How the Two-Stage Failover & Circuit Breaker Works:**
-    1. **Circuit `CLOSED` (First $N$ Upstream Errors — PostFlow Recovery):**
-       - When `primary_model` returns `HTTP 429` or `>= 500`, `LTQ-CircuitBreakerCount` (`CountOnly: true`, `SharedName: llm-circuit-breaker`, `<Identifier ref="tried_primary_model"/>`, `<LLMModelSource>{circuit_breaker_checked}</LLMModelSource>`, weight `1`) increments the distributed rolling-window error counter for `tried_primary_model`.
-       - `JS-prepare-fallback-request` transcodes the original client payload (`raw_client_payload`) into `fallback_model`'s wire format (`gemini`, `anthropic`, or `openai`) and dispatches `SC-FallbackGoogleIAM` (for Vertex AI) or `SC-FallbackExternal` (for OpenAI/BYO endpoints) in `ProxyEndpoint.PostFlow.Response`.
-       - `JS-apply-fallback-response` transcodes the fallback response back into the caller's requested format (`200 OK`) *before* token extraction, Model Armor response sanitization, monetization cost calculation, and token quota deduction execute—so billing and safety reflect the actual model that served the request (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: CLOSED`).
-    2. **Circuit `OPEN` (Sustained Outage — Zero-Latency PreFlow Promotion):**
-       - Once `primary_model` reaches `error_threshold` within the rolling window on `llm-circuit-breaker`, `LTQ-CircuitBreakerCheck` (`EnforceOnly: true`, `continueOnError: true`, `<Identifier ref="primary_model"/>`) trips in `PreFlow.Request` *before* `RouteRule` executes.
-       - `JS-resolve-model-location` immediately promotes `fallback_model` → `primary_model` in `PreFlow`, routing **directly** to the fallback `TargetEndpoint` with **0ms extra hop latency** and **full native SSE streaming** (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: OPEN`, `X-Gateway-Routed-Model: <fallback_model>`).
-    3. **Self-Healing Recovery:** When the rolling window expires, the distributed counter resets and traffic automatically resumes routing to `primary_model`.
+    1. **Circuit `CLOSED` (First $N$ Upstream Errors — Transparent Failover):**
+       - When the primary model returns `HTTP 429` or `5xx`, the gateway increments a rolling error counter for that model and automatically retries the request against the fallback model—transcoding the request and response across providers if needed (`200 OK`, `X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: CLOSED`).
+       - Token quotas, cost attribution, and Model Armor safety checks are applied against the fallback model that actually served the response.
+    2. **Circuit `OPEN` (Sustained Outage — Zero-Latency Promotion):**
+       - Once the primary model hits `error_threshold` within the rolling window, the circuit trips `OPEN`.
+       - Subsequent requests immediately promote the fallback model **before** routing upstream—delivering **0ms extra hop latency** and **full native SSE streaming** (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: OPEN`, `X-Gateway-Routed-Model: <fallback_model>`).
+    3. **Self-Healing Recovery:** When the rolling window expires, the error counter resets automatically and traffic resumes routing to the primary model.
 
 ---
 
