@@ -3,7 +3,8 @@
   <DisplayName>AM-SetQuotaHeaders</DisplayName>
   <Set>
     <Headers>
-      <Header name="x-quota-allowed">{ratelimit.LTQ-CountOnly.allowed.count}</Header>
+      <Header name="x-quota-mode">{primary_quota_mode}</Header>
+      <Header name="x-quota-allowed">{ratelimit.LTQ-EnforceOnly.allowed.count}</Header>
       <Header name="x-quota-used">{ratelimit.LTQ-CountOnly.used.count}</Header>
       <Header name="x-quota-available">{ratelimit.LTQ-CountOnly.available.count}</Header>
       <Header name="x-quota-ip-used">{ratelimit.LTQ-CountOnly-IP.used.count}</Header>

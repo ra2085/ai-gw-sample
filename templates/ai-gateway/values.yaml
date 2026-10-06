@@ -15,6 +15,7 @@ gateway:
 features:
   monetization:
     enabled: true
+    enforce_apigee_wallet: true            # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer billing wallets
     default_currency: "USD"
     default_markup: 1.0
   model_armor:
@@ -55,19 +56,21 @@ features:
     window_unit: "minute"                # Rolling recovery window unit (minute, hour, day)
   quotas:
     enabled: true
-    # Primary window uses native API Product Quota (<UseQuotaConfigInAPIProduct>).
-    # Enable secondary_window only when a dual rolling token window (e.g., 4h + 7d) is required.
-    # Limits are read dynamically from API Product / Developer App custom attributes with fallback defaults.
+    # Primary window uses auth-agnostic dynamic quota variables (primary_quota_limit / primary_quota_interval / primary_quota_unit)
+    # isolated by SharedName: "llm-token-counter", Identifier: "rate_limit_client_id", and LLMModelSource: "{model}".
+    # Supports either token budgets (`limit`) or Virtual USD Spend Wallets (`limit_usd`, tracked in micro-USD: $1.00 = 1,000,000).
+    # Enable secondary_window only when a dual rolling window or shared Team Budget (e.g., 4h per-user + 7d team pool) is required.
     secondary_window:
       enabled: false
       shared_name: "llm-token-counter-secondary"
-      identifier_ref: "rate_limit_client_id"
+      identifier_ref: "secondary_quota_identifier"
       allow_count: 1000000
-      allow_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit"
+      # allow_usd: 100.00                  # Optional fallback team/secondary spend cap in USD (converted to micro-USD)
+      allow_ref: "secondary_quota_limit"
       interval: 7
-      interval_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval"
+      interval_ref: "secondary_quota_interval"
       time_unit: "day"
-      time_unit_ref: "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit"
+      time_unit_ref: "secondary_quota_unit"
   rate_limits:
     # Opt-in per-application burst and concurrency rate limits (both disabled by default).
     # When enabled, limits can be overridden at runtime with zero proxy redeployment via
@@ -121,11 +124,11 @@ features:
         client_id: ""                      # Apigee Developer App client_id (or run: bash scripts/sync-personas.sh)
         # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
         # quota:
-        #   limit: 50000
+        #   limit: 50000                   # Token budget (or use limit_usd: 5.00 for a $5.00 Virtual USD Spend Wallet)
         #   interval: 4
         #   unit: "hour"
         # team_budget:
-        #   limit: 2000000
+        #   limit: 2000000                 # Shared team token pool (or use limit_usd: 100.00 for a $100.00 team USD pool)
         #   interval: 7
         #   unit: "day"
         # rate_limits:
@@ -139,13 +142,13 @@ features:
         client_id: ""                      # Apigee Developer App client_id bound to the Developer API Product
         # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
         # quota:
-        #   limit: 250000
+        #   limit: 250000                  # Or use limit_usd: 25.00 (and per_model_usd: { claude-sonnet-4-6: 10.00 })
         #   interval: 4
         #   unit: "hour"
         #   per_model:
         #     claude-sonnet-4-6: 50000
         # team_budget:
-        #   limit: 10000000
+        #   limit: 10000000                # Or use limit_usd: 500.00
         #   interval: 7
         #   unit: "day"
       it:
@@ -167,11 +170,13 @@ features:
     # Optional Individual, Agent, or Team Exceptions (Quotas, Auto-Expiration, Team Budgets, Models, Model Armor):
     # exceptions:
     #   - match: ["alice@company.com"]
-    #     quota_limit: 500000              # Raises primary quota AND isolates Alice from shared team budget exhaustion
+    #     quota_limit: 500000              # Or quota_limit_usd: 50.00; raises personal limit while still drawing from shared team pool
+    #     # bypass_team_budget: true       # Optional emergency bypass: isolates Alice from an exhausted shared team pool
     #     expires_at: "2026-10-15T00:00:00Z" # Automatically reverts to baseline persona quota after timestamp
     #     models: ["*"]                    # Temporarily grant access to all catalog models
     #   - match: ["team:Search-Research"]
-    #     team_budget_limit: 50000000      # Raises shared 7-day pool for the entire Search-Research team
+    #     team_budget_limit: 50000000      # Or team_budget_limit_usd: 1000.00; raises shared 7-day pool for the entire Search-Research team
+    #     expires_at: "2026-10-31T23:59:59Z" # Optional auto-expiration for temporary department top-ups
     #   - match: ["*@pci-vault.iam.gserviceaccount.com"]
     #     quota_limit: 2000000
     #     model_armor:

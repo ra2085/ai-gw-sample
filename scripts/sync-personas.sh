@@ -232,11 +232,15 @@ for raw_p in "${PERSONAS_ARRAY[@]}"; do
 
     MATCH_CLAIMS=$(get_prop "persona.${p}.match_claims")
     MODELS=$(get_prop "persona.${p}.models")
+    QUOTA_MODE=$(get_prop "persona.${p}.quota_mode")
     QUOTA_LIMIT=$(get_prop "persona.${p}.quota_limit")
+    QUOTA_LIMIT_USD=$(get_prop "persona.${p}.quota_limit_usd")
     QUOTA_INTERVAL=$(get_prop "persona.${p}.quota_interval")
     QUOTA_UNIT=$(get_prop "persona.${p}.quota_unit")
     PER_MODEL_QUOTAS=$(get_prop "persona.${p}.per_model_quotas")
+    TEAM_MODE=$(get_prop "persona.${p}.team_quota_mode")
     TEAM_LIMIT=$(get_prop "persona.${p}.team_quota_limit")
+    TEAM_LIMIT_USD=$(get_prop "persona.${p}.team_quota_limit_usd")
     TEAM_INTERVAL=$(get_prop "persona.${p}.team_quota_interval")
     TEAM_UNIT=$(get_prop "persona.${p}.team_quota_unit")
     BURST_RATE=$(get_prop "persona.${p}.burst_rate")
@@ -249,10 +253,10 @@ for raw_p in "${PERSONAS_ARRAY[@]}"; do
 
     # Build API Product JSON with Apigee X llmOperationGroup.operationConfigs
     # expanding concrete catalog models (and aliases) so LTQ-EnforceOnly / LTQ-CountOnly
-    # token counters track every authorized model and per-model quota accurately.
+    # token or micro-USD counters track every authorized model and per-model quota accurately.
     PRODUCT_JSON=$(python3 - "$PRODUCT_NAME" "$DISPLAY_NAME" "$APIGEE_ENV" "$PROXY_NAME" "$p" \
-        "$MATCH_CLAIMS" "$MODELS" "$QUOTA_LIMIT" "$QUOTA_INTERVAL" "$QUOTA_UNIT" \
-        "$PER_MODEL_QUOTAS" "$TEAM_LIMIT" "$TEAM_INTERVAL" "$TEAM_UNIT" "$BURST_RATE" "$CONCURRENCY" \
+        "$MATCH_CLAIMS" "$MODELS" "$QUOTA_MODE" "$QUOTA_LIMIT" "$QUOTA_LIMIT_USD" "$QUOTA_INTERVAL" "$QUOTA_UNIT" \
+        "$PER_MODEL_QUOTAS" "$TEAM_MODE" "$TEAM_LIMIT" "$TEAM_LIMIT_USD" "$TEAM_INTERVAL" "$TEAM_UNIT" "$BURST_RATE" "$CONCURRENCY" \
         "$MA_TMPL" "$MA_REQ" "$MA_RESP" "$MODEL_PROPS" <<'PYEOF'
 import fnmatch
 import json
@@ -261,10 +265,10 @@ import sys
 
 (
     product_name, display_name, env_name, proxy_name, persona,
-    match_claims, models, q_limit, q_interval, q_unit,
-    per_model_quotas, t_limit, t_interval, t_unit, burst, concurrency,
+    match_claims, models, q_mode, q_limit, q_limit_usd, q_interval, q_unit,
+    per_model_quotas, t_mode, t_limit, t_limit_usd, t_interval, t_unit, burst, concurrency,
     ma_tmpl, ma_req, ma_resp, model_props_path
-) = sys.argv[1:21]
+) = sys.argv[1:25]
 
 # 1. Parse models.catalog and alias.* from model_locations.properties
 catalog_models = []
@@ -372,8 +376,18 @@ if models:
     # Store concrete expanded model names (or '*' if unrestricted)
     expanded_attr_models = "*" if unrestricted else ",".join(rbac_allowed)
     attrs.append({"name": "allowed_models", "value": expanded_attr_models})
+if q_mode:
+    attrs.append({"name": "quota_mode", "value": q_mode})
+if q_limit_usd:
+    attrs.append({"name": "quota_limit_usd", "value": q_limit_usd})
 if per_model_quotas:
     attrs.append({"name": "per_model_quotas", "value": per_model_quotas})
+if t_mode:
+    attrs.append({"name": "team_quota_mode", "value": t_mode})
+    attrs.append({"name": "secondary_quota_mode", "value": t_mode})
+if t_limit_usd:
+    attrs.append({"name": "team_quota_limit_usd", "value": t_limit_usd})
+    attrs.append({"name": "secondary_quota_limit_usd", "value": t_limit_usd})
 if t_limit:
     attrs.append({"name": "team_quota_limit", "value": t_limit})
     attrs.append({"name": "secondary_quota_limit", "value": t_limit})

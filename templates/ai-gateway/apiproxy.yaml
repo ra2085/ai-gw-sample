@@ -51,7 +51,7 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -129,7 +129,7 @@ ProxyEndpoints:
                   Condition: '!(stream = true) and (response.status.code < 400) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
                   Name: SMR-SanitizeModelResponse
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features (or (and $.Values.features.monetization $.Values.features.monetization.enabled) (and $.Values.features.quotas $.Values.features.quotas.enabled)) }}
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: JS-calculate-monetization-cost
@@ -226,7 +226,7 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -306,7 +306,7 @@ ProxyEndpoints:
                   Condition: '!(stream = true) and (response.status.code < 400) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
                   Name: SMR-SanitizeModelResponse
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features (or (and $.Values.features.monetization $.Values.features.monetization.enabled) (and $.Values.features.quotas $.Values.features.quotas.enabled)) }}
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: JS-calculate-monetization-cost
@@ -394,7 +394,7 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -470,7 +470,7 @@ ProxyEndpoints:
                   Condition: '!(stream = true) and (response.status.code < 400) and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
                   Name: SMR-SanitizeModelResponse
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features (or (and $.Values.features.monetization $.Values.features.monetization.enabled) (and $.Values.features.quotas $.Values.features.quotas.enabled)) }}
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: JS-calculate-monetization-cost
@@ -562,7 +562,7 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
               {{- include "auth_preflow_steps" . | nindent 14 }}
               {{- end }}
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
               - Step:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
@@ -622,7 +622,7 @@ ProxyEndpoints:
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: JS-calculate-tokens-non-streaming
-              {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+              {{- if and $.Values.features (or (and $.Values.features.monetization $.Values.features.monetization.enabled) (and $.Values.features.quotas $.Values.features.quotas.enabled)) }}
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
                   Name: JS-calculate-monetization-cost
@@ -679,7 +679,7 @@ ProxyEndpoints:
           {{- if or (not $.Values.features) (not $.Values.features.auth) (and $.Values.features.auth (ne $.Values.features.auth.enabled false)) }}
           {{- include "auth_preflow_steps" . | nindent 10 }}
           {{- end }}
-          {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled }}
+          {{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
           - Step:
               Name: MLC-EnforceMonetizationLimits
           {{- end }}
@@ -759,15 +759,10 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled $.Values.features.model_armor.enabled)) }}
           - Step:
               Condition: release_concurrency_slot = "true"
               Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
-          - Step:
-              Condition: usage_total_tokens != null
-              Name: JS-calculate-monetization-cost
           {{- end }}
           - Step:
               Condition: usage_total_tokens != null
@@ -845,15 +840,10 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled $.Values.features.model_armor.enabled)) }}
           - Step:
               Condition: release_concurrency_slot = "true"
               Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
-          - Step:
-              Condition: usage_total_tokens != null
-              Name: JS-calculate-monetization-cost
           {{- end }}
           - Step:
               Condition: usage_total_tokens != null
@@ -938,15 +928,10 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled $.Values.features.model_armor.enabled)) }}
           - Step:
               Condition: release_concurrency_slot = "true"
               Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
-          - Step:
-              Condition: usage_total_tokens != null
-              Name: JS-calculate-monetization-cost
           {{- end }}
           - Step:
               Condition: usage_total_tokens != null
@@ -1031,15 +1016,10 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled $.Values.features.model_armor.enabled)) }}
           - Step:
               Condition: release_concurrency_slot = "true"
               Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
-          - Step:
-              Condition: usage_total_tokens != null
-              Name: JS-calculate-monetization-cost
           {{- end }}
           - Step:
               Condition: usage_total_tokens != null
@@ -1121,15 +1101,10 @@ TargetEndpoints:
         Response:
           - Step:
               Name: JS-combine-resp
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $.Values.features.quotas.enabled $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled $.Values.features.model_armor.enabled)) }}
           - Step:
               Condition: release_concurrency_slot = "true"
               Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          {{- if $.Values.features.monetization.enabled }}
-          - Step:
-              Condition: usage_total_tokens != null
-              Name: JS-calculate-monetization-cost
           {{- end }}
           - Step:
               Condition: usage_total_tokens != null

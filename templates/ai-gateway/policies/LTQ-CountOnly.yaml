@@ -8,9 +8,16 @@ LLMTokenQuota:
   CountOnly: true
   Identifier:
     .ref: rate_limit_client_id
-  UseQuotaConfigInAPIProduct:
-    .stepName: VA-ApiKey
+  Allow:
+    .count: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.default_quota }}{{ $.Values.features.quotas.default_quota }}{{ else }}1000000{{ end }}
+    .countRef: primary_quota_limit
+  Interval:
+    .ref: primary_quota_interval
+    -Data: 1
+  TimeUnit:
+    .ref: primary_quota_unit
+    -Data: hour
   Distributed: true
   Synchronous: true
-  LLMTokenUsageSource: '{usage_total_tokens}'
+  LLMTokenUsageSource: '{primary_quota_usage}'
   LLMModelSource: '{model}'

@@ -7,17 +7,20 @@ AssignMessage:
     Headers:
       - Header:
           .name: x-quota-allowed
-          -Data: '{ratelimit.LTQ-CountOnly.allowed.count}'
+          -Data: '{ratelimit.LTQ-EnforceOnly.allowed.count}'
       - Header:
           .name: x-quota-used
           -Data: '{ratelimit.LTQ-CountOnly.used.count}'
       - Header:
           .name: x-quota-available
           -Data: '{ratelimit.LTQ-CountOnly.available.count}'
+      - Header:
+          .name: x-quota-unit
+          -Data: '{primary_quota_mode}'
       {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
       - Header:
           .name: x-quota-secondary-allowed
-          -Data: '{ratelimit.LTQ-SecondaryCountOnly.allowed.count}'
+          -Data: '{ratelimit.LTQ-SecondaryEnforceOnly.allowed.count}'
       - Header:
           .name: x-quota-secondary-used
           -Data: '{ratelimit.LTQ-SecondaryCountOnly.used.count}'

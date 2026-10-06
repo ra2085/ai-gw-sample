@@ -9,7 +9,7 @@ try {
     var isVertexPredict = context.getVariable("vertex_predict_embeddings") === "true";
     var requestFormat = (context.getVariable("request_format") || "").toLowerCase();
     var isOpenAIFormat = requestFormat === "openai";
-    var respStr = null;
+    var respStr;
     var parsedResp = null;
 
     if (isEmbeddings || isVertexPredict || (promptTokens === 0 && completionTokens === 0)) {
@@ -128,10 +128,12 @@ try {
     context.setVariable("completion_tokens", totalCompletionStr);
     context.setVariable("usage_completion_tokens", totalCompletionStr);
     context.setVariable("usage_total_tokens", totalTokensStr);
+    context.setVariable("primary_quota_usage", totalTokensStr);
+    context.setVariable("secondary_quota_usage", totalTokensStr);
 
     // Extract assistant response text into response_partial for non-streaming Model Armor response sanitization
     if (!isEmbeddings && !isVertexPredict && context.getVariable("model_armor_response_enabled") !== "false") {
-        var rawRespContent = respStr !== null ? respStr : context.getVariable("response.content");
+        var rawRespContent = respStr !== undefined ? respStr : context.getVariable("response.content");
         if (rawRespContent) {
             try {
                 if (!parsedResp) {

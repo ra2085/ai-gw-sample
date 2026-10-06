@@ -26,7 +26,8 @@ gateway:
 features:
   # 1. Invoice-Accurate Cost Attribution
   monetization:
-    enabled: true                                     # Calculates exact USD cost (cached & reasoning tokens) and checks prepaid balances
+    enabled: true                                     # Calculates exact USD cost (cached & reasoning tokens)
+    enforce_apigee_wallet: true                       # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer wallets
     default_currency: "USD"                           # Default currency code
     default_markup: 1.0                               # Default markup multiplier
 
@@ -51,12 +52,14 @@ features:
     enabled: true                                     # Enables automatic prompt complexity classification
     classifier_model: "gemini-3.1-flash-lite"         # Fast model used for classification
 
-  # 4. Rolling-Window Token Quotas & Team Budgets
+  # 4. Rolling-Window Quotas & Team Budgets (Tokens or Virtual USD Spend Wallets)
   quotas:
-    enabled: true                                     # Enforces AI Product rolling token quotas and per-model limits
+    enabled: true                                     # Enforces AI Product rolling token or micro-USD quotas and per-model limits
     secondary_window:
       enabled: false                                  # Opt-in: 2nd rolling window (7-day cap OR shared Team Budget)
-      allow_count: 1000000                            # Default fallback token limit
+      shared_name: "llm-token-counter-secondary"      # Isolated counter namespace for secondary/team budgets
+      identifier_ref: "secondary_quota_identifier"    # Resolves to "team:<identity_team>" (team scope) or rate_limit_client_id
+      allow_count: 1000000                            # Default fallback token limit (or use allow_usd: 100.00 for USD fallback)
       allow_ref: "secondary_quota_limit"              # Dynamically resolves team_quota_limit or secondary_quota_limit
       interval: 7                                     # Default fallback interval
       interval_ref: "secondary_quota_interval"        # Dynamically resolves team/secondary interval
@@ -79,6 +82,7 @@ features:
   # 6. Rolling-Window Circuit Breaker & Automatic Fallback Chains
   circuit_breaker:
     enabled: true                                     # Enables automatic 429/5xx failover & PreFlow circuit breaking
+    shared_name: "llm-circuit-breaker"                # Isolated counter namespace for circuit breaker error budgets
     error_threshold: 3                                # Upstream errors within window before circuit trips OPEN
     window_interval: 1                                # Rolling error budget window duration
     window_unit: "minute"                             # Rolling window unit (minute | hour | day)
@@ -125,11 +129,11 @@ features:
         client_id: "CONSUMER_KEY_FOR_KNOWLEDGE_WORKER_AI_PRODUCT" # Optional if default_client_id is set or synced via scripts/sync-personas.sh
         models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "claude-haiku-4-5"] # Concrete catalog model IDs (or ["*"] for all catalog models)
         quota:
-          limit: 100000                               # Per-user rolling token allowance
+          limit: 100000                               # Per-user rolling token allowance (or use limit_usd: 5.00 for a $5.00 USD Spend Wallet)
           interval: 4
           time_unit: "hour"                           # minute | hour | day | week | month
         team_budget:
-          limit: 5000000                              # Shared department/team rolling token budget
+          limit: 5000000                              # Shared department/team rolling token budget (or use limit_usd: 100.00)
           interval: 7
           time_unit: "day"
         rate_limits:
@@ -143,7 +147,7 @@ features:
         client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
         models: ["*"]                                 # Expands to all concrete catalog models in llmOperationGroup
         quota:
-          limit: 500000                               # 500k tokens / 4 hours per engineer
+          limit: 500000                               # 500k tokens / 4 hours per engineer (or use limit_usd: 25.00 + per_model_usd)
           interval: 4
           time_unit: "hour"
           per_model:                                  # Optional: cap expensive frontier models while leaving fast models uncapped
@@ -187,12 +191,14 @@ features:
 
     # 9. Unified Identity & Team Exceptions (Quotas, Team Budgets, Model Access, Rate Limits & Model Armor)
     exceptions:
-      - match: ["alice@corp.example.com"]             # Individual temporary token boost + frontier model unlock
-        quota_limit: 5000000                          # Overrides primary token quota (bypasses exhausted team budget while active)
+      - match: ["alice@corp.example.com"]             # Individual temporary token or USD boost + frontier model unlock
+        quota_limit: 5000000                          # Overrides personal quota (or quota_limit_usd: 50.00; still draws from shared team pool by default)
+        # bypass_team_budget: true                    # Optional emergency bypass: isolates user from an exhausted shared team pool
         expires_at: "2026-12-31T23:59:59Z"            # Optional ISO-8601 UTC auto-expiration timestamp
         models: ["*"]                                 # Optional: unlocks specific models for this user/agent
       - match: ["team:ml-research", "team:core-ai"]   # Department-level shared team budget override
-        team_budget_limit: 100000000                  # Overrides shared 7-day department pool to 100M tokens
+        team_budget_limit: 100000000                  # Overrides shared 7-day department pool (or use team_budget_limit_usd: 1000.00)
+        expires_at: "2026-12-31T23:59:59Z"            # Optional ISO-8601 UTC auto-expiration for temporary department top-ups
       - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
         burst_rate: "1200pm"                          # Optional per-identity/team burst rate override
         concurrency_limit: 50                         # Optional per-identity/team concurrency override

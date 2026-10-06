@@ -20,4 +20,4 @@ LLMTokenQuota:
   Distributed: true
   Synchronous: true
   LLMTokenUsageSource: '{cb_error_weight}'
-  LLMModelSource: '{tried_primary_model}'
+  LLMModelSource: '{circuit_breaker_checked}'

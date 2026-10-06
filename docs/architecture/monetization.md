@@ -8,14 +8,17 @@ Once you have organized your consumers into **AI Products**, you can layer on to
 
 Click any tab below to see how to configure that control declaratively in `values.yaml` (or via Apigee API Product attributes):
 
-=== "1. Per-User & Per-Model Token Quotas"
-    **What it does:** Sets a rolling token allowance (for example, `500,000 tokens per 4 hours`) for each individual user belonging to a **Persona / AI Product**, plus optional model-specific caps for expensive frontier models.
+=== "1. Per-User & Per-Model Quotas (Tokens or USD)"
+    **What it does:** Sets a rolling allowance—either in **Tokens (`limit`)** or in **USD (`limit_usd`)** via a **Virtual USD Spend Wallet**—for each individual user belonging to a **Persona / AI Product**, plus optional model-specific caps for expensive frontier models.
 
-    * **Standard Persona Quota:** Declared under `features.auth.personas.<name>.quota`. Every user mapped to that persona receives their own isolated rolling counter (`quota_client_id`).
-    * **Per-Model Quota (`per_model`):** Want to cap expensive frontier models (such as `claude-sonnet-4-6` at `50,000 tokens / 4h`) while leaving fast models (`gemini-3.1-flash-lite`) uncapped up to the 500k allowance? Add `per_model` under the persona's `quota` block:
+    * **Token Mode (`limit` / `per_model`):** Counts raw tokens against `LTQ-EnforceOnly` / `LTQ-CountOnly`.
+    * **Virtual USD Spend Wallet Mode (`limit_usd` / `per_model_usd`):** Converts USD budgets into integer **micro-dollars** (`$1.00 = 1,000,000` micro-USD) and deducts the exact invoice-accurate cost (`tx_cost_micro_usd`, accounting for input, output, cached reads, cache writes, and thinking tokens) from each user's isolated rolling counter—**without onboarding individual users as Apigee Developer entities!**
 
     ```yaml
     features:
+      monetization:
+        enabled: true
+        enforce_apigee_wallet: false              # Use Virtual USD Spend Wallets instead of Apigee Developer billing wallets
       quotas:
         enabled: true
       auth:
@@ -23,59 +26,81 @@ Click any tab below to see how to configure that control declaratively in `value
           developer:
             models: ["*"]                         # Expands to all concrete catalog models in llmOperationGroup
             quota:
-              limit: 500000                       # 500k tokens per 4 hours per individual engineer
-              interval: 4
-              time_unit: "hour"
-              per_model:
-                claude-sonnet-4-6: 50000          # Max 50k tokens / 4h on Claude Sonnet 4.6
-                gemini-3.1-pro-preview: 100000    # Max 100k tokens / 4h on Gemini 3.1 Pro
+              # Option A: Token Quota (limit / per_model)
+              # limit: 500000
+              # per_model:
+              #   claude-sonnet-4-6: 50000
+              #
+              # Option B: Virtual USD Spend Wallet (limit_usd / per_model_usd)
+              limit_usd: 15.00                    # $15.00 USD per day per individual engineer (15,000,000 micro-USD)
+              interval: 1
+              time_unit: "day"
+              per_model_usd:
+                claude-sonnet-4-6: 5.00           # Max $5.00 USD / day on Claude Sonnet 4.6
     ```
 
-    *(Note: Both the proxy bundle's `config.properties` and `./scripts/sync-personas.sh`—which writes each concrete model's `llmTokenQuota` into the Apigee API Product's `llmOperationGroup.operationConfigs`—enforce these per-model caps automatically).*
+    *(Note: Both the proxy bundle's `config.properties` and `./scripts/sync-personas.sh`—which writes each concrete model's `llmTokenQuota` into the Apigee API Product's `llmOperationGroup.operationConfigs`—enforce these token or micro-USD caps automatically, and `x-quota-mode: usd` / `tokens` is returned on every response).*
 
-=== "2. Shared Team Budgets & Dual Windows"
-    **What it does:** Enforces a second rolling token window—either as a **7-day weekly cap per user** or as a **Shared Team Budget** across everyone in a department (such as `eng-ml`).
+=== "2. Shared Team Budgets & Dual Windows (Tokens or USD)"
+    **What it does:** Enforces a second rolling window (`LTQ-SecondaryEnforceOnly` / `LTQ-SecondaryCountOnly`)—either as a **7-day weekly cap per user** or as a **Shared Team Budget** across everyone in a department (such as `eng-ml`). You can even mix modes (for example, a **4-hour Token Quota per user** + a **30-day Shared USD Spend Budget per team**)!
 
-    1. Enable the secondary window and declare `team_budget` on the persona (or override a specific department under `exceptions`) in `values.yaml`:
+    1. Enable the secondary window and declare `team_budget` (`limit` or `limit_usd`) on the persona (or override a specific department under `exceptions`) in `values.yaml`:
        ```yaml
        features:
          quotas:
            enabled: true
            secondary_window:
              enabled: true
+             shared_name: "llm-token-counter-secondary"
+             identifier_ref: "secondary_quota_identifier"
              allow_count: 10000000
+             # allow_usd: 250.00                  # Optional global fallback in USD
              interval: 7
              time_unit: "day"
          auth:
            personas:
              developer:
                team_budget:
-                 limit: 25000000      # 25M shared 7-day token pool per department
-                 interval: 7
+                 limit_usd: 250.00                # $250.00 USD shared 30-day pool per department (or use limit: 25000000 for tokens)
+                 interval: 30
                  time_unit: "day"
            exceptions:
-             # Optional: give a specific department (`team:ml-research`) a 100M 7-day pool
+             # Optional: give a specific department (`team:ml-research`) a $1,000.00 30-day pool (or team_budget_limit for tokens)
              - match: ["team:ml-research"]
-               team_budget_limit: 100000000
+               team_budget_limit_usd: 1000.00
        ```
-    2. All users in a department (`dc_identity_team`) draw from that department's shared pool while also respecting their individual 4-hour primary quota.
+    2. All users in a department (`dc_identity_team`) draw from that department's cross-model shared pool (`SharedName: llm-token-counter-secondary`, `Identifier: secondary_quota_identifier`, `LLMModelSource: "{secondary_quota_scope}"`) while also respecting their individual per-model primary quota (`SharedName: llm-token-counter`, `Identifier: rate_limit_client_id`, `LLMModelSource: "{model}"`).
 
 === "3. Temporary Individual & Team Exceptions"
-    **What it does:** Grants a specific engineer, Service Account, SPIFFE agent, or department a temporary token boost (for example, `5,000,000 tokens` until Friday at 5:00 PM UTC) or unlocks specific models, and **automatically expires** back to their standard persona tier when `expires_at` passes.
+    **What it does:** Grants a specific engineer, Service Account, SPIFFE agent, or department a temporary allowance boost—either in tokens (`quota_limit` / `team_budget_limit`) or USD (`quota_limit_usd` / `team_budget_limit_usd`)—or unlocks specific models, and **automatically expires** back to their standard persona tier when `expires_at` passes.
 
     Declare the exception directly in `values.yaml` under `features.auth.exceptions`:
     ```yaml
     features:
       auth:
         exceptions:
+          # 1. Individual Exception (raises personal cap; still draws from shared team pool by default)
           - match: ["alice@corp.example.com"]
-            quota_limit: 5000000                  # 5M token allowance
+            quota_limit_usd: 50.00                # $50.00 USD personal allowance (or quota_limit: 5000000 for tokens)
+            # bypass_team_budget: true            # Optional emergency bypass: isolates Alice from an exhausted team pool
             expires_at: "2026-12-31T17:00:00Z"    # Auto-expires in memory at this UTC timestamp
             models: ["*"]                         # Unlocks all catalog models while active
+
+          # 2. Team Exception (temporarily tops up a department's shared pool)
+          - match: ["team:ml-research"]
+            team_budget_limit_usd: 1000.00        # Or team_budget_limit: 100000000 for tokens
+            expires_at: "2026-12-31T17:00:00Z"    # Automatically reverts to baseline team_budget after timestamp
     ```
 
-    * **Zero Manual Cleanup:** While the exception is active, the user gets the elevated limit and is **not blocked** if their team's shared pool is exhausted (`is_quota_exception_active = "true"`). Once `expires_at` passes, the gateway automatically reverts them to their standard persona quota on the very next request.
-    * *(Alternatively, you can set custom attributes `quota_override` and `quota_override_expires_at` on a Developer or Developer App in Apigee).*
+    | Team Pool Status | Individual Status | User Status | What Happens Next? |
+    | :--- | :--- | :--- | :--- |
+    | 🟢 **Has Funds** | 🟢 **Has Funds** | **Standard** | **Request Approved.** Cost/tokens are deducted from both the individual's meter (`LTQ-EnforceOnly`) and the shared team pool (`LTQ-SecondaryEnforceOnly`). |
+    | 🟢 **Has Funds** | 🔴 **Exhausted** | **Standard** | **Request Denied (429).** The user hits their personal limit; teammates can continue working. |
+    | 🔴 **Exhausted** | 🟢 **Has Funds** | **Standard** | **Request Denied (429).** The master team valve locks down the entire department (`team:<identity_team>`), even for users with remaining personal allowance. |
+    | 🟢 **Has Funds** | 🔴 **Exhausted** | **Has Individual Exception** | **Request Approved.** `quota_limit_usd` / `quota_limit` raises the user's personal cap while still deducting from the remaining shared team pool. |
+    | 🔴 **Exhausted** | 🔴 **Exhausted** | **Has Individual Exception** | **Denied by default** (master team pool is empty). **Approved** if you either top up the department (`team_budget_limit_usd`) **or** set `bypass_team_budget: true` on the individual exception. |
+
+    * *(Alternatively, you can set custom attributes `quota_override`, `quota_override_expires_at`, and `bypass_team_budget` on a Developer or Developer App in Apigee).*
 
 === "4. Burst & Stream Concurrency Limits"
     **What it does:** Protects backend capacity from sudden request spikes (`burst`) or runaway clients opening dozens of simultaneous streaming connections (`concurrency`). Both are opt-in globally in `values.yaml` and can be customized per persona or exception:
@@ -127,6 +152,9 @@ models:
 | **OpenAI (`gpt-5.4`, `gpt-5.4-mini`)** | Required | **Recommended** *(0.10x of `input_rate`)* | Not needed | OpenAI automatic prompt caching bills `cached_tokens` at `cache_read_rate` with no cache write surcharge. |
 | **Vertex MaaS (Llama, Mistral), Embeddings, & Self-Hosted (`vLLM`)** | Required | Not needed | Not needed | These endpoints do not bill separate cached token rates; if omitted, any reported cached tokens default to `input_rate`. |
 
-* **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
-* **Prepaid Balance Enforcement:** Accounts with depleted prepaid balances are automatically blocked before calling the upstream model provider.
+* **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd` and `X-Gateway-Total-Cost-Micro-USD`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
+* **Two Wallet Enforcement Modes:**
+  1. **Virtual USD Spend Wallets (`limit_usd` + `enforce_apigee_wallet: false`):** Recommended when onboarding users via SSO/JWT/SPIFFE onto shared Persona AI Products without creating an Apigee Developer entity per user. Enforces per-user, per-model, and shared team USD spend caps in micro-dollars (`$1.00 = 1,000,000` micro-USD) directly inside `LTQ-EnforceOnly` and `LTQ-SecondaryEnforceOnly`.
+  2. **Native Apigee Monetization Wallets (`enforce_apigee_wallet: true`):** Uses `MLC-EnforceMonetizationLimits` to verify prepaid/postpaid balances on the Apigee Developer entity owning the Developer App.
+
 

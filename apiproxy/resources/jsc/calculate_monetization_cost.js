@@ -29,8 +29,9 @@ try {
     var totalTokens = promptTokens + completionTokens;
 
     var model = context.getVariable("model") || "default";
+    var isDefaultModel = (model === "default");
     var bareModel = model.indexOf("/") !== -1 ? model.split("/").slice(1).join("/") : model;
-    var hasBarePrefix = bareModel !== model;
+    var hasBarePrefix = (bareModel !== model && bareModel !== "default");
 
     // 1. Fetch model pricing rates per 1,000,000 tokens from propertyset
     //    Supports both <model>.input_rate_per_m (static propertyset) and <model>.input_rate (values.yaml template)
@@ -38,16 +39,16 @@ try {
                        context.getVariable("propertyset.monetization_rates." + model + ".input_rate") ||
                        (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate_per_m") ||
                                          context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate")) : null) ||
-                       context.getVariable("propertyset.monetization_rates.default.input_rate_per_m") ||
-                       context.getVariable("propertyset.monetization_rates.default.input_rate") ||
+                       (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.input_rate_per_m") ||
+                                           context.getVariable("propertyset.monetization_rates.default.input_rate")) : null) ||
                        "0.10";
 
     var outputRateStr = context.getVariable("propertyset.monetization_rates." + model + ".output_rate_per_m") ||
                         context.getVariable("propertyset.monetization_rates." + model + ".output_rate") ||
                         (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate_per_m") ||
                                           context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate")) : null) ||
-                        context.getVariable("propertyset.monetization_rates.default.output_rate_per_m") ||
-                        context.getVariable("propertyset.monetization_rates.default.output_rate") ||
+                        (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.output_rate_per_m") ||
+                                            context.getVariable("propertyset.monetization_rates.default.output_rate")) : null) ||
                         "0.40";
 
     var inputRate = parseFloat(inputRateStr);
@@ -59,8 +60,8 @@ try {
                                context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate") ||
                                (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate_per_m") ||
                                                  context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate")) : null) ||
-                               context.getVariable("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
-                               context.getVariable("propertyset.monetization_rates.default.cache_read_rate");
+                               (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
+                                                   context.getVariable("propertyset.monetization_rates.default.cache_read_rate")) : null);
         if (cacheReadRateStr) cacheReadRate = parseFloat(cacheReadRateStr);
     }
 
@@ -70,8 +71,8 @@ try {
                                 context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate") ||
                                 (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate_per_m") ||
                                                   context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate")) : null) ||
-                                context.getVariable("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
-                                context.getVariable("propertyset.monetization_rates.default.cache_write_rate");
+                                (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
+                                                    context.getVariable("propertyset.monetization_rates.default.cache_write_rate")) : null);
         if (cacheWriteRateStr) cacheWriteRate = parseFloat(cacheWriteRateStr);
     }
 
@@ -79,7 +80,7 @@ try {
     var markupStr = context.getVariable("propertyset.monetization_rates." + model + ".markup") ||
                     (hasBarePrefix ? context.getVariable("propertyset.monetization_rates." + bareModel + ".markup") : null) ||
                     context.getVariable("propertyset.monetization_rates.platform.markup_multiplier") ||
-                    context.getVariable("propertyset.monetization_rates.default.markup") ||
+                    (!isDefaultModel ? context.getVariable("propertyset.monetization_rates.default.markup") : null) ||
                     "1.0";
     var markupMultiplier = parseFloat(markupStr);
     if (isNaN(markupMultiplier) || markupMultiplier <= 0) {
@@ -90,7 +91,7 @@ try {
                    context.getVariable("propertyset.monetization_rates.default.currency") ||
                    "USD";
 
-    // 4. Compute micro-transaction costs in USD
+    // 4. Compute micro-transaction costs in USD and integer micro-USD ($1.00 = 1,000,000 micro-USD)
     var uncachedPromptCost = (uncachedPromptTokens / 1000000.0) * inputRate * markupMultiplier;
     var cacheReadCost = (cacheReadTokens / 1000000.0) * cacheReadRate * markupMultiplier;
     var cacheWriteCost = (cacheWriteTokens / 1000000.0) * cacheWriteRate * markupMultiplier;
@@ -98,18 +99,27 @@ try {
     var completionCost = (completionTokens / 1000000.0) * outputRate * markupMultiplier;
     var totalCost = promptCost + completionCost;
     var totalCostStr = totalCost.toFixed(6);
+    var totalCostMicro = totalCost > 0 ? Math.max(1, Math.round(totalCost * 1000000)) : 0;
+    var totalCostMicroStr = totalCostMicro.toFixed(0);
+    var totalTokensStr = totalTokens.toFixed(0);
 
-    // 5. Export context variables for headers, analytics data collectors, and Apigee Monetization Rating Engine
+    var primaryQuotaMode = context.getVariable("primary_quota_mode") || "tokens";
+    var secondaryQuotaMode = context.getVariable("secondary_quota_mode") || "tokens";
+
+    // 5. Export context variables for headers, analytics data collectors, Virtual USD Spend Wallets, and Apigee Monetization Rating Engine
     context.setVariable("cache_read_tokens", cacheReadTokens.toFixed(0));
     context.setVariable("cache_write_tokens", cacheWriteTokens.toFixed(0));
     context.setVariable("thinking_tokens", thinkingTokens.toFixed(0));
     context.setVariable("tx_cost_usd", totalCostStr);
+    context.setVariable("tx_cost_micro_usd", totalCostMicroStr);
     context.setVariable("tx_prompt_cost_usd", promptCost.toFixed(6));
     context.setVariable("tx_uncached_prompt_cost_usd", uncachedPromptCost.toFixed(6));
     context.setVariable("tx_cache_read_cost_usd", cacheReadCost.toFixed(6));
     context.setVariable("tx_cache_write_cost_usd", cacheWriteCost.toFixed(6));
     context.setVariable("tx_completion_cost_usd", completionCost.toFixed(6));
     context.setVariable("tx_currency", currency);
+    context.setVariable("primary_quota_usage", primaryQuotaMode === "usd" ? totalCostMicroStr : totalTokensStr);
+    context.setVariable("secondary_quota_usage", secondaryQuotaMode === "usd" ? totalCostMicroStr : totalTokensStr);
 
     // Apigee Monetization Data Collector variables (used by Monetization Rating Engine to deduct from prepaid wallet)
     context.setVariable("perUnitPriceMultiplier", totalCostStr);
@@ -118,7 +128,7 @@ try {
 
     // Apigee Monetization standard transaction variables
     context.setVariable("mint.tx_cost", totalCostStr);
-    context.setVariable("mint.tx_volume", totalTokens.toString());
+    context.setVariable("mint.tx_volume", totalTokensStr);
     context.setVariable("mint.tx_currency", currency);
 
 } catch (e) {

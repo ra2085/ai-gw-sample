@@ -22,10 +22,6 @@
         <Name>JS-combine-resp</Name>
       </Step>
       <Step>
-        <Name>JS-calculate-monetization-cost</Name>
-        <Condition>usage_total_tokens != null</Condition>
-      </Step>
-      <Step>
         <Name>DC-CaptureTokenCountsStreaming</Name>
         <Condition>usage_total_tokens != null</Condition>
       </Step>

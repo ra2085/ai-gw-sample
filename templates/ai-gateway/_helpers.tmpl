@@ -235,7 +235,14 @@ persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayN
 persona.{{ $pName }}.models={{ if $pCfg.models }}{{ if kindIs "slice" $pCfg.models }}{{ $pCfg.models | join "," }}{{ else }}{{ $pCfg.models }}{{ end }}{{ else if kindIs "slice" $pCfg.allowed_models }}{{ $pCfg.allowed_models | join "," }}{{ else }}{{ $pCfg.allowed_models }}{{ end }}
 {{- end }}
 {{- if $pCfg.quota }}
-{{- if $pCfg.quota.limit }}
+{{- if $pCfg.quota.limit_usd }}
+persona.{{ $pName }}.quota_mode=usd
+persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota.limit_usd }}
+persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota.limit_usd 1000000) }}
+{{- else if $pCfg.quota.limit }}
+{{- if $pCfg.quota.mode }}
+persona.{{ $pName }}.quota_mode={{ $pCfg.quota.mode }}
+{{- end }}
 persona.{{ $pName }}.quota_limit={{ $pCfg.quota.limit }}
 {{- end }}
 {{- if $pCfg.quota.interval }}
@@ -244,7 +251,17 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota.interval }}
 {{- if or $pCfg.quota.unit $pCfg.quota.time_unit }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota.unit | default $pCfg.quota.time_unit }}
 {{- end }}
-{{- if $pCfg.quota.per_model }}
+{{- if $pCfg.quota.per_model_usd }}
+{{- $pmUsdList := list -}}
+{{- range $mName, $mLimitUsd := $pCfg.quota.per_model_usd }}
+{{- $mMicro := printf "%.0f" (mulf $mLimitUsd 1000000) -}}
+persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mMicro }}
+{{- $pmUsdList = append $pmUsdList (printf "%s:%s" $mName $mMicro) -}}
+{{- end }}
+{{- if $pmUsdList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmUsdList | sortAlpha | join "," }}
+{{- end }}
+{{- else if $pCfg.quota.per_model }}
 {{- $pmList := list -}}
 {{- range $mName, $mLimit := $pCfg.quota.per_model }}
 persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mLimit }}
@@ -255,7 +272,11 @@ persona.{{ $pName }}.per_model_quotas={{ $pmList | sortAlpha | join "," }}
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.quota_limit }}
+{{- if $pCfg.quota_limit_usd }}
+persona.{{ $pName }}.quota_mode=usd
+persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota_limit_usd }}
+persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota_limit_usd 1000000) }}
+{{- else if $pCfg.quota_limit }}
 persona.{{ $pName }}.quota_limit={{ $pCfg.quota_limit }}
 {{- end }}
 {{- if $pCfg.quota_interval }}
@@ -265,7 +286,14 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota_interval }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota_unit | default $pCfg.quota_time_unit }}
 {{- end }}
 {{- if $pCfg.team_budget }}
-{{- if $pCfg.team_budget.limit }}
+{{- if $pCfg.team_budget.limit_usd }}
+persona.{{ $pName }}.team_quota_mode=usd
+persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_budget.limit_usd }}
+persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_budget.limit_usd 1000000) }}
+{{- else if $pCfg.team_budget.limit }}
+{{- if $pCfg.team_budget.mode }}
+persona.{{ $pName }}.team_quota_mode={{ $pCfg.team_budget.mode }}
+{{- end }}
 persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_budget.limit }}
 {{- end }}
 {{- if $pCfg.team_budget.interval }}
@@ -275,7 +303,11 @@ persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_budget.interval }}
 persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_budget.unit | default $pCfg.team_budget.time_unit }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.team_quota_limit }}
+{{- if $pCfg.team_quota_limit_usd }}
+persona.{{ $pName }}.team_quota_mode=usd
+persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_quota_limit_usd }}
+persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_quota_limit_usd 1000000) }}
+{{- else if $pCfg.team_quota_limit }}
 persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_quota_limit }}
 {{- end }}
 {{- if $pCfg.team_quota_interval }}
@@ -364,13 +396,26 @@ model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_templa
 model_armor_identity_rules_count={{ len $allRules }}
 {{- range $idx, $rule := $allRules }}
 model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
-{{- if $rule.quota_limit }}
+{{- if $rule.quota_limit_usd }}
+model_armor.rule.{{ $idx }}.quota_mode=usd
+model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rule.quota_limit_usd }}
+model_armor.rule.{{ $idx }}.quota_limit={{ printf "%.0f" (mulf $rule.quota_limit_usd 1000000) }}
+{{- else if $rule.quota_limit }}
 model_armor.rule.{{ $idx }}.quota_limit={{ $rule.quota_limit }}
 {{- end }}
 {{- if $rule.expires_at }}
 model_armor.rule.{{ $idx }}.expires_at={{ $rule.expires_at }}
 {{- end }}
-{{- if or $rule.team_budget_limit $rule.team_quota_limit }}
+{{- if $rule.bypass_team_budget }}
+model_armor.rule.{{ $idx }}.bypass_team_budget={{ $rule.bypass_team_budget }}
+{{- end }}
+{{- if or $rule.team_budget_limit_usd $rule.team_quota_limit_usd }}
+{{- $tbUsd := $rule.team_budget_limit_usd | default $rule.team_quota_limit_usd }}
+model_armor.rule.{{ $idx }}.team_budget_mode=usd
+model_armor.rule.{{ $idx }}.team_quota_mode=usd
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ printf "%.0f" (mulf $tbUsd 1000000) }}
+{{- else if or $rule.team_budget_limit $rule.team_quota_limit }}
 model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit | default $rule.team_quota_limit }}
 {{- end }}
 {{- if or $rule.models $rule.allowed_models }}

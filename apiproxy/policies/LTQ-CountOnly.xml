@@ -4,9 +4,11 @@
   <SharedName>llm-token-counter</SharedName>
   <CountOnly>true</CountOnly>
   <Identifier ref="rate_limit_client_id"/>
-  <UseQuotaConfigInAPIProduct stepName="VA-ApiKey"/>
+  <Allow count="1000000" countRef="primary_quota_limit"/>
+  <Interval ref="primary_quota_interval">1</Interval>
+  <TimeUnit ref="primary_quota_unit">hour</TimeUnit>
   <Distributed>true</Distributed>
   <Synchronous>true</Synchronous>
-  <LLMTokenUsageSource>{usage_total_tokens}</LLMTokenUsageSource>
+  <LLMTokenUsageSource>{primary_quota_usage}</LLMTokenUsageSource>
   <LLMModelSource>{model}</LLMModelSource>
 </LLMTokenQuota>

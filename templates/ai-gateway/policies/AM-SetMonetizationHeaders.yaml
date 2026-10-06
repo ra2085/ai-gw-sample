@@ -36,6 +36,9 @@ AssignMessage:
           .name: X-Gateway-Total-Cost-USD
           -Data: '{tx_cost_usd}'
       - Header:
+          .name: X-Gateway-Total-Cost-Micro-USD
+          -Data: '{tx_cost_micro_usd}'
+      - Header:
           .name: X-Gateway-Cost-Currency
           -Data: '{tx_currency}'
       - Header:

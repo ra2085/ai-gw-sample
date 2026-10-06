@@ -15,6 +15,9 @@ if (context.getVariable("usage_total_tokens") !== null) {
     context.removeVariable("usage_completion_tokens");
     context.removeVariable("usage_total_tokens");
     context.removeVariable("tx_cost_usd");
+    context.removeVariable("tx_cost_micro_usd");
+    context.removeVariable("primary_quota_usage");
+    context.removeVariable("secondary_quota_usage");
     context.removeVariable("perUnitPriceMultiplier");
 }
 if (context.getVariable("buff_ready") === "true") {
@@ -34,6 +37,7 @@ if (rawContent && dataIdx !== -1) {
             var parsedEvent = JSON.parse(eventStr);
             var requestFormat = context.getVariable("request_format") || "claude";
             var tokensAlreadyCounted = context.getVariable("stream_tokens_already_counted") === "true";
+            var rawModel = context.getVariable("model");
             
             var promptTokens = 0;
             var completionTokens = 0;
@@ -51,6 +55,7 @@ if (rawContent && dataIdx !== -1) {
                     var cacheWriteStr = String(cacheWrite);
                     var thinkingStr = String(thinkingTokens);
                     var outTokensStr = String(outTokens);
+                    var totalTStr = totalT.toFixed(0);
                     context.setVariable("prompt_tokens", totalInStr);
                     context.setVariable("usage_prompt_tokens", totalInStr);
                     context.setVariable("uncached_prompt_tokens", uncachedInStr);
@@ -63,8 +68,100 @@ if (rawContent && dataIdx !== -1) {
                     context.setVariable("usage_thinking_tokens", thinkingStr);
                     context.setVariable("completion_tokens", outTokensStr);
                     context.setVariable("usage_completion_tokens", outTokensStr);
-                    context.setVariable("usage_total_tokens", totalT.toFixed(0));
+                    context.setVariable("usage_total_tokens", totalTStr);
                     context.setVariable("stream_tokens_already_counted", "true");
+
+                    // Inline Monetization & Virtual USD Spend Wallet Calculation (keeps EventFlow <= 5 policies)
+                    var model = rawModel || "default";
+                    var isDefaultModel = (model === "default");
+                    var bareModel = model.indexOf("/") !== -1 ? model.split("/").slice(1).join("/") : model;
+                    var hasBarePrefix = (bareModel !== model && bareModel !== "default");
+
+                    var inputRateStr = context.getVariable("propertyset.monetization_rates." + model + ".input_rate_per_m") ||
+                                       context.getVariable("propertyset.monetization_rates." + model + ".input_rate") ||
+                                       (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate_per_m") ||
+                                                         context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate")) : null) ||
+                                       (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.input_rate_per_m") ||
+                                                           context.getVariable("propertyset.monetization_rates.default.input_rate")) : null) ||
+                                       "0.10";
+
+                    var outputRateStr = context.getVariable("propertyset.monetization_rates." + model + ".output_rate_per_m") ||
+                                        context.getVariable("propertyset.monetization_rates." + model + ".output_rate") ||
+                                        (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate_per_m") ||
+                                                          context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate")) : null) ||
+                                        (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.output_rate_per_m") ||
+                                                            context.getVariable("propertyset.monetization_rates.default.output_rate")) : null) ||
+                                        "0.40";
+
+                    var inputRate = parseFloat(inputRateStr);
+                    var outputRate = parseFloat(outputRateStr);
+
+                    var cacheReadRate = inputRate;
+                    if (cacheRead > 0) {
+                        var cacheReadRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate_per_m") ||
+                                               context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate") ||
+                                               (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate_per_m") ||
+                                                                 context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate")) : null) ||
+                                               (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
+                                                                   context.getVariable("propertyset.monetization_rates.default.cache_read_rate")) : null);
+                        if (cacheReadRateStr) cacheReadRate = parseFloat(cacheReadRateStr);
+                    }
+
+                    var cacheWriteRate = inputRate;
+                    if (cacheWrite > 0) {
+                        var cacheWriteRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate_per_m") ||
+                                                context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate") ||
+                                                (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate_per_m") ||
+                                                                  context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate")) : null) ||
+                                                (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
+                                                                    context.getVariable("propertyset.monetization_rates.default.cache_write_rate")) : null);
+                        if (cacheWriteRateStr) cacheWriteRate = parseFloat(cacheWriteRateStr);
+                    }
+
+                    var markupStr = context.getVariable("propertyset.monetization_rates." + model + ".markup") ||
+                                    (hasBarePrefix ? context.getVariable("propertyset.monetization_rates." + bareModel + ".markup") : null) ||
+                                    context.getVariable("propertyset.monetization_rates.platform.markup_multiplier") ||
+                                    (!isDefaultModel ? context.getVariable("propertyset.monetization_rates.default.markup") : null) ||
+                                    "1.0";
+                    var markupMultiplier = parseFloat(markupStr);
+                    if (isNaN(markupMultiplier) || markupMultiplier <= 0) {
+                        markupMultiplier = 1.0;
+                    }
+
+                    var currency = context.getVariable("propertyset.monetization_rates.platform.currency") ||
+                                   context.getVariable("propertyset.monetization_rates.default.currency") ||
+                                   "USD";
+
+                    var uncachedPromptCost = (uncachedIn / 1000000.0) * inputRate * markupMultiplier;
+                    var cacheReadCost = (cacheRead / 1000000.0) * cacheReadRate * markupMultiplier;
+                    var cacheWriteCost = (cacheWrite / 1000000.0) * cacheWriteRate * markupMultiplier;
+                    var promptCost = uncachedPromptCost + cacheReadCost + cacheWriteCost;
+                    var completionCost = (outTokens / 1000000.0) * outputRate * markupMultiplier;
+                    var totalCost = promptCost + completionCost;
+                    var totalCostStr = totalCost.toFixed(6);
+                    var totalCostMicro = totalCost > 0 ? Math.max(1, Math.round(totalCost * 1000000)) : 0;
+                    var totalCostMicroStr = totalCostMicro.toFixed(0);
+
+                    var primaryQuotaMode = context.getVariable("primary_quota_mode") || "tokens";
+                    var secondaryQuotaMode = context.getVariable("secondary_quota_mode") || "tokens";
+
+                    context.setVariable("tx_cost_usd", totalCostStr);
+                    context.setVariable("tx_cost_micro_usd", totalCostMicroStr);
+                    context.setVariable("tx_prompt_cost_usd", promptCost.toFixed(6));
+                    context.setVariable("tx_uncached_prompt_cost_usd", uncachedPromptCost.toFixed(6));
+                    context.setVariable("tx_cache_read_cost_usd", cacheReadCost.toFixed(6));
+                    context.setVariable("tx_cache_write_cost_usd", cacheWriteCost.toFixed(6));
+                    context.setVariable("tx_completion_cost_usd", completionCost.toFixed(6));
+                    context.setVariable("tx_currency", currency);
+                    context.setVariable("primary_quota_usage", primaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
+                    context.setVariable("secondary_quota_usage", secondaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
+
+                    context.setVariable("perUnitPriceMultiplier", totalCostStr);
+                    context.setVariable("currency", currency);
+                    context.setVariable("transactionSuccess", "true");
+                    context.setVariable("mint.tx_cost", totalCostStr);
+                    context.setVariable("mint.tx_volume", totalTStr);
+                    context.setVariable("mint.tx_currency", currency);
                 }
             }
 
@@ -121,7 +218,7 @@ if (rawContent && dataIdx !== -1) {
                 // -------------------------------------------------------------
                 // Branch 2: OpenAI Request Format (/v1/chat/completions)
                 // -------------------------------------------------------------
-                var modelName = context.getVariable("model") || "claude";
+                var modelName = rawModel || "claude";
 
                 if (targetName === "claude" || parsedEvent.type) {
                     // Target is Anthropic Claude -> Translate Anthropic SSE chunk to OpenAI SSE!
@@ -263,7 +360,7 @@ if (rawContent && dataIdx !== -1) {
                 // -------------------------------------------------------------
                 // Branch 3: Anthropic Claude Request Format (/v1/messages)
                 // -------------------------------------------------------------
-                var modelName = context.getVariable("model") || "unknown";
+                var modelName = rawModel || "unknown";
 
                 if (targetName === "claude") {
                     // Target is Native Claude:

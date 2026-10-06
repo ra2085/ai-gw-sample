@@ -10,5 +10,5 @@
   <Distributed>true</Distributed>
   <Synchronous>true</Synchronous>
   <LLMTokenUsageSource>{cb_error_weight}</LLMTokenUsageSource>
-  <LLMModelSource>{tried_primary_model}</LLMModelSource>
+  <LLMModelSource>{circuit_breaker_checked}</LLMModelSource>
 </LLMTokenQuota>

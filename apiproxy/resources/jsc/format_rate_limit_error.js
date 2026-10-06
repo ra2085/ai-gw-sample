@@ -54,6 +54,7 @@ try {
     } else if (secQuotaFailed) {
         var secScope = context.getVariable("secondary_quota_scope") || "user";
         var identityTeam = context.getVariable("identity_team") || "default";
+        var secQuotaMode = context.getVariable("secondary_quota_mode") || "tokens";
         tokenAllowed = context.getVariable("ratelimit.LTQ-SecondaryEnforceOnly.allowed.count") || tokenAllowed;
         tokenAvail = "0";
         var secExpiry = parseInt(context.getVariable("ratelimit.LTQ-SecondaryEnforceOnly.expiry.time") || "0", 10);
@@ -62,17 +63,25 @@ try {
         } else {
             retryAfterSec = 3600;
         }
+        var secLimitDisplay = secQuotaMode === "usd"
+            ? ("$" + (parseInt(tokenAllowed, 10) / 1000000).toFixed(2) + " USD")
+            : (tokenAllowed + " tokens");
         if (secScope === "team") {
             constraint = "team_budget_quota";
-            message = "Team token budget exceeded for team '" + identityTeam + "' (limit: " + tokenAllowed + " tokens). Please retry after " + retryAfterSec + "s.";
+            message = secQuotaMode === "usd"
+                ? ("Team spend budget exceeded for team '" + identityTeam + "' (limit: " + secLimitDisplay + "). Please retry after " + retryAfterSec + "s.")
+                : ("Team token budget exceeded for team '" + identityTeam + "' (limit: " + secLimitDisplay + "). Please retry after " + retryAfterSec + "s.");
         } else {
             constraint = "token_quota_secondary";
-            message = "Secondary rolling-window token quota exceeded (limit: " + tokenAllowed + " tokens). Please retry after " + retryAfterSec + "s.";
+            message = secQuotaMode === "usd"
+                ? ("Secondary rolling-window spend quota exceeded (limit: " + secLimitDisplay + "). Please retry after " + retryAfterSec + "s.")
+                : ("Secondary rolling-window token quota exceeded (limit: " + secLimitDisplay + "). Please retry after " + retryAfterSec + "s.");
         }
     } else {
         var llmModelQuota = context.getVariable("verifyapikey.VA-ApiKey.apiproduct.developer.llmQuota.limit") ||
                             context.getVariable("apiproduct.developer.llmQuota.limit");
         var exceptionActive = String(context.getVariable("quota_exception_active")) === "true";
+        var priQuotaMode = context.getVariable("primary_quota_mode") || "tokens";
         var targetModel = context.getVariable("model") || "requested model";
         tokenAvail = "0";
         if (expiryTime > Date.now()) {
@@ -80,15 +89,24 @@ try {
         } else {
             retryAfterSec = 60;
         }
+        var priLimitDisplay = priQuotaMode === "usd"
+            ? ("$" + (parseInt(tokenAllowed, 10) / 1000000).toFixed(2) + " USD")
+            : (tokenAllowed + " tokens");
         if (exceptionActive) {
             constraint = "individual_exception_quota";
-            message = "Individual exception token quota exceeded (limit: " + tokenAllowed + " tokens). Please retry after " + retryAfterSec + "s.";
+            message = priQuotaMode === "usd"
+                ? ("Individual exception spend quota exceeded (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.")
+                : ("Individual exception token quota exceeded (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.");
         } else if (llmModelQuota) {
             constraint = "per_model_quota";
-            message = "Per-model token quota exceeded for model '" + targetModel + "' (limit: " + tokenAllowed + " tokens). Please retry after " + retryAfterSec + "s.";
+            message = priQuotaMode === "usd"
+                ? ("Per-model spend quota exceeded for model '" + targetModel + "' (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.")
+                : ("Per-model token quota exceeded for model '" + targetModel + "' (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.");
         } else {
             constraint = "token_quota_primary";
-            message = "Rolling-window token quota exceeded (limit: " + tokenAllowed + " tokens). Please retry after " + retryAfterSec + "s.";
+            message = priQuotaMode === "usd"
+                ? ("Rolling-window spend quota exceeded (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.")
+                : ("Rolling-window token quota exceeded (limit: " + priLimitDisplay + "). Please retry after " + retryAfterSec + "s.");
         }
     }
 

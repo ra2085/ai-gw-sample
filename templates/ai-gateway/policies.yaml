@@ -56,7 +56,9 @@
 - {{ include "./policies/JS-inject-deidentified-finding.yaml" . | indent 2 | trim }}
 
 # Monetization & Quota Policies
+{{- if and $.Values.features $.Values.features.monetization $.Values.features.monetization.enabled (ne (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "false") }}
 - {{ include "./policies/MLC-EnforceMonetizationLimits.yaml" . | indent 2 | trim }}
+{{- end }}
 - {{ include "./policies/JS-calculate-monetization-cost.yaml" . | indent 2 | trim }}
 - {{ include "./policies/AM-SetMonetizationHeaders.yaml" . | indent 2 | trim }}
 - {{ include "./policies/LTQ-EnforceOnly.yaml" . | indent 2 | trim }}

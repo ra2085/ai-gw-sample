@@ -9,15 +9,15 @@ LLMTokenQuota:
   Identifier:
     .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.identifier_ref | default "secondary_quota_identifier" }}{{ else }}secondary_quota_identifier{{ end }}
   Allow:
-    .count: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.allow_count | default 1000000 }}{{ else }}1000000{{ end }}
-    .countRef: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.allow_ref | default "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit" }}{{ else }}verifyapikey.VA-ApiKey.apiproduct.secondary_quota_limit{{ end }}
+    .count: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ if $.Values.features.quotas.secondary_window.allow_usd }}{{ printf "%.0f" (mulf $.Values.features.quotas.secondary_window.allow_usd 1000000) }}{{ else }}{{ $.Values.features.quotas.secondary_window.allow_count | default 1000000 }}{{ end }}{{ else }}1000000{{ end }}
+    .countRef: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.allow_ref | default "secondary_quota_limit" }}{{ else }}secondary_quota_limit{{ end }}
   Interval:
-    .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.interval_ref | default "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval" }}{{ else }}verifyapikey.VA-ApiKey.apiproduct.secondary_quota_interval{{ end }}
+    .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.interval_ref | default "secondary_quota_interval" }}{{ else }}secondary_quota_interval{{ end }}
     -Data: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.interval | default 7 }}{{ else }}7{{ end }}
   TimeUnit:
-    .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit_ref | default "verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit" }}{{ else }}verifyapikey.VA-ApiKey.apiproduct.secondary_quota_unit{{ end }}
+    .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit_ref | default "secondary_quota_unit" }}{{ else }}secondary_quota_unit{{ end }}
     -Data: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit | default "day" }}{{ else }}day{{ end }}
   Distributed: true
   Synchronous: true
-  LLMTokenUsageSource: '{usage_total_tokens}'
-  LLMModelSource: '{model}'
+  LLMTokenUsageSource: '{secondary_quota_usage}'
+  LLMModelSource: '{secondary_quota_scope}'

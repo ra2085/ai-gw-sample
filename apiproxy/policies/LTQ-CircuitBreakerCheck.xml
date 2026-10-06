@@ -9,5 +9,5 @@
   <TimeUnit ref="propertyset.config.cb_window_unit">minute</TimeUnit>
   <Distributed>true</Distributed>
   <Synchronous>true</Synchronous>
-  <LLMModelSource>{primary_model}</LLMModelSource>
+  <LLMModelSource>{circuit_breaker_checked}</LLMModelSource>
 </LLMTokenQuota>

@@ -19,4 +19,4 @@ LLMTokenQuota:
     -Data: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.window_unit | default "minute" }}{{ else }}minute{{ end }}
   Distributed: true
   Synchronous: true
-  LLMModelSource: '{primary_model}'
+  LLMModelSource: '{circuit_breaker_checked}'

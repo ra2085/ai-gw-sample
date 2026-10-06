@@ -67,6 +67,8 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
         enabled: true
         secondary_window:
           enabled: true
+          shared_name: "llm-token-counter-secondary"
+          identifier_ref: "secondary_quota_identifier"
           allow_count: 1000000
           interval: 7
           time_unit: "day"
