@@ -80,4 +80,5 @@ Instead of building custom API proxies from scratch for every model provider and
 | **Step 3** | **[Models & Providers](template-guide/custom-urls.md)** | Add Vertex AI Gemini & Claude, Model Garden MaaS (Llama, Mistral), Direct OpenAI & Anthropic (`provider_keys` PropertySet), Embeddings, or self-hosted vLLM. |
 | **Step 4** | **[Quotas, Budgets & Cost Control](architecture/monetization.md)** | Configure rolling token allowances, per-model caps, shared department budgets, temporary overrides, and **Invoice-Accurate Cost Attribution**. |
 | **Step 5** | **[Smart Routing & Content Safety](architecture/routing.md)** | Set up transparent model aliases, cost tiers, fallback chains, complexity-based routing (`auto:judge`), and GCP Model Armor sanitization. |
+| **Step 6** | **[Analytics & Looker Studio Dashboards](operations/looker-studio-dashboard.md)** | Share multi-bucket cost chargeback, **Prompt Cache ROI**, team/peer consumption, developer self-service, and security governance dashboards across platform personas. |
 

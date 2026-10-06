@@ -6,16 +6,25 @@ Follow these steps to render, validate, and deploy the AI Gateway in CI/CD or pr
 
 ## 1. Create Required Data Collectors (Once per Organization)
 
-Apigee requires the following **9 Data Collectors** to record token metrics, cost attribution telemetry, and identity dimensions (`user_id`, `persona`, `team`):
+Apigee requires the following **18 Data Collectors** to record granular token metrics (`prompt`, `uncached_prompt`, `cache_read`, `cache_write`, `thinking`, `completion`, `total`), per-token-type USD cost attribution (`uncached_prompt_cost`, `cache_read_cost`, `cache_write_cost`, `prompt_cost`, `completion_cost`, `total_cost`), and identity dimensions (`user_id`, `persona`, `team`):
 
 ```bash
 for dc in \
   "dc_prompt_token_count:INTEGER" \
+  "dc_uncached_prompt_token_count:INTEGER" \
+  "dc_cache_read_token_count:INTEGER" \
+  "dc_cache_write_token_count:INTEGER" \
+  "dc_thinking_token_count:INTEGER" \
   "dc_completion_token_count:INTEGER" \
   "dc_total_token_count:INTEGER" \
+  "dc_tx_uncached_prompt_cost_usd:FLOAT" \
+  "dc_tx_cache_read_cost_usd:FLOAT" \
+  "dc_tx_cache_write_cost_usd:FLOAT" \
+  "dc_tx_prompt_cost_usd:FLOAT" \
+  "dc_tx_completion_cost_usd:FLOAT" \
+  "dc_tx_cost_usd:FLOAT" \
   "dc_model:STRING" \
   "dc_requested_model:STRING" \
-  "dc_tx_cost_usd:FLOAT" \
   "dc_identity_user_id:STRING" \
   "dc_identity_persona:STRING" \
   "dc_identity_team:STRING"; do

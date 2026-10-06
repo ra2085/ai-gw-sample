@@ -90,7 +90,7 @@ nav:
       - Feature Toggles: template-guide/feature-flags.md
       - Client Endpoints & Protocols: architecture/protocols.md
   - Analytics & Operations:
+      - Analytics & Looker Studio Dashboards: operations/looker-studio-dashboard.md
       - Telemetry & Headers: operations/telemetry.md
-      - Analytics & Looker Studio Reports: operations/looker-studio-dashboard.md
       - CI/CD & Deployment: operations/deployment.md
 

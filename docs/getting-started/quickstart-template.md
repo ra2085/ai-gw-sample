@@ -7,7 +7,7 @@ Get an enterprise AI Gateway running in 5 minutes using a single **15-line `valu
 > 1. Install `apigee-go-gen` and `apigeecli`.
 > 2. Authenticate with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
 > 3. Create the deployment Service Account with `roles/aiplatform.user`.
-> 4. Create the 9 telemetry Data Collectors in your Apigee organization.
+> 4. Create the 18 telemetry Data Collectors in your Apigee organization.
 > 5. Provision your AI Products and Persona Developer Apps with `bash ./scripts/sync-personas.sh`.
 
 ---
