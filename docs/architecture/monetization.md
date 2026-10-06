@@ -31,8 +31,8 @@ flowchart LR
 
 Click any tab below for the exact `values.yaml` snippet to copy into your configuration:
 
-=== "Recipe 1: Personal Allowance & Per-Model Caps"
-    **Goal:** Give every developer **$15.00 / day** (or `500,000 tokens / day`), while capping expensive frontier models (`claude-sonnet-4-6`) at **$5.00 / day** per user.
+=== "Recipe 1: Personal Allowance ($USD or Tokens)"
+    **Goal:** Cap each individual developer's usage per day (plus a stricter cap on expensive frontier models like `claude-sonnet-4-6`), using either **$USD (`limit_usd`)** or **Tokens (`limit`)**:
 
     ```yaml
     features:
@@ -43,22 +43,35 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
         enabled: true
       auth:
         personas:
+          # Option A: Virtual USD Spend Wallet ($15/day overall, max $5/day on Claude Sonnet 4.6)
           developer:
             models: ["*"]
             quota:
-              # Use limit_usd / per_model_usd for $USD, OR limit / per_model for raw tokens:
-              limit_usd: 15.00                    # $15.00 USD / day per individual engineer
+              limit_usd: 15.00
               interval: 1
               time_unit: "day"
               per_model_usd:
-                claude-sonnet-4-6: 5.00           # Max $5.00 USD / day on Claude Sonnet 4.6
+                claude-sonnet-4-6: 5.00
+
+          # Option B: Raw Token Quota (500k tokens / 4 hours overall, max 50k on Claude Sonnet 4.6)
+          knowledge-worker:
+            models: ["gemini-3.5-flash", "claude-haiku-4-5", "claude-sonnet-4-6"]
+            quota:
+              limit: 500000
+              interval: 4
+              time_unit: "hour"
+              per_model:
+                claude-sonnet-4-6: 50000
     ```
 
-=== "Recipe 2: Shared Team Pool + Personal Guardrails"
-    **Goal:** Give each department (e.g., `eng-ml`, `platform`) a shared **$250.00 / 30-day** budget across all models, while keeping a **$15.00 / day** personal limit per engineer so one user cannot accidentally consume the entire department's monthly pool in an afternoon.
+=== "Recipe 2: Hybrid (Per-User Tokens + Team $USD)"
+    **Goal:** Combine **Tokens** and **$USD** in the same persona—for example, give each engineer a **500,000 token / 4-hour** pacing limit (Valve 1) while enforcing a **$250.00 / 30-day** finance chargeback cap across their entire department (Valve 2):
 
     ```yaml
     features:
+      monetization:
+        enabled: true
+        enforce_apigee_wallet: false
       quotas:
         enabled: true
         secondary_window:
@@ -67,38 +80,66 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
         personas:
           developer:
             models: ["*"]
-            quota:                                # Valve 1: Per-User Daily Cap
-              limit_usd: 15.00
-              interval: 1
-              time_unit: "day"
-            team_budget:                          # Valve 2: Shared Department Monthly Pool
-              limit_usd: 250.00                   # Shared by everyone in the same department
+            quota:                                # Valve 1 (Tokens): 500k tokens / 4h per engineer
+              limit: 500000
+              interval: 4
+              time_unit: "hour"
+              per_model:
+                claude-sonnet-4-6: 50000          # Per-model token cap on frontier model
+            team_budget:                          # Valve 2 ($USD): $250.00 / 30d shared across the department
+              limit_usd: 250.00
               interval: 30
               time_unit: "day"
     ```
 
-=== "Recipe 3: Temporary Exceptions & Emergency Bypass"
-    **Goal:** Handle real-world operational exceptions in a few lines of YAML—with automatic expiration (`expires_at`) so temporary boosts never become permanent leaks:
+=== "Recipe 3: All-USD Team Pool + Personal Cap"
+    **Goal:** Manage both valves in **$USD**—give each department a shared **$250.00 / 30-day** pool across all models (or `limit: 25000000` for an all-token pool), while keeping a **$15.00 / day** personal limit per engineer so one user cannot drain the team's monthly budget in an afternoon:
+
+    ```yaml
+    features:
+      monetization:
+        enabled: true
+        enforce_apigee_wallet: false
+      quotas:
+        enabled: true
+        secondary_window:
+          enabled: true                           # Turns on Valve 2 (Shared Team Pool)
+      auth:
+        personas:
+          developer:
+            models: ["*"]
+            quota:                                # Valve 1 ($USD): $15.00 / day per engineer
+              limit_usd: 15.00
+              interval: 1
+              time_unit: "day"
+            team_budget:                          # Valve 2 ($USD): $250.00 / 30d shared by department
+              limit_usd: 250.00
+              interval: 30
+              time_unit: "day"
+    ```
+
+=== "Recipe 4: Temporary Exceptions & Emergency Bypass"
+    **Goal:** Grant time-bound boosts in **$USD (`*_usd`)** or **Tokens (`quota_limit` / `team_budget_limit`)**—with automatic expiration (`expires_at`) so temporary boosts never become permanent leaks:
 
     ```yaml
     features:
       auth:
         exceptions:
-          # Case A: Personal Boost (Alice gets $50/day for a benchmark sprint; still draws from her team's pool)
+          # Case A: Personal Boost in $USD or Tokens (still draws from the user's shared team pool)
           - match: ["alice@corp.example.com"]
-            quota_limit_usd: 50.00
+            quota_limit_usd: 50.00                # Or use quota_limit: 5000000 for a token boost
             expires_at: "2026-12-31T17:00:00Z"
             models: ["*"]
 
-          # Case B: Emergency On-Call Bypass (Bob gets $100/day AND keeps working even if his team's pool is $0)
+          # Case B: Emergency On-Call Bypass (Bob keeps working even if his team's pool is $0)
           - match: ["bob@corp.example.com"]
-            quota_limit_usd: 100.00
+            quota_limit_usd: 100.00               # Or use quota_limit: 10000000 for tokens
             bypass_team_budget: true              # Isolates Bob from an exhausted team budget
             expires_at: "2026-12-31T17:00:00Z"
 
-          # Case C: Department Top-Up (Raise team 'ml-research' shared pool to $1,000 until quarter-end)
+          # Case C: Department Top-Up (Raise team 'ml-research' shared pool until quarter-end)
           - match: ["team:ml-research"]
-            team_budget_limit_usd: 1000.00
+            team_budget_limit_usd: 1000.00        # Or use team_budget_limit: 100000000 for tokens
             expires_at: "2026-12-31T17:00:00Z"
     ```
 
@@ -112,7 +153,7 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
     | 🟢 **Has Funds** | 🔴 **Exhausted** | **Individual Exception** | **Approved (`200`).** Exception raises the user's personal cap while still deducting from the remaining team pool. |
     | 🔴 **Exhausted** | 🟢 / 🔴 *Any* | **Individual Exception** | **Blocked (`429`) by default** (team pool is empty). **Approved (`200`)** if you top up the team (`Case C`) **or** set `bypass_team_budget: true` (`Case B`). |
 
-=== "Recipe 4: Burst & Stream Concurrency Limits"
+=== "Recipe 5: Burst & Stream Concurrency Limits"
     **Goal:** Protect upstream LLM capacity from sudden request spikes (`burst`) or runaway loops opening dozens of simultaneous SSE streams (`concurrency`):
 
     ```yaml
