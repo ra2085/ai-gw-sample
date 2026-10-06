@@ -606,36 +606,52 @@ try {
                           "default";
 
     // Normalize API Product name "<gateway>-<persona>" to "<persona>" if matching configured persona
-    if (identityPersona && !context.getVariable("propertyset.config.persona." + identityPersona + ".match_claims")) {
-        var knownPersonasCsv = context.getVariable("propertyset.config.auth_personas_list") || "";
+    if (identityPersona && !getVarOnce("propertyset.config.persona." + identityPersona + ".match_claims")) {
+        var knownPersonasCsv = getVarOnce("propertyset.config.auth_personas_list") || "";
         if (knownPersonasCsv) {
             var knownPersonas = knownPersonasCsv.split(",");
             var lowerIdPersona = String(identityPersona).toLowerCase();
+            var normIdPersona = lowerIdPersona.replace(/_/g, "-");
+            var bestCand = "";
+            var bestCandLen = -1;
             for (var kp = 0; kp < knownPersonas.length; kp++) {
                 var candPersona = knownPersonas[kp].trim();
                 if (!candPersona) continue;
-                var suffix = "-" + candPersona.toLowerCase();
-                if (lowerIdPersona.length > suffix.length &&
-                    lowerIdPersona.lastIndexOf(suffix) === lowerIdPersona.length - suffix.length) {
-                    identityPersona = candPersona;
+                var lowerCand = candPersona.toLowerCase();
+                var normCand = lowerCand.replace(/_/g, "-");
+                if (lowerIdPersona === lowerCand || normIdPersona === normCand) {
+                    bestCand = candPersona;
                     break;
                 }
+                var suffix = "-" + lowerCand;
+                var normSuffix = "-" + normCand;
+                if ((lowerIdPersona.length > suffix.length && lowerIdPersona.lastIndexOf(suffix) === lowerIdPersona.length - suffix.length) ||
+                    (normIdPersona.length > normSuffix.length && normIdPersona.lastIndexOf(normSuffix) === normIdPersona.length - normSuffix.length)) {
+                    if (candPersona.length > bestCandLen) {
+                        bestCand = candPersona;
+                        bestCandLen = candPersona.length;
+                    }
+                }
+            }
+            if (bestCand) {
+                identityPersona = bestCand;
             }
         }
     }
 
-    var identityTeam = cleanTokenAttr(context.getVariable("accesstoken.team")) ||
+    var safePersona = isSafeSegment(identityPersona) ? identityPersona : "default";
+    var explicitTeam = cleanTokenAttr(context.getVariable("accesstoken.team")) ||
                        cleanTokenAttr(context.getVariable("auth_team")) ||
                        context.getVariable("verifyapikey.VA-ApiKey.team") ||
                        context.getVariable("verifyapikey.VA-ApiKey.developer.team") ||
                        context.getVariable("verifyapikey.VA-ApiKey.apiproduct.team") ||
-                       context.getVariable("apiproduct.team") ||
-                       "default";
+                       context.getVariable("apiproduct.team") || "";
+    var rawTeam = (explicitTeam && explicitTeam !== "default") ? explicitTeam : safePersona;
+    var identityTeam = isSafeSegment(rawTeam) ? rawTeam : safePersona;
     var identityAuthType = cleanTokenAttr(context.getVariable("accesstoken.auth_source")) ||
                            cleanTokenAttr(context.getVariable("auth_token_type")) ||
                            (vaClientId ? "apikey" : (oauthClientId ? "oauth" : "none"));
 
-    var safePersona = isSafeSegment(identityPersona) ? identityPersona : "default";
     context.setVariable("identity_user_id", identityUserId);
     context.setVariable("identity_persona", identityPersona);
     context.setVariable("identity_team", identityTeam);

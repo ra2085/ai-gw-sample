@@ -8,29 +8,41 @@ Once you have organized your callers into **AI Products**, you can enforce perso
 
 Regardless of how a caller authenticates (**API Key**, **Native OAuth**, **Okta/Entra SSO**, **Google Cloud Agent Identity / SPIFFE**, or **IAM Service Account**), the gateway resolves the caller's **User/Agent ID**, **Persona**, and **Department/Team**, and passes every request through at most **two independent valves**:
 
-<div class="arch-flow">
-  <div class="arch-stage arch-stage--highlight">
-    <div class="arch-stage-title">Two-Valve Budget Pipeline (Evaluated on Every Request)</div>
-    <div class="arch-grid">
-      <div class="arch-card">
-        <div class="arch-card-title">1. Caller Identity</div>
-        <div class="arch-card-sub">SSO User, API Key, OAuth Client, SPIFFE Agent, or Service Account</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">2. Valve 1: Personal Allowance</div>
-        <div class="arch-card-sub"><strong>Has Funds</strong> &rarr; Continue to Valve 2<br/><strong>Exhausted</strong> &rarr; <code>429 Personal Limit</code> (Teammates unaffected)</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">3. Valve 2: Shared Team Pool</div>
-        <div class="arch-card-sub"><strong>Has Funds</strong> &rarr; Route to Upstream LLM<br/><strong>Exhausted</strong> &rarr; <code>429 Team Budget</code> (Department paused)</div>
-      </div>
-    </div>
-  </div>
+<div class="grid cards" markdown>
+
+-   **Valve 1: Personal Allowance (Always Active)**
+
+    ---
+
+    Gives each individual engineer or agent their own isolated rolling budget (in **Tokens** or **USD**), plus optional stricter caps on expensive frontier models (like `claude-opus-4-6`). If exhausted, returns `429 Personal Limit` while teammates keep working.
+
+-   **Valve 2: Shared Team Pool (Opt-In)**
+
+    ---
+
+    Caps total spend across an entire department (e.g., `eng-ml`, `sales`) across **all models combined**. You can mix units freely (for example, a **4-hour Token limit per user** + a **30-day USD budget per team**). If exhausted, returns `429 Team Budget`.
+
+-   **Auto-Expiring Exceptions**
+
+    ---
+
+    Temporarily boost an individual's allowance, top up a team's shared pool, or grant an emergency bypass (`bypass_team_budget: true`) until an `expires_at` timestamp—without creating separate API Products or remembering to roll changes back.
+
 </div>
 
-* **Valve 1 — Personal Allowance (Always Active):** Gives each individual engineer or agent their own isolated rolling budget (in **Tokens** or **USD**), plus optional stricter caps on expensive frontier models (like `claude-opus-4-6`). One runaway script can never drain a teammate's personal quota.
-* **Valve 2 — Shared Team Pool (Opt-In):** Caps total spend across an entire department (e.g., `eng-ml`, `sales`) across **all models combined**. You can even mix units (for example, a **4-hour Token limit per user** + a **30-day USD budget per team**).
-* **Auto-Expiring Exceptions:** Temporarily boost an individual's allowance, top up a team's shared pool, or grant an emergency bypass (`bypass_team_budget: true`) until an `expires_at` timestamp—without creating separate API Products or remembering to roll changes back.
+### How the Gateway Knows Which Team a Caller Belongs To
+
+You do not need to hardcode a list of team members in `values.yaml`. You can model teams in two ways—or combine both:
+
+* **Option A — One Shared Persona + Dynamic Team Claim (Same policy across many teams):** Define a single `developer` persona (e.g., `$250 / 30d` `team_budget`), and let the gateway extract each caller's department/project from their credential so `team:eng-ml` and `team:sales` each get their own independent `$250` pool.
+* **Option B — Distinct Personas per Team (`developer_team_a`, `developer_team_b`):** Define separate personas when teams need different model catalogs or different budget sizes. If no explicit `team` attribute or `department` claim is present on the credential, the gateway automatically falls back to the persona name (`team:developer_team_a` and `team:developer_team_b`), isolating each persona's pool automatically.
+
+| Authentication Method | Where the Team ID Comes From (Precedence Order) | Example Resolved Team Bucket |
+| :--- | :--- | :--- |
+| **Corporate SSO (Okta / Entra ID / Ping JWT or Opaque)** | Reads the token's configured `team_claim` (defaults to `department` in `values.yaml`). If omitted, falls back to the matched **Persona** name. | `team:eng-ml` *(or `team:developer_team_a`)* |
+| **Google Cloud Agent Identity (SPIFFE)** | Extracts the GCP Project Number directly from the agent's attested `principal://.../projects/<project_number>/...` URI. | `team:project:123456789012` |
+| **Google Cloud IAM Service Account** | Extracts the GCP Project ID directly from the Service Account email (`<name>@<project_id>.iam.gserviceaccount.com`). | `team:project:cymbal-ai` |
+| **Apigee API Key / Native OAuth** | Reads the `team` custom attribute on the **Developer App**, **Developer**, or **API Product** in Apigee. If omitted, falls back to the resolved **Persona** name. | `team:core-platform` *(or `team:developer_team_a`)* |
 
 ### Independent Units & Precedence at a Glance
 

@@ -132,7 +132,7 @@ try {
     var userEmail = "";
     var rawPersonaClaim = "";
     var defaultAgentPersona = "";
-    var team = "default";
+    var team = "";
     var quotaOverride = "";
     var quotaOverrideExpiresAt = "";
     var modelArmorRequestTemplate = "";
@@ -258,7 +258,7 @@ try {
                 isVerified = true;
                 userEmail = idpData.email || String(userId);
                 rawPersonaClaim = idpData[pClaim] !== undefined ? idpData[pClaim] : (idpData.role || idpData.groups || "");
-                team = idpData[tClaim] || idpData.department || idpData.cost_center || "default";
+                team = idpData[tClaim] || idpData.department || idpData.cost_center || "";
                 quotaOverride = idpData[qClaim] ? String(idpData[qClaim]) : "";
                 quotaOverrideExpiresAt = idpData[qExpClaim] ? String(idpData[qExpClaim]) : "";
                 modelArmorRequestTemplate = idpData.model_armor_request_template || idpData.model_armor_template || "";
@@ -291,7 +291,7 @@ try {
                 rawPersonaClaim = jwtPrimaryPersona ||
                                   (jpClaim !== "role" ? context.getVariable("jwt.VJ-VerifyIdpJwt.claim.role") : "") ||
                                   (jpClaim !== "groups" ? context.getVariable("jwt.VJ-VerifyIdpJwt.claim.groups") : "") || "";
-                team = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jtClaim) || "default";
+                team = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jtClaim) || "";
                 quotaOverride = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqClaim) || "";
                 quotaOverrideExpiresAt = context.getVariable("jwt.VJ-VerifyIdpJwt.claim." + jqExpClaim) || "";
                 var jwtSharedArmor = context.getVariable("jwt.VJ-VerifyIdpJwt.claim.model_armor_template") || "";
@@ -386,10 +386,12 @@ try {
             context.setVariable("oauth_external_authorization_status", "true");
 
             // Store token metadata attributes for OA-SaveTokenAttributes (SetOAuthV2Info)
+            var cleanTeam = String(team || "").replace(/[\r\n\0]/g, "").trim();
+            var resolvedTeam = (cleanTeam && cleanTeam !== "default") ? cleanTeam : (matchedPersona || "default");
             context.setVariable("auth_user_id", String(userId));
             context.setVariable("auth_user_email", String(userEmail || userId));
             context.setVariable("auth_persona", matchedPersona);
-            context.setVariable("auth_team", String(team || "default"));
+            context.setVariable("auth_team", resolvedTeam);
             context.setVariable("auth_quota_override", String(quotaOverride || "unset"));
             context.setVariable("auth_quota_override_expires_at", String(quotaOverrideExpiresAt || "unset"));
             context.setVariable("auth_model_armor_request_template", String(modelArmorRequestTemplate || "unset"));

@@ -40,72 +40,33 @@ Instead of building custom API proxies from scratch for every model provider and
 
 ## How the Framework Fits Together
 
-<div class="arch-flow">
-  <div class="arch-stage">
-    <div class="arch-stage-title">1. Who Calls the Gateway (Any SDK or Identity)</div>
-    <div class="arch-grid">
-      <div class="arch-card">
-        <div class="arch-card-title">Developers & CLI Tools</div>
-        <div class="arch-card-sub">Claude Code, Codex, Anthropic SDK, OpenAI SDK, Google GenAI SDK</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">Internal Apps & Portals</div>
-        <div class="arch-card-sub">Corporate SSO (Okta, Entra ID, Ping JWT / Opaque) & Apigee OAuth / API Keys</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">Autonomous Agents</div>
-        <div class="arch-card-sub">Vertex AI Agent Engine (SPIFFE <code>.system.id.goog</code>) & GCP Service Accounts</div>
-      </div>
-    </div>
-  </div>
+<div class="grid cards" markdown>
 
-  <div class="arch-connector">
-    <span class="arch-connector-pill">↓ Authenticated & Mapped by SSO Group, SPIFFE Principal, or App Key ↓</span>
-  </div>
+-   **1. Who Calls the Gateway (Any SDK or Identity)**
 
-  <div class="arch-stage arch-stage--highlight">
-    <div class="arch-stage-title">2. How You Govern (Apigee AI Products & Guardrails)</div>
-    <div class="arch-grid">
-      <div class="arch-card">
-        <div class="arch-card-title">AI Product: Lead Engineer</div>
-        <div class="arch-card-sub">High USD / Token Allowance • All Frontier Models (Claude Opus, Gemini Pro, GPT-5.4)</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">AI Product: Standard Developer</div>
-        <div class="arch-card-sub">Personal Daily Cap + Shared Team Pool • Coding & Reasoning Models</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">AI Product: Knowledge Worker</div>
-        <div class="arch-card-sub">Standard Budget • Fast, Cost-Efficient Models (Gemini Flash, Claude Haiku)</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">AI Product: Autonomous Agent</div>
-        <div class="arch-card-sub">Dedicated Service Quota • Scoped Task Models • Burst & Concurrency Limits</div>
-      </div>
-    </div>
-  </div>
+    ---
 
-  <div class="arch-connector">
-    <span class="arch-connector-pill">↓ Protocol-Transcoded, Sanitized (Model Armor), Circuit-Broken & Cost-Rated ↓</span>
-  </div>
+    * **Developers & CLI Tools:** `Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, Google GenAI SDK
+    * **Internal Apps & Portals:** Corporate SSO (`Okta`, `Entra ID`, `Ping`) & Apigee OAuth / API Keys
+    * **Autonomous Agents:** Vertex AI Agent Engine (`SPIFFE` `.system.id.goog`) & GCP Service Accounts
 
-  <div class="arch-stage">
-    <div class="arch-stage-title">3. Where Models Run (Multi-Cloud & Self-Hosted Backends)</div>
-    <div class="arch-grid">
-      <div class="arch-card">
-        <div class="arch-card-title">Google Cloud Vertex AI</div>
-        <div class="arch-card-sub">Gemini, Anthropic Claude, Embeddings & Model Garden MaaS (Llama, Mistral, Qwen)</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">Direct Cloud Providers</div>
-        <div class="arch-card-sub">Direct OpenAI, Anthropic & Azure OpenAI (Isolated PropertySet / Per-App Keys)</div>
-      </div>
-      <div class="arch-card">
-        <div class="arch-card-title">Self-Hosted Clusters</div>
-        <div class="arch-card-sub">Custom vLLM, Ollama & Private Endpoints on GKE or Cloud Run</div>
-      </div>
-    </div>
-  </div>
+-   **2. How You Govern (Apigee AI Products)**
+
+    ---
+
+    * **Lead Engineer:** High USD / Token budget • All frontier models (`claude-opus-4-6`, `gemini-3.1-pro`)
+    * **Standard Developer:** Personal daily cap + shared department pool • Coding & reasoning models
+    * **Knowledge Worker:** Standard budget • Fast, cost-efficient models (`gemini-3.5-flash`, `claude-haiku-4-5`)
+    * **Autonomous Agent:** Dedicated service quota • Scoped task models • Burst & stream concurrency limits
+
+-   **3. Where Models Run (Multi-Cloud & Self-Hosted)**
+
+    ---
+
+    * **Google Cloud Vertex AI:** Gemini, Anthropic Claude, Embeddings & Model Garden MaaS (`Llama`, `Mistral`, `Qwen`)
+    * **Direct Cloud Providers:** OpenAI, Anthropic & Azure OpenAI (isolated keys per app or PropertySet)
+    * **Self-Hosted Clusters:** Custom `vLLM`, `Ollama` & private endpoints on GKE or Cloud Run
+
 </div>
 
 ---
