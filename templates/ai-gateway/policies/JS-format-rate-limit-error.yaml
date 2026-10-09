@@ -1,7 +1,14 @@
-Javascript:
-  .continueOnError: true
+JavaCallout:
+  .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-format-rate-limit-error
   DisplayName: JS-format-rate-limit-error
-  ResourceURL: jsc://format_rate_limit_error.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: format_rate_limit_error
+    - Property:
+        .name: error_prefix
+        -Data: error.
+  ClassName: com.google.apigee.callouts.FallbackAndErrorCallout
+  ResourceURL: java://ai-gateway-callouts.jar

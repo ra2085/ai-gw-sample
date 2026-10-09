@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-calculate-tokens-non-streaming
   DisplayName: JS-calculate-tokens-non-streaming
-  Properties: {}
-  ResourceURL: jsc://calculate_tokens_non_streaming.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: calculate_tokens_non_streaming
+    - Property:
+        .name: error_prefix
+        -Data: tokens.
+  ClassName: com.google.apigee.callouts.ResponseTranscoderAndCostCallout
+  ResourceURL: java://ai-gateway-callouts.jar

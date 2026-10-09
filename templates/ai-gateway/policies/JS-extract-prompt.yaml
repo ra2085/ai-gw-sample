@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-extract-prompt
   DisplayName: JS-extract-prompt
-  Properties: {}
-  ResourceURL: jsc://extract_prompt.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: extract_prompt
+    - Property:
+        .name: error_prefix
+        -Data: router.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

@@ -27,3 +27,5 @@ cloud-run-mocks/
 mocks/
 mock-servers/
 .agents
+callout
+apiproxy/

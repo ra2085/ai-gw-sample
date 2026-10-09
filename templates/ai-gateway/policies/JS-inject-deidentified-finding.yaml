@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-inject-deidentified-finding
   DisplayName: JS-inject-deidentified-finding
-  Properties: {}
-  ResourceURL: jsc://inject_deidentified_finding.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: inject_deidentified_finding
+    - Property:
+        .name: error_prefix
+        -Data: armor.
+  ClassName: com.google.apigee.callouts.FallbackAndErrorCallout
+  ResourceURL: java://ai-gateway-callouts.jar

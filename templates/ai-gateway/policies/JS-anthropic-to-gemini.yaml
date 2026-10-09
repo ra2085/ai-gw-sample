@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-anthropic-to-gemini
   DisplayName: JS-anthropic-to-gemini
-  Properties: {}
-  ResourceURL: jsc://anthropic_to_gemini.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: anthropic_to_gemini
+    - Property:
+        .name: error_prefix
+        -Data: transcode.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

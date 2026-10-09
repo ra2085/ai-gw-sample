@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-restore-model-openai
   DisplayName: JS-restore-model-openai
-  Properties: {}
-  ResourceURL: jsc://restore_model_openai.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: restore_model_openai
+    - Property:
+        .name: error_prefix
+        -Data: router.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

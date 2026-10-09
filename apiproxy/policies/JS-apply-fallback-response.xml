@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<Javascript continueOnError="true" enabled="true" name="JS-apply-fallback-response" timeLimit="200">
-  <DisplayName>JS-apply-fallback-response</DisplayName>
-  <Properties/>
-  <ResourceURL>jsc://apply_fallback_response.js</ResourceURL>
-</Javascript>

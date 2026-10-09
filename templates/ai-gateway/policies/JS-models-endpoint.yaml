@@ -1,8 +1,14 @@
-Javascript:
+JavaCallout:
   .continueOnError: false
   .enabled: true
-  .timeLimit: 200
   .name: JS-models-endpoint
   DisplayName: JS-models-endpoint
-  Properties: {}
-  ResourceURL: jsc://models_endpoint.js
+  Properties:
+    - Property:
+        .name: action
+        -Data: models_endpoint
+    - Property:
+        .name: error_prefix
+        -Data: catalog.
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar
