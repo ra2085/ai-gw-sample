@@ -288,7 +288,7 @@ if model_props_path and os.path.isfile(model_props_path):
                     if m_clean and m_clean not in catalog_models:
                         catalog_models.append(m_clean)
             elif k.startswith("alias.") and v:
-                alias_name = k[len("alias."):].strip()
+                alias_name = k[len("alias."):].strip().replace("\\:", ":")
                 if alias_name:
                     aliases_map[alias_name] = v
 

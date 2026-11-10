@@ -8,13 +8,17 @@
 # ==============================================================================
 # Master list consumed dynamically by /v1/models endpoint
 {{- $modelNames := list -}}
+{{- $flaggedDefaultModel := "" -}}
 {{- range $.Values.models -}}
   {{- $modelNames = append $modelNames .name -}}
+  {{- if and .is_default (eq $flaggedDefaultModel "") -}}
+    {{- $flaggedDefaultModel = .name -}}
+  {{- end -}}
 {{- end }}
 models.catalog={{ $modelNames | join "," }}
 
 # Global defaults
-default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
+default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $flaggedDefaultModel }}{{ $flaggedDefaultModel }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
 default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-3.1-flash-lite{{ end }}
 default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
 default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
@@ -32,14 +36,22 @@ task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.rout
 task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
 task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
 task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-task.classifier_model={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
+{{- $classifierModel := "gemini-3.1-flash-lite" -}}
+{{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.classifier_model -}}
+  {{- $classifierModel = $.Values.features.llm_judge.classifier_model -}}
+{{- else if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.classifier_model -}}
+  {{- $classifierModel = $.Values.routing.tasks.classifier_model -}}
+{{- end }}
+task.classifier_model={{ $classifierModel }}
+judge.model={{ $classifierModel }}
+judge.location={{ if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.location }}{{ $.Values.features.llm_judge.location }}{{ else if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
 
 # ==============================================================================
 # SECTION 3: BACKWARD COMPATIBILITY ALIASES & REWRITES
 # ==============================================================================
 {{- if and $.Values.routing $.Values.routing.aliases }}
 {{- range $alias, $target := $.Values.routing.aliases }}
-alias.{{ $alias }}={{ $target }}
+alias.{{ $alias | replace ":" "\\:" }}={{ $target }}
 {{- end }}
 {{- end }}
 
@@ -105,8 +117,8 @@ alias.{{ $alias }}={{ $target }}
 
 {{ end }}
 # --- Fallback Defaults ---
-default_gemini.endpoint=global
-default_gemini.model=global
+default_gemini.endpoint={{ if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
+default_gemini.model={{ if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
 default_claude.endpoint=us-east5
 default_claude.model=us-east5
 default_openai.endpoint=global
@@ -129,10 +141,10 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
 {{- if .pricing }}
-{{ .name }}.input_rate_per_m={{ .pricing.input_rate }}
-{{ .name }}.output_rate_per_m={{ .pricing.output_rate }}
-{{ .name }}.input_rate={{ .pricing.input_rate }}
-{{ .name }}.output_rate={{ .pricing.output_rate }}
+{{ .name }}.input_rate_per_m={{ .pricing.input_rate | default 0 }}
+{{ .name }}.output_rate_per_m={{ .pricing.output_rate | default 0 }}
+{{ .name }}.input_rate={{ .pricing.input_rate | default 0 }}
+{{ .name }}.output_rate={{ .pricing.output_rate | default 0 }}
 {{- if .pricing.cache_read_rate }}
 {{ .name }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
 {{ .name }}.cache_read_rate={{ .pricing.cache_read_rate }}
@@ -154,6 +166,7 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
 */}}
 {{- define "generate_config_properties" -}}
 project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
+model_armor_enabled={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "enabled") }}{{ $.Values.features.model_armor.enabled }}{{ else }}false{{ end }}
 model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
 model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
@@ -538,6 +551,21 @@ buffer_size=50
 - Step:
     Condition: 'fallback_ready = "true"'
     Name: JS-apply-fallback-response
+{{- end -}}
+
+{{- define "javacallout_embedded_propertysets" -}}
+- Property:
+    .name: propertyset_config_b64
+    -Data: {{ include "generate_config_properties" . | b64enc }}
+- Property:
+    .name: propertyset_model_locations_b64
+    -Data: {{ include "generate_model_locations_properties" . | b64enc }}
+- Property:
+    .name: propertyset_monetization_rates_b64
+    -Data: {{ include "generate_monetization_rates_properties" . | b64enc }}
+- Property:
+    .name: propertyset_extract_expressions_b64
+    -Data: {{ include "generate_extract_expressions_properties" . | b64enc }}
 {{- end -}}
 
 {{- define "blank" -}}{{- end -}}

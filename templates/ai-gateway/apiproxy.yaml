@@ -885,7 +885,7 @@ TargetEndpoints:
           GoogleAccessToken:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
-        URL: https://aiplatform.googleapis.com
+        URL: https://{endpoint_host}
 
   - TargetEndpoint:
       .name: gemini-openai-compat

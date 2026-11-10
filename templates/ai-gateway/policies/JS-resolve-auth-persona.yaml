@@ -10,5 +10,6 @@ JavaCallout:
     - Property:
         .name: error_prefix
         -Data: persona.
+    {{- include "javacallout_embedded_propertysets" . | nindent 4 }}
   ClassName: com.google.apigee.callouts.AuthAndPersonaCallout
   ResourceURL: java://ai-gateway-callouts.jar
