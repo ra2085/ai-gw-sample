@@ -203,7 +203,124 @@ if ! $DRY_RUN; then
     fi
 fi
 
-APIGEE_API="https://apigee.googleapis.com/v1/organizations/${APIGEE_ORG}"
+APIGEE_API_BASE="${APIGEE_API_BASE:-https://apigee.googleapis.com}"
+APIGEE_API="${APIGEE_API_BASE%/}/v1/organizations/${APIGEE_ORG}"
+APIGEE_MAX_RETRIES="${APIGEE_MAX_RETRIES:-3}"
+APIGEE_RETRY_BASE_SLEEP="${APIGEE_RETRY_BASE_SLEEP:-1}"
+
+redact_json_secrets() {
+    local file="$1"
+    if [[ -f "$file" && -s "$file" ]]; then
+        sed -E 's/("consumerSecret"[[:space:]]*:[[:space:]]*")[^"]*"/\1***REDACTED***"/g' "$file"
+    fi
+}
+
+# Retry-aware HTTP wrapper: retries transient 000/429/500/502/503/504 up to APIGEE_MAX_RETRIES times.
+apigee_curl() {
+    local out_file="$1"
+    shift
+    local attempt=0
+    local http_code="000"
+    while true; do
+        : > "$out_file"
+        local raw_code=""
+        raw_code=$(curl -s -o "$out_file" -w "%{http_code}" "$@") || true
+        http_code=$(printf '%s' "$raw_code" | tr -d '[:space:]')
+        [[ -z "$http_code" ]] && http_code="000"
+        if [[ "$http_code" != "000" && "$http_code" != "429" && "$http_code" != "500" && "$http_code" != "502" && "$http_code" != "503" && "$http_code" != "504" ]]; then
+            echo "$http_code"
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        if [[ $attempt -ge $APIGEE_MAX_RETRIES ]]; then
+            echo "$http_code"
+            return 0
+        fi
+        local sleep_s
+        sleep_s=$(python3 -c 'import sys; print(float(sys.argv[1]) * (2 ** (int(sys.argv[2]) - 1)))' "$APIGEE_RETRY_BASE_SLEEP" "$attempt")
+        sleep "$sleep_s"
+    done
+}
+
+# Inspects a DeveloperApp (or DeveloperAppKey) JSON file and outputs:
+#   <app_status>|<cred_action>|<consumer_key>
+# where cred_action is one of:
+#   approved       -> active approved+unexpired key already approved for PRODUCT_NAME
+#   needs_approve  -> active approved+unexpired key has PRODUCT_NAME in revoked/pending state
+#   missing        -> active approved+unexpired key exists, needs PRODUCT_NAME associated
+#   mint_new       -> no active approved+unexpired credential exists (empty credentials[] or all revoked/expired)
+inspect_app_credentials() {
+    local json_file="$1"
+    local product_name="$2"
+    python3 - "$json_file" "$product_name" <<'PYCRED'
+import json
+import sys
+import time
+
+json_path, prod_name = sys.argv[1], sys.argv[2]
+with open(json_path, "r", encoding="utf-8") as fh:
+    d = json.load(fh)
+if not isinstance(d, dict):
+    raise SystemExit("Invalid JSON response object")
+
+now_ms = int(time.time() * 1000)
+app_status = str(d.get("status") or "approved").strip().lower()
+
+# Support both DeveloperApp ({"credentials": [...]}) and DeveloperAppKey ({"consumerKey": "...", "apiProducts": [...]})
+if "credentials" in d or "consumerKey" not in d:
+    raw_creds = d.get("credentials")
+    if not isinstance(raw_creds, list):
+        raw_creds = []
+else:
+    raw_creds = [d]
+
+def is_cred_active(c):
+    if not isinstance(c, dict):
+        return False
+    ck = str(c.get("consumerKey") or "").strip()
+    if not ck:
+        return False
+    st = str(c.get("status") or "approved").strip().lower()
+    if st != "approved":
+        return False
+    exp = c.get("expiresAt")
+    if exp not in (None, "", "-1", -1):
+        try:
+            exp_val = int(str(exp).strip())
+        except ValueError:
+            return False
+        if exp_val != -1 and exp_val <= now_ms:
+            return False
+    return True
+
+def prod_state(c):
+    prods = c.get("apiProducts")
+    if not isinstance(prods, list):
+        return "missing"
+    saw_unapproved = False
+    for item in prods:
+        if isinstance(item, dict) and item.get("apiproduct") == prod_name:
+            pst = str(item.get("status") or "approved").strip().lower()
+            if pst == "approved":
+                return "approved"
+            saw_unapproved = True
+    return "needs_approve" if saw_unapproved else "missing"
+
+active = []
+for cred in raw_creds:
+    if is_cred_active(cred):
+        active.append((prod_state(cred), str(cred["consumerKey"]).strip()))
+
+if not active:
+    print(f"{app_status}|mint_new|")
+    sys.exit(0)
+
+priority = {"approved": 0, "needs_approve": 1, "missing": 2}
+active.sort(key=lambda pair: priority.get(pair[0], 3))
+best_action, best_key = active[0]
+print(f"{app_status}|{best_action}|{best_key}")
+PYCRED
+}
 
 # Step 1: Safe Upsert of Persona Owner Developer
 echo -e "\n${YELLOW}Step 1: Ensuring Persona Owner Developer (${DEV_EMAIL})...${NC}"
@@ -212,20 +329,25 @@ DEV_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"email": sys.argv[
 if $DRY_RUN; then
     echo -e "  ${BLUE}[DRY-RUN]${NC} Check GET ${APIGEE_API}/developers/${DEV_EMAIL} -> POST if 404"
 else
-    DEV_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/developers/${DEV_EMAIL}")
+    DEV_CHECK_FILE="$TMP_WORK_DIR/dev_check.json"
+    DEV_STATUS=$(apigee_curl "$DEV_CHECK_FILE" -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/developers/${DEV_EMAIL}")
     if [[ "$DEV_STATUS" == "200" ]]; then
         echo -e "  ${GREEN}✓ Developer ${DEV_EMAIL} already exists (preserved).${NC}"
-    else
-        CREATE_DEV_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${APIGEE_API}/developers" \
+    elif [[ "$DEV_STATUS" == "404" ]]; then
+        DEV_CREATE_FILE="$TMP_WORK_DIR/dev_create.json"
+        CREATE_DEV_STATUS=$(apigee_curl "$DEV_CREATE_FILE" -X POST "${APIGEE_API}/developers" \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
             -d "$DEV_PAYLOAD")
         if [[ "$CREATE_DEV_STATUS" == "200" || "$CREATE_DEV_STATUS" == "201" ]]; then
             echo -e "  ${GREEN}✓ Created Developer ${DEV_EMAIL}.${NC}"
         else
-            echo -e "  ${RED}✗ Failed to create Developer ${DEV_EMAIL} (HTTP ${CREATE_DEV_STATUS}).${NC}" >&2
+            echo -e "  ${RED}✗ Failed to create Developer ${DEV_EMAIL} (HTTP ${CREATE_DEV_STATUS}): $(redact_json_secrets "$DEV_CREATE_FILE")${NC}" >&2
             exit 1
         fi
+    else
+        echo -e "  ${RED}✗ Failed to query Developer ${DEV_EMAIL} (HTTP ${DEV_STATUS}): $(redact_json_secrets "$DEV_CHECK_FILE")${NC}" >&2
+        exit 1
     fi
 fi
 
@@ -282,10 +404,17 @@ for raw_p in "${PERSONAS_ARRAY[@]}"; do
             PROD_STATUS="200"
         fi
     else
-        PROD_STATUS=$(curl -s -o "$PROD_CHECK_FILE" -w "%{http_code}" \
+        PROD_STATUS=$(apigee_curl "$PROD_CHECK_FILE" \
             -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/apiproducts/${PRODUCT_NAME}")
-        if [[ "$PROD_STATUS" == "200" && -s "$PROD_CHECK_FILE" ]]; then
+        if [[ "$PROD_STATUS" == "200" ]]; then
+            if ! python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); assert isinstance(d, dict) and d.get("name")' "$PROD_CHECK_FILE" 2>/dev/null; then
+                echo -e "  ${RED}✗ GET API Product ${PRODUCT_NAME} returned HTTP 200 with invalid or empty JSON body.${NC}" >&2
+                exit 1
+            fi
             EXISTING_PROD_PATH="$PROD_CHECK_FILE"
+        elif [[ "$PROD_STATUS" != "404" ]]; then
+            echo -e "  ${RED}✗ Failed to query API Product ${PRODUCT_NAME} (HTTP ${PROD_STATUS}): $(redact_json_secrets "$PROD_CHECK_FILE")${NC}" >&2
+            exit 1
         fi
     fi
 
@@ -561,7 +690,7 @@ PYEOF
         CLIENT_ID="<dry-run-${p}-client-id>"
     else
         if [[ "$PROD_STATUS" == "200" ]]; then
-            UPD_STATUS=$(curl -s -o "$PROD_RESP_FILE" -w "%{http_code}" \
+            UPD_STATUS=$(apigee_curl "$PROD_RESP_FILE" \
                 -X PUT "${APIGEE_API}/apiproducts/${PRODUCT_NAME}" \
                 -H "Authorization: Bearer ${TOKEN}" \
                 -H "Content-Type: application/json" \
@@ -569,11 +698,11 @@ PYEOF
             if [[ "$UPD_STATUS" == "200" ]]; then
                 echo -e "  ${GREEN}✓ Merged & updated existing API Product ${PRODUCT_NAME} in-place (preserved environments, custom attributes & external operations).${NC}"
             else
-                echo -e "  ${RED}✗ Failed to update API Product ${PRODUCT_NAME} (HTTP ${UPD_STATUS}): $(cat "$PROD_RESP_FILE")${NC}" >&2
+                echo -e "  ${RED}✗ Failed to update API Product ${PRODUCT_NAME} (HTTP ${UPD_STATUS}): $(redact_json_secrets "$PROD_RESP_FILE")${NC}" >&2
                 exit 1
             fi
         else
-            CRT_STATUS=$(curl -s -o "$PROD_RESP_FILE" -w "%{http_code}" \
+            CRT_STATUS=$(apigee_curl "$PROD_RESP_FILE" \
                 -X POST "${APIGEE_API}/apiproducts" \
                 -H "Authorization: Bearer ${TOKEN}" \
                 -H "Content-Type: application/json" \
@@ -581,40 +710,114 @@ PYEOF
             if [[ "$CRT_STATUS" == "200" || "$CRT_STATUS" == "201" ]]; then
                 echo -e "  ${GREEN}✓ Created new API Product ${PRODUCT_NAME}.${NC}"
             else
-                echo -e "  ${RED}✗ Failed to create API Product ${PRODUCT_NAME} (HTTP ${CRT_STATUS}): $(cat "$PROD_RESP_FILE")${NC}" >&2
+                echo -e "  ${RED}✗ Failed to create API Product ${PRODUCT_NAME} (HTTP ${CRT_STATUS}): $(redact_json_secrets "$PROD_RESP_FILE")${NC}" >&2
                 exit 1
             fi
         fi
 
-        # Safe Upsert of Developer App (preserving existing consumerKey & existing product bindings)
-        APP_STATUS=$(curl -s -o "$APP_RESP_FILE" -w "%{http_code}" \
+        # Safe Upsert of Developer App (preserving active approved consumerKey & product bindings)
+        APP_STATUS=$(apigee_curl "$APP_RESP_FILE" \
             -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}")
         if [[ "$APP_STATUS" == "200" ]]; then
-            CLIENT_ID=$(python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); print(d.get("credentials",[{}])[0].get("consumerKey",""))' "$APP_RESP_FILE")
-            ALREADY_BOUND=$(python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); p=sys.argv[2]; prods=d.get("credentials",[{}])[0].get("apiProducts",[]); print("true" if any(isinstance(x,dict) and x.get("apiproduct")==p for x in prods) else "false")' "$APP_RESP_FILE" "$PRODUCT_NAME")
-            echo -e "  ${GREEN}✓ Preserved existing Developer App ${APP_NAME} (client_id: ${CLIENT_ID:0:8}...).${NC}"
-            if [[ "$ALREADY_BOUND" != "true" ]]; then
-                ASSOC_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"apiProducts": [sys.argv[1]]}))' "$PRODUCT_NAME")
-                curl -s -o /dev/null -X POST \
-                    "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}" \
+            IFS='|' read -r APP_APPROVAL CRED_ACTION CLIENT_ID <<< "$(inspect_app_credentials "$APP_RESP_FILE" "$PRODUCT_NAME")"
+            if [[ "$APP_APPROVAL" != "approved" ]]; then
+                APP_APPROVE_FILE="$TMP_WORK_DIR/app_approve_${p}.json"
+                APP_APPROVE_STATUS=$(apigee_curl "$APP_APPROVE_FILE" \
+                    -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}?action=approve" \
+                    -H "Authorization: Bearer ${TOKEN}" \
+                    -H "Content-Type: application/octet-stream")
+                if [[ "$APP_APPROVE_STATUS" != "200" && "$APP_APPROVE_STATUS" != "204" ]]; then
+                    echo -e "  ${RED}✗ Failed to approve Developer App ${APP_NAME} (HTTP ${APP_APPROVE_STATUS}): $(redact_json_secrets "$APP_APPROVE_FILE")${NC}" >&2
+                    exit 1
+                fi
+            fi
+
+            if [[ "$CRED_ACTION" == "mint_new" ]]; then
+                MINT_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"name": sys.argv[1], "apiProducts": [sys.argv[2]]}))' "$APP_NAME" "$PRODUCT_NAME")
+                APP_MINT_FILE="$TMP_WORK_DIR/app_mint_${p}.json"
+                MINT_STATUS=$(apigee_curl "$APP_MINT_FILE" \
+                    -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}" \
                     -H "Authorization: Bearer ${TOKEN}" \
                     -H "Content-Type: application/json" \
-                    -d "$ASSOC_PAYLOAD" || true
+                    -d "$MINT_PAYLOAD")
+                if [[ "$MINT_STATUS" != "200" && "$MINT_STATUS" != "201" ]]; then
+                    echo -e "  ${RED}✗ Failed to mint active credential for Developer App ${APP_NAME} (HTTP ${MINT_STATUS}): $(redact_json_secrets "$APP_MINT_FILE")${NC}" >&2
+                    exit 1
+                fi
+                IFS='|' read -r _ CRED_ACTION CLIENT_ID <<< "$(inspect_app_credentials "$APP_MINT_FILE" "$PRODUCT_NAME")"
+                if [[ -z "$CLIENT_ID" ]]; then
+                    echo -e "  ${RED}✗ Developer App ${APP_NAME} returned no active approved consumerKey after credential creation.${NC}" >&2
+                    exit 1
+                fi
+                echo -e "  ${GREEN}✓ Minted new active credential for existing Developer App ${APP_NAME} (client_id: ${CLIENT_ID:0:8}...).${NC}"
+            else
+                echo -e "  ${GREEN}✓ Preserved existing Developer App ${APP_NAME} (client_id: ${CLIENT_ID:0:8}...).${NC}"
             fi
-        else
+
+            if [[ "$CRED_ACTION" == "missing" ]]; then
+                ASSOC_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"apiProducts": [sys.argv[1]]}))' "$PRODUCT_NAME")
+                KEY_ASSOC_FILE="$TMP_WORK_DIR/key_assoc_${p}.json"
+                KEY_ASSOC_STATUS=$(apigee_curl "$KEY_ASSOC_FILE" \
+                    -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}" \
+                    -H "Authorization: Bearer ${TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "$ASSOC_PAYLOAD")
+                if [[ "$KEY_ASSOC_STATUS" != "200" && "$KEY_ASSOC_STATUS" != "201" ]]; then
+                    echo -e "  ${RED}✗ Failed to bind API Product ${PRODUCT_NAME} to key ${CLIENT_ID:0:8}... on App ${APP_NAME} (HTTP ${KEY_ASSOC_STATUS}): $(redact_json_secrets "$KEY_ASSOC_FILE")${NC}" >&2
+                    exit 1
+                fi
+                if [[ -s "$KEY_ASSOC_FILE" ]]; then
+                    IFS='|' read -r _ POST_ASSOC_ACTION _ <<< "$(inspect_app_credentials "$KEY_ASSOC_FILE" "$PRODUCT_NAME" 2>/dev/null || echo "approved|approved|")"
+                    if [[ "$POST_ASSOC_ACTION" == "needs_approve" ]]; then
+                        CRED_ACTION="needs_approve"
+                    fi
+                fi
+            fi
+
+            if [[ "$CRED_ACTION" == "needs_approve" ]]; then
+                KEY_APPROVE_FILE="$TMP_WORK_DIR/key_approve_${p}.json"
+                KEY_APPROVE_STATUS=$(apigee_curl "$KEY_APPROVE_FILE" \
+                    -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}/apiproducts/${PRODUCT_NAME}?action=approve" \
+                    -H "Authorization: Bearer ${TOKEN}" \
+                    -H "Content-Type: application/octet-stream")
+                if [[ "$KEY_APPROVE_STATUS" != "200" && "$KEY_APPROVE_STATUS" != "204" ]]; then
+                    echo -e "  ${RED}✗ Failed to approve API Product ${PRODUCT_NAME} on key ${CLIENT_ID:0:8}... for App ${APP_NAME} (HTTP ${KEY_APPROVE_STATUS}): $(redact_json_secrets "$KEY_APPROVE_FILE")${NC}" >&2
+                    exit 1
+                fi
+                echo -e "  ${GREEN}✓ Approved API Product ${PRODUCT_NAME} binding on key ${CLIENT_ID:0:8}...${NC}"
+            fi
+        elif [[ "$APP_STATUS" == "404" ]]; then
             APP_CREATE_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"name": sys.argv[1], "apiProducts": [sys.argv[2]], "attributes": [{"name": "persona", "value": sys.argv[3]}]}))' "$APP_NAME" "$PRODUCT_NAME" "$p")
-            APP_CRT_STATUS=$(curl -s -o "$APP_RESP_FILE" -w "%{http_code}" \
+            APP_CRT_STATUS=$(apigee_curl "$APP_RESP_FILE" \
                 -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps" \
                 -H "Authorization: Bearer ${TOKEN}" \
                 -H "Content-Type: application/json" \
                 -d "$APP_CREATE_PAYLOAD")
             if [[ "$APP_CRT_STATUS" == "200" || "$APP_CRT_STATUS" == "201" ]]; then
-                CLIENT_ID=$(python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); print(d.get("credentials",[{}])[0].get("consumerKey",""))' "$APP_RESP_FILE")
+                IFS='|' read -r _ CRED_ACTION CLIENT_ID <<< "$(inspect_app_credentials "$APP_RESP_FILE" "$PRODUCT_NAME")"
+                if [[ -z "$CLIENT_ID" ]]; then
+                    echo -e "  ${RED}✗ Created Developer App ${APP_NAME}, but response contained no active approved consumerKey.${NC}" >&2
+                    exit 1
+                fi
+                if [[ "$CRED_ACTION" == "needs_approve" ]]; then
+                    KEY_APPROVE_FILE="$TMP_WORK_DIR/key_approve_${p}.json"
+                    KEY_APPROVE_STATUS=$(apigee_curl "$KEY_APPROVE_FILE" \
+                        -X POST "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}/apiproducts/${PRODUCT_NAME}?action=approve" \
+                        -H "Authorization: Bearer ${TOKEN}" \
+                        -H "Content-Type: application/octet-stream")
+                    if [[ "$KEY_APPROVE_STATUS" != "200" && "$KEY_APPROVE_STATUS" != "204" ]]; then
+                        echo -e "  ${RED}✗ Failed to approve API Product ${PRODUCT_NAME} on newly created App ${APP_NAME} (HTTP ${KEY_APPROVE_STATUS}): $(redact_json_secrets "$KEY_APPROVE_FILE")${NC}" >&2
+                        exit 1
+                    fi
+                fi
                 echo -e "  ${GREEN}✓ Created Developer App ${APP_NAME} (client_id: ${CLIENT_ID:0:8}...).${NC}"
             else
-                echo -e "  ${RED}✗ Failed to create Developer App ${APP_NAME} (HTTP ${APP_CRT_STATUS}): $(cat "$APP_RESP_FILE")${NC}" >&2
+                echo -e "  ${RED}✗ Failed to create Developer App ${APP_NAME} (HTTP ${APP_CRT_STATUS}): $(redact_json_secrets "$APP_RESP_FILE")${NC}" >&2
                 exit 1
             fi
+        else
+            echo -e "  ${RED}✗ Failed to query Developer App ${APP_NAME} (HTTP ${APP_STATUS}): $(redact_json_secrets "$APP_RESP_FILE")${NC}" >&2
+            exit 1
         fi
     fi
 
