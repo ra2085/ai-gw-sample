@@ -37,4 +37,4 @@ ServiceCallout:
       Enabled: true
       Enforce: true
       IgnoreValidationErrors: false
-    URL: https://{judge_host}/v1/projects/{propertyset.config.project_id}/locations/{judge_location}/publishers/google/models/{judge_model}:generateContent
+    URL: https://{judge_host}/v1/projects/{gcp_project_id}/locations/{judge_location}/publishers/google/models/{judge_model}:generateContent

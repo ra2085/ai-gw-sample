@@ -19,4 +19,4 @@ LLMTokenQuota:
     -Data: hour
   Distributed: true
   Synchronous: true
-  LLMModelSource: '{model}'
+  LLMModelSource: '{quota_model_bucket}'

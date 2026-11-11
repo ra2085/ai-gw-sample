@@ -1,5 +1,5 @@
 ExtractVariables:
-  .continueOnError: false
+  .continueOnError: true
   .enabled: true
   .name: EV-Model
   DisplayName: EV-Model

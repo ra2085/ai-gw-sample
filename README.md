@@ -28,7 +28,13 @@ With 3–5 AI Products, you can govern **10,000+ developers and autonomous agent
 
 > **Prerequisites:** Complete the one-time setup in **[Prerequisites & Setup](docs/getting-started/installation.md)** (`apigee-go-gen`, `apigeecli`, Google Cloud Service Account with `roles/aiplatform.user`, and telemetry Data Collectors).
 
-### 1. Define Your Gateway (`values.quickstart.yaml`)
+### 1. Copy & Customize Your Gateway (`./values.yaml`)
+
+```bash
+cp ./templates/ai-gateway/values.quickstart.yaml ./values.yaml
+```
+
+Edit `./values.yaml` and set `gateway.project_id` to your GCP project ID:
 
 ```yaml
 gateway:
@@ -46,8 +52,16 @@ models:
   - name: "claude-haiku-4-5"
     displayName: "Claude 4.5 Haiku"
     publisher: "anthropic"
+    target: "claude"
     format: "anthropic"
     region: "us-east5"
+
+  - name: "text-embedding-005"
+    displayName: "Vertex AI Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "openai"
+    region: "us-central1"
 
   # Optional: Self-Hosted or External OpenAI-Compatible Model
   - name: "my-vllm-model"
@@ -56,16 +70,25 @@ models:
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
 ```
 
-### 2. Render, Deploy & Provision AI Products
+### 2. Provision AI Products, Render & Deploy
 
 ```bash
-# 1. Compile the Apigee proxy bundle from YAML
+# 1. Safely provision Apigee API Products (llmOperationGroup) & Developer App keys
+#    (If using SSO/Agent token import, copy the generated client_id values into ./values.yaml;
+#     direct x-api-key calls work immediately with the generated $API_KEY)
+bash ./scripts/sync-personas.sh \
+    --values ./values.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
+
+# 2. Compile the Apigee proxy bundle from YAML
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
-    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --values ./values.yaml \
+    --set "gateway.project_id=$PROJECT_ID" \
     --output ./out/ai-gateway.zip
 
-# 2. Deploy to Apigee X / Hybrid
+# 3. Deploy to Apigee X / Hybrid
 apigeecli apis create bundle \
     --proxy-zip ./out/ai-gateway.zip \
     --name ai-gateway \
@@ -75,12 +98,6 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
-
-# 3. Safely provision Apigee API Products (llmOperationGroup) & Developer App keys
-bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.quickstart.yaml \
-    --org "$PROJECT_ID" \
-    --env "$APIGEE_ENV"
 ```
 
 ---
@@ -91,7 +108,7 @@ The documentation is organized into four task-oriented sections:
 
 | Section | Guides | What You Will Find |
 | :--- | :--- | :--- |
-| **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal 15-line YAML quickstart, and one-time CLI/IAM setup. |
+| **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal quickstart YAML, and one-time CLI/IAM setup. |
 | **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI & Anthropic (`provider_keys` PropertySet), token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
 | **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md) | Complete schema table, feature toggles, and client SDK compatibility matrix. |
-| **4. Analytics & Operations** | • [Analytics & Looker Studio Dashboards](docs/operations/looker-studio-dashboard.md)<br>• [Telemetry & Headers](docs/operations/telemetry.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Looker Studio persona dashboards (multi-bucket FinOps chargeback, Prompt Cache ROI, team/peer insights, developer self-service, security & quota governance, Judge ROI), response headers (`X-Gateway-*`, `X-RateLimit-*`), and CI/CD deployment. |
+| **4. Analytics & Operations** | • [Analytics & Looker Studio Dashboards](docs/operations/looker-studio-dashboard.md)<br>• [Telemetry & Headers](docs/operations/telemetry.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Looker Studio persona dashboards (multi-bucket FinOps chargeback, Prompt Cache ROI, team/peer insights, developer self-service, security & quota governance, Judge ROI), response headers (`X-Gateway-*`, `x-quota-*`), and CI/CD deployment. |

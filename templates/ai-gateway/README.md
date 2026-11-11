@@ -104,13 +104,13 @@ Configure features, unified Personas (AI Products), and individual/team Exceptio
 features:
   monetization:
     enabled: true
+    enforce_apigee_wallet: false
   model_armor:
-    enabled: true
+    enabled: false
+    location: "us-central1"
   llm_judge:
     enabled: true
   quotas:
-    enabled: true
-  cors:
     enabled: true
   auth:
     enabled: true

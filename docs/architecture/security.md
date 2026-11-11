@@ -180,7 +180,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
         enabled: true
         agent_identity:
           enabled: true
-          allowed_email_suffix: ".iam.gserviceaccount.com" # Or "*@my-project.iam.gserviceaccount.com"
+          allowed_email_suffix: "@my-project.iam.gserviceaccount.com,@my-data-project.iam.gserviceaccount.com" # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com"
           persona: "agent"              # Fallback persona tier for verified Service Accounts
           token_ttl_ms: 3600000
         personas:

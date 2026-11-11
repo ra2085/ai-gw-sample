@@ -7,19 +7,91 @@
 # SECTION 1: DYNAMIC CATALOG & DEFAULT ROUTING
 # ==============================================================================
 # Master list consumed dynamically by /v1/models endpoint
+{{- $globalDefaultRegion := "global" -}}
+{{- if and $.Values.defaults $.Values.defaults.region -}}
+  {{- $globalDefaultRegion = printf "%v" $.Values.defaults.region -}}
+{{- end -}}
 {{- $modelNames := list -}}
+{{- $chatModels := list -}}
+{{- $catalogMap := dict -}}
+{{- $regionMap := dict -}}
 {{- $flaggedDefaultModel := "" -}}
+{{- $modelTierLow := "" -}}
+{{- $modelTierMedium := "" -}}
+{{- $modelTierHigh := "" -}}
+{{- $modelTierMax := "" -}}
+{{- $liteCandidate := "" -}}
+{{- $highCandidate := "" -}}
+{{- $maxCandidate := "" -}}
+{{- $geminiLiteCandidate := "" -}}
+{{- $firstGeminiModel := "" -}}
 {{- range $.Values.models -}}
-  {{- $modelNames = append $modelNames .name -}}
+  {{- $mName := printf "%v" .name -}}
+  {{- $mFmt := printf "%v" (.format | default "gemini") -}}
+  {{- $mTier := printf "%v" (.tier | default "") -}}
+  {{- $mPub := "google" -}}
+  {{- if .publisher -}}
+    {{- $mPub = printf "%v" .publisher -}}
+  {{- else if eq $mFmt "anthropic" -}}
+    {{- $mPub = "anthropic" -}}
+  {{- else if eq $mFmt "openai" -}}
+    {{- $mPub = "openai" -}}
+  {{- end -}}
+  {{- $mReg := printf "%v" (.endpoint | default .region | default $globalDefaultRegion) -}}
+  {{- $modelNames = append $modelNames $mName -}}
+  {{- $_ := set $catalogMap $mName true -}}
+  {{- $_ := set $regionMap $mName $mReg -}}
   {{- if and .is_default (eq $flaggedDefaultModel "") -}}
-    {{- $flaggedDefaultModel = .name -}}
+    {{- $flaggedDefaultModel = $mName -}}
+  {{- end -}}
+  {{- if not (regexMatch "(?i)embedding" $mName) -}}
+    {{- $chatModels = append $chatModels $mName -}}
+    {{- if and (eq $mTier "low") (eq $modelTierLow "") }}{{- $modelTierLow = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "medium") (eq $modelTierMedium "") }}{{- $modelTierMedium = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "high") (eq $modelTierHigh "") }}{{- $modelTierHigh = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "max") (eq $modelTierMax "") }}{{- $modelTierMax = $mName -}}{{- end -}}
+    {{- if and (eq $liteCandidate "") (regexMatch "(?i)(lite|haiku|-mini\\b|-nano\\b)" $mName) -}}
+      {{- $liteCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $highCandidate "") (regexMatch "(?i)(-pro\\b|sonnet|opus|argon|ultra)" $mName) -}}
+      {{- $highCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $maxCandidate "") (regexMatch "(?i)(opus|argon|ultra)" $mName) -}}
+      {{- $maxCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $mPub "google") (not .custom_url) -}}
+      {{- if eq $firstGeminiModel "" }}{{- $firstGeminiModel = $mName -}}{{- end -}}
+      {{- if and (eq $geminiLiteCandidate "") (regexMatch "(?i)(lite|flash)" $mName) -}}
+        {{- $geminiLiteCandidate = $mName -}}
+      {{- end -}}
+    {{- end -}}
   {{- end -}}
 {{- end }}
 models.catalog={{ $modelNames | join "," }}
+{{- $defaultModel := "gemini-3.5-flash" -}}
+{{- if and $.Values.defaults $.Values.defaults.model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.defaults.model))) -}}
+  {{- $defaultModel = printf "%v" $.Values.defaults.model -}}
+{{- else if $flaggedDefaultModel -}}
+  {{- $defaultModel = $flaggedDefaultModel -}}
+{{- else if $chatModels -}}
+  {{- $defaultModel = index $chatModels 0 -}}
+{{- else if $.Values.models -}}
+  {{- $defaultModel = printf "%v" (index $.Values.models 0).name -}}
+{{- end -}}
+{{- $defaultFallback := $defaultModel -}}
+{{- if and $.Values.defaults $.Values.defaults.fallback (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.defaults.fallback))) -}}
+  {{- $defaultFallback = printf "%v" $.Values.defaults.fallback -}}
+{{- else if $modelTierLow -}}
+  {{- $defaultFallback = $modelTierLow -}}
+{{- else if $liteCandidate -}}
+  {{- $defaultFallback = $liteCandidate -}}
+{{- else if empty $catalogMap -}}
+  {{- $defaultFallback = "gemini-3.1-flash-lite" -}}
+{{- end }}
 
 # Global defaults
-default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $flaggedDefaultModel }}{{ $flaggedDefaultModel }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
-default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-3.1-flash-lite{{ end }}
+default.model={{ $defaultModel }}
+default.fallback={{ $defaultFallback }}
 default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
 default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
 default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Values.defaults.format }}{{ else }}gemini{{ end }}
@@ -27,31 +99,105 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
 # ==============================================================================
 # SECTION 2: SMART ROUTER TIERS & TASK MAPPINGS
 # ==============================================================================
-tier.low={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
-tier.medium={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-sonnet-4-6" }}{{ else }}claude-sonnet-4-6{{ end }}
-
-task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
-task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-{{- $classifierModel := "gemini-3.1-flash-lite" -}}
+{{- $tierLow := $defaultFallback -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.low (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.low))) -}}
+  {{- $tierLow = printf "%v" $.Values.routing.tiers.low -}}
+{{- else if $modelTierLow -}}
+  {{- $tierLow = $modelTierLow -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-flash-lite") -}}
+  {{- $tierLow = "gemini-3.1-flash-lite" -}}
+{{- else if $liteCandidate -}}
+  {{- $tierLow = $liteCandidate -}}
+{{- end -}}
+{{- $tierMedium := $defaultModel -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.medium (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.medium))) -}}
+  {{- $tierMedium = printf "%v" $.Values.routing.tiers.medium -}}
+{{- else if $modelTierMedium -}}
+  {{- $tierMedium = $modelTierMedium -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.5-flash") -}}
+  {{- $tierMedium = "gemini-3.5-flash" -}}
+{{- end -}}
+{{- $tierHigh := $defaultModel -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.high (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.high))) -}}
+  {{- $tierHigh = printf "%v" $.Values.routing.tiers.high -}}
+{{- else if $modelTierHigh -}}
+  {{- $tierHigh = $modelTierHigh -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-pro-preview") -}}
+  {{- $tierHigh = "gemini-3.1-pro-preview" -}}
+{{- else if $highCandidate -}}
+  {{- $tierHigh = $highCandidate -}}
+{{- end -}}
+{{- $tierMax := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.max (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.max))) -}}
+  {{- $tierMax = printf "%v" $.Values.routing.tiers.max -}}
+{{- else if $modelTierMax -}}
+  {{- $tierMax = $modelTierMax -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "claude-sonnet-4-6") -}}
+  {{- $tierMax = "claude-sonnet-4-6" -}}
+{{- else if $maxCandidate -}}
+  {{- $tierMax = $maxCandidate -}}
+{{- end }}
+tier.low={{ $tierLow }}
+tier.medium={{ $tierMedium }}
+tier.high={{ $tierHigh }}
+tier.max={{ $tierMax }}
+{{- $taskCoding := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.coding (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.coding))) -}}
+  {{- $taskCoding = printf "%v" $.Values.routing.tasks.coding -}}
+{{- end -}}
+{{- $taskReasoning := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.reasoning (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.reasoning))) -}}
+  {{- $taskReasoning = printf "%v" $.Values.routing.tasks.reasoning -}}
+{{- end -}}
+{{- $taskCreativeWriting := $tierMax -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.creative_writing (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.creative_writing))) -}}
+  {{- $taskCreativeWriting = printf "%v" $.Values.routing.tasks.creative_writing -}}
+{{- end -}}
+{{- $taskSummarization := $tierLow -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.summarization (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.summarization))) -}}
+  {{- $taskSummarization = printf "%v" $.Values.routing.tasks.summarization -}}
+{{- end -}}
+{{- $taskExtraction := $tierLow -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.extraction (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.extraction))) -}}
+  {{- $taskExtraction = printf "%v" $.Values.routing.tasks.extraction -}}
+{{- end -}}
+{{- $taskSimpleChat := $tierMedium -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.simple_chat (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.simple_chat))) -}}
+  {{- $taskSimpleChat = printf "%v" $.Values.routing.tasks.simple_chat -}}
+{{- end }}
+task.coding={{ $taskCoding }}
+task.reasoning={{ $taskReasoning }}
+task.creative_writing={{ $taskCreativeWriting }}
+task.summarization={{ $taskSummarization }}
+task.extraction={{ $taskExtraction }}
+task.simple_chat={{ $taskSimpleChat }}
+{{- $classifierModel := $geminiLiteCandidate | default $firstGeminiModel | default "gemini-3.1-flash-lite" -}}
 {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.classifier_model -}}
-  {{- $classifierModel = $.Values.features.llm_judge.classifier_model -}}
-{{- else if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.classifier_model -}}
-  {{- $classifierModel = $.Values.routing.tasks.classifier_model -}}
+  {{- $classifierModel = printf "%v" $.Values.features.llm_judge.classifier_model -}}
+{{- else if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.classifier_model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.classifier_model))) -}}
+  {{- $classifierModel = printf "%v" $.Values.routing.tasks.classifier_model -}}
+{{- end -}}
+{{- $judgeLoc := "global" -}}
+{{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.location -}}
+  {{- $judgeLoc = printf "%v" $.Values.features.llm_judge.location -}}
+{{- else if hasKey $regionMap $classifierModel -}}
+  {{- $judgeLoc = get $regionMap $classifierModel -}}
+{{- else if and $.Values.defaults $.Values.defaults.region -}}
+  {{- $judgeLoc = printf "%v" $.Values.defaults.region -}}
 {{- end }}
 task.classifier_model={{ $classifierModel }}
 judge.model={{ $classifierModel }}
-judge.location={{ if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.location }}{{ $.Values.features.llm_judge.location }}{{ else if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
+judge.location={{ $judgeLoc }}
 
 # ==============================================================================
 # SECTION 3: BACKWARD COMPATIBILITY ALIASES & REWRITES
 # ==============================================================================
 {{- if and $.Values.routing $.Values.routing.aliases }}
 {{- range $alias, $target := $.Values.routing.aliases }}
-alias.{{ $alias | replace ":" "\\:" }}={{ $target }}
+{{- $targetStr := printf "%v" $target }}
+{{- if or (empty $catalogMap) (hasKey $catalogMap $targetStr) }}
+alias.{{ (printf "%v" $alias) | replace ":" "\\:" }}={{ $targetStr }}
+{{- end }}
 {{- end }}
 {{- end }}
 
@@ -59,58 +205,59 @@ alias.{{ $alias | replace ":" "\\:" }}={{ $target }}
 # SECTION 4: ACTIVE MODEL DEFINITIONS (METADATA, REGIONS & CUSTOM URLS)
 # ==============================================================================
 {{- range $.Values.models }}
+{{- $mKey := (printf "%v" .name) | replace ":" "\\:" }}
 # --- {{ .displayName | default .name }} ---
-{{ .name }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
-{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
-{{ .name }}.endpoint={{ .endpoint | default .region | default "global" }}
-{{ .name }}.model={{ .region | default "global" }}
-{{ .name }}.format={{ .format | default "gemini" }}
-{{ .name }}.display_name={{ .displayName | default .name }}
+{{ $mKey }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
+{{ $mKey }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
+{{ $mKey }}.endpoint={{ .endpoint | default .region | default "global" }}
+{{ $mKey }}.model={{ .region | default "global" }}
+{{ $mKey }}.format={{ .format | default "gemini" }}
+{{ $mKey }}.display_name={{ .displayName | default .name }}
 
 {{- if .created_at }}
-{{ .name }}.created_at={{ .created_at }}
+{{ $mKey }}.created_at={{ .created_at }}
 {{- end }}
 {{- if .custom_url }}
-{{ .name }}.url={{ .custom_url }}
+{{ $mKey }}.url={{ .custom_url }}
 {{- end }}
 {{- if .upstream_model }}
-{{ .name }}.upstream_model={{ .upstream_model }}
+{{ $mKey }}.upstream_model={{ .upstream_model }}
 {{- end }}
 {{- if .openai_org_id }}
-{{ .name }}.openai_org_id={{ .openai_org_id }}
+{{ $mKey }}.openai_org_id={{ .openai_org_id }}
 {{- end }}
 {{- if .openai_project_id }}
-{{ .name }}.openai_project_id={{ .openai_project_id }}
+{{ $mKey }}.openai_project_id={{ .openai_project_id }}
 {{- end }}
 {{- if .anthropic_version }}
-{{ .name }}.anthropic_version={{ .anthropic_version }}
+{{ $mKey }}.anthropic_version={{ .anthropic_version }}
 {{- end }}
 {{- if .anthropic_beta }}
-{{ .name }}.anthropic_beta={{ .anthropic_beta }}
+{{ $mKey }}.anthropic_beta={{ .anthropic_beta }}
 {{- end }}
 {{- if .auth }}
 {{- if .auth.type }}
-{{ .name }}.auth_type={{ .auth.type }}
+{{ $mKey }}.auth_type={{ .auth.type }}
 {{- end }}
 {{- if .auth.header_name }}
-{{ .name }}.auth_header={{ .auth.header_name }}
+{{ $mKey }}.auth_header={{ .auth.header_name }}
 {{- end }}
 {{- if .auth.token_ref }}
-{{ .name }}.auth_token_ref={{ .auth.token_ref }}
+{{ $mKey }}.auth_token_ref={{ .auth.token_ref }}
 {{- end }}
 {{- if .auth.token }}
-{{ .name }}.auth_token={{ .auth.token }}
+{{ $mKey }}.auth_token={{ .auth.token }}
 {{- end }}
 {{- end }}
 {{- if .model_armor }}
 {{- if .model_armor.template }}
-{{ .name }}.model_armor_template={{ .model_armor.template }}
+{{ $mKey }}.model_armor_template={{ .model_armor.template }}
 {{- end }}
 {{- if .model_armor.request_template }}
-{{ .name }}.model_armor_request_template={{ .model_armor.request_template }}
+{{ $mKey }}.model_armor_request_template={{ .model_armor.request_template }}
 {{- end }}
 {{- if .model_armor.response_template }}
-{{ .name }}.model_armor_response_template={{ .model_armor.response_template }}
+{{ $mKey }}.model_armor_response_template={{ .model_armor.response_template }}
 {{- end }}
 {{- end }}
 
@@ -123,6 +270,9 @@ default_claude.endpoint=us-east5
 default_claude.model=us-east5
 default_openai.endpoint=global
 default_openai.model=us
+{{- if and $.Values.defaults (hasKey $.Values.defaults "auto_fallback") }}
+default.auto_fallback={{ $.Values.defaults.auto_fallback }}
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -141,20 +291,21 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
 {{- if .pricing }}
-{{ .name }}.input_rate_per_m={{ .pricing.input_rate | default 0 }}
-{{ .name }}.output_rate_per_m={{ .pricing.output_rate | default 0 }}
-{{ .name }}.input_rate={{ .pricing.input_rate | default 0 }}
-{{ .name }}.output_rate={{ .pricing.output_rate | default 0 }}
+{{- $mPriceKey := (printf "%v" .name) | replace ":" "\\:" }}
+{{ $mPriceKey }}.input_rate_per_m={{ .pricing.input_rate | default 0 }}
+{{ $mPriceKey }}.output_rate_per_m={{ .pricing.output_rate | default 0 }}
+{{ $mPriceKey }}.input_rate={{ .pricing.input_rate | default 0 }}
+{{ $mPriceKey }}.output_rate={{ .pricing.output_rate | default 0 }}
 {{- if .pricing.cache_read_rate }}
-{{ .name }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
-{{ .name }}.cache_read_rate={{ .pricing.cache_read_rate }}
+{{ $mPriceKey }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
+{{ $mPriceKey }}.cache_read_rate={{ .pricing.cache_read_rate }}
 {{- end }}
 {{- if .pricing.cache_write_rate }}
-{{ .name }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
-{{ .name }}.cache_write_rate={{ .pricing.cache_write_rate }}
+{{ $mPriceKey }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
+{{ $mPriceKey }}.cache_write_rate={{ .pricing.cache_write_rate }}
 {{- end }}
 {{- if .pricing.markup }}
-{{ .name }}.markup={{ .pricing.markup }}
+{{ $mPriceKey }}.markup={{ .pricing.markup }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -165,10 +316,31 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
   Dynamically builds config.properties
 */}}
 {{- define "generate_config_properties" -}}
-project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
+{{- $gwProjStr := "" -}}
+{{- if and $.Values.gateway $.Values.gateway.project_id -}}
+  {{- $rawGwProj := printf "%v" $.Values.gateway.project_id -}}
+  {{- if and (ne $rawGwProj "") (ne $rawGwProj "your-gcp-project-id") (ne $rawGwProj "{organization.name}") -}}
+    {{- $gwProjStr = $rawGwProj -}}
+  {{- end -}}
+{{- end -}}
+{{- $maProjStr := $gwProjStr -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id -}}
+  {{- $rawMaProj := printf "%v" $.Values.features.model_armor.project_id -}}
+  {{- if and (ne $rawMaProj "") (ne $rawMaProj "your-gcp-project-id") (ne $rawMaProj "{organization.name}") -}}
+    {{- $maProjStr = $rawMaProj -}}
+  {{- end -}}
+{{- end -}}
+{{- $maLocStr := "us-central1" -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.location -}}
+  {{- $rawMaLoc := printf "%v" $.Values.features.model_armor.location -}}
+  {{- if and (ne $rawMaLoc "") (ne ($rawMaLoc | lower) "global") -}}
+    {{- $maLocStr = $rawMaLoc -}}
+  {{- end -}}
+{{- end -}}
+project_id={{ $gwProjStr }}
 model_armor_enabled={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "enabled") }}{{ $.Values.features.model_armor.enabled }}{{ else }}false{{ end }}
-model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
-model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
+model_armor_project_id={{ $maProjStr }}
+model_armor_location={{ $maLocStr }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
 model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
@@ -198,9 +370,10 @@ openai_project_id={{ $.Values.gateway.openai_project_id }}
 
 # Authentication & Persona-Based Token Import Configuration
 auth_allow_bearer_api_key={{ if hasKey $auth "allow_bearer_api_key" }}{{ $auth.allow_bearer_api_key }}{{ else }}true{{ end }}
+auth_apigee_oauth_enabled={{ if and $auth.apigee_oauth (hasKey $auth.apigee_oauth "enabled") }}{{ $auth.apigee_oauth.enabled }}{{ else }}true{{ end }}
 auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
-auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain }}{{ else }}.system.id.goog{{ end }}
-auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix }}{{ else }}.iam.gserviceaccount.com{{ end }}
+auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ if kindIs "slice" $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain | join "," }}{{ else }}{{ $auth.agent_identity.allowed_trust_domain }}{{ end }}{{ end }}
+auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ if kindIs "slice" $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix | join "," }}{{ else }}{{ $auth.agent_identity.allowed_email_suffix }}{{ end }}{{ else if $gwProjStr }}@{{ $gwProjStr }}.iam.gserviceaccount.com{{ end }}
 auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
 auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
 
@@ -215,6 +388,9 @@ auth_idp_opaque_token_ttl_ms={{ if and $auth.idp_opaque $auth.idp_opaque.token_t
 auth_idp_jwt_enabled={{ if and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") }}{{ $auth.idp_jwt.enabled }}{{ else }}false{{ end }}
 auth_idp_jwt_jwks_uri={{ if and $auth.idp_jwt $auth.idp_jwt.jwks_uri }}{{ $auth.idp_jwt.jwks_uri }}{{ else }}https://idp.example.com/oauth2/v1/keys{{ end }}
 auth_idp_jwt_issuer={{ if and $auth.idp_jwt $auth.idp_jwt.issuer }}{{ $auth.idp_jwt.issuer }}{{ else }}https://idp.example.com{{ end }}
+{{- if and $auth.idp_jwt $auth.idp_jwt.audience }}
+auth_idp_jwt_audience={{ if kindIs "slice" $auth.idp_jwt.audience }}{{ $auth.idp_jwt.audience | join "," }}{{ else }}{{ $auth.idp_jwt.audience }}{{ end }}
+{{- end }}
 auth_idp_jwt_user_claim={{ if and $auth.idp_jwt $auth.idp_jwt.user_claim }}{{ $auth.idp_jwt.user_claim }}{{ else }}email{{ end }}
 auth_idp_jwt_persona_claim={{ if and $auth.idp_jwt $auth.idp_jwt.persona_claim }}{{ $auth.idp_jwt.persona_claim }}{{ else }}role{{ end }}
 auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $auth.idp_jwt.team_claim }}{{ else }}department{{ end }}
@@ -226,19 +402,22 @@ auth_idp_jwt_token_ttl_ms={{ if and $auth.idp_jwt $auth.idp_jwt.token_ttl_ms }}{
 auth_default_client_id={{ $defaultClientId }}
 {{- end }}
 {{- $personas := dict }}
-{{- if $.Values.personas }}
+{{- if and $.Values.personas (kindIs "map" $.Values.personas) }}
 {{- $personas = $.Values.personas }}
-{{- else if $auth.personas }}
+{{- else if and $auth.personas (kindIs "map" $auth.personas) }}
 {{- $personas = $auth.personas }}
 {{- end }}
-{{- if $personas }}
 {{- $pNames := list -}}
-{{- range $pName, $_ := $personas -}}
-  {{- $pNames = append $pNames $pName -}}
+{{- range $pName, $pVal := $personas -}}
+  {{- if kindIs "map" $pVal -}}
+    {{- $pNames = append $pNames $pName -}}
+  {{- end -}}
 {{- end }}
+{{- if gt (len $pNames) 0 }}
 auth_personas_list={{ $pNames | sortAlpha | join "," }}
 auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
 {{- range $pName, $pCfg := $personas }}
+{{- if kindIs "map" $pCfg }}
 persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
 persona.{{ $pName }}.client_id={{ $pCfg.client_id | default $defaultClientId }}
 {{- if or $pCfg.display_name $pCfg.displayName }}
@@ -364,6 +543,7 @@ model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor_request_t
 model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor_response_template }}
 {{- end }}
 {{- end }}
+{{- end }}
 {{- else }}
 auth_personas_list=knowledge-worker,developer,it,agent
 auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
@@ -376,8 +556,9 @@ persona.it.client_id={{ $defaultClientId }}
 persona.agent.match_claims=agent,service-account,automation
 persona.agent.client_id={{ $defaultClientId }}
 {{- end }}
-{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas }}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas (kindIs "map" $.Values.features.model_armor.personas) }}
 {{- range $maPersona, $maCfg := $.Values.features.model_armor.personas }}
+{{- if kindIs "map" $maCfg }}
 {{- if $maCfg.template }}
 model_armor.persona.{{ $maPersona }}.template={{ $maCfg.template }}
 {{- end }}
@@ -386,6 +567,7 @@ model_armor.persona.{{ $maPersona }}.request_template={{ $maCfg.request_template
 {{- end }}
 {{- if $maCfg.response_template }}
 model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_template }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -478,25 +660,37 @@ buffer_size=50
   Renders the unified 4-option Auth & Persona Token Import PreFlow steps
 */}}
 {{- define "auth_preflow_steps" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $apigeeOauthEnabled := true -}}
+{{- if and $auth.apigee_oauth (hasKey $auth.apigee_oauth "enabled") -}}
+  {{- $apigeeOauthEnabled = ne (printf "%v" $auth.apigee_oauth.enabled) "false" -}}
+{{- end -}}
 - Step:
     Name: JS-extract-auth-credentials
 - Step:
     Condition: '(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")'
     Name: VA-ApiKey
+{{- if $apigeeOauthEnabled }}
 - Step:
     Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")'
     Name: OA-VerifyAccessToken
+{{- end }}
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
     Name: SC-VerifyAgentToken
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
     Name: SC-VerifyIdpOpaqueToken
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
     Name: VJ-VerifyIdpJwt
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
     Name: JS-resolve-auth-persona
 - Step:
     Condition: 'auth_ready_to_import = "true"'
@@ -568,6 +762,56 @@ buffer_size=50
     -Data: {{ include "generate_extract_expressions_properties" . | b64enc }}
 {{- end -}}
 
+{{- define "callout_abort_faultrule" -}}
+- FaultRule:
+    .name: callout-abort
+    -Data:
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Name: AM-CustomError
+      - Condition: callout_aborted = "true"
+{{- end -}}
+
+{{- define "default_fault_rule" -}}
+- DefaultFaultRule:
+    .name: default-fault-cleanup
+    -Data:
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+          Name: JS-inject-deidentified-finding
+      - Step:
+          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+          Name: AM-CustomError
+{{- end -}}
+
+{{- define "default_fault_rule_map" -}}
+DefaultFaultRule:
+  .name: default-fault-cleanup
+  -Data:
+    {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+    - Step:
+        Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+        Name: RQ-ReleaseConcurrencySlot
+    {{- end }}
+    - Step:
+        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+        Name: JS-inject-deidentified-finding
+    - Step:
+        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+        Name: AM-CustomError
+{{- end -}}
+
 {{- define "blank" -}}{{- end -}}
+
+
 
 

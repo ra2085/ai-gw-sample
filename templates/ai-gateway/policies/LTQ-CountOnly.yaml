@@ -20,4 +20,4 @@ LLMTokenQuota:
   Distributed: true
   Synchronous: true
   LLMTokenUsageSource: '{primary_quota_usage}'
-  LLMModelSource: '{model}'
+  LLMModelSource: '{quota_model_bucket}'

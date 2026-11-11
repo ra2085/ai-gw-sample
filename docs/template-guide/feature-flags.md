@@ -9,22 +9,23 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | Feature Toggle | Default | Purpose | Guide |
 | :--- | :---: | :--- | :--- |
 | **`features.auth.enabled`** | `true` | Authenticates callers (API Keys, Corporate SSO, GCP Agents, OAuth) and maps them to **AI Products**. | [AI Products & Auth](../architecture/security.md) |
-| **`features.quotas.enabled`** | `true` | Enforces rolling token allowances and per-model limits defined on your **AI Products**. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.auth.apigee_oauth.enabled`** | `true` | Enables native Apigee OAuth 2.0 bearer token verification (`OA-VerifyAccessToken`). | [AI Products & Auth](../architecture/security.md) |
+| **`features.quotas.enabled`** | `true` | Enforces rolling token or Virtual USD Spend Wallet allowances defined on your **AI Products**. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.quotas.secondary_window.enabled`** | `false` | Adds a second rolling window for **Shared Team Budgets** or 7-day weekly caps. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.burst.enabled`** | `false` | Smooths sudden request-per-second/minute spikes per user or agent. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
-| **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and checks prepaid balances. | [Quotas & Cost Control](../architecture/monetization.md) |
-| **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
-| **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) for fallback chains (`"models": [...]`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
-| **`features.model_armor.enabled`** | `true` | Screens prompts and responses for PII, secrets, and prompt injection via GCP Model Armor. | [Smart Routing & Safety](../architecture/routing.md) |
-| **`features.cors.enabled`** | `true` | Adds CORS headers and `OPTIONS` preflight support for browser-based applications. | [`values.yaml` Reference](configuration.md) |
+| **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and cost telemetry headers. | [Quotas & Cost Control](../architecture/monetization.md) |
+| **`features.monetization.enforce_apigee_wallet`** | `false` | Opt-in: enforces native Apigee Monetization Add-on developer billing wallets (`MLC-EnforceMonetizationLimits`). | [Quotas & Cost Control](../architecture/monetization.md) |
+| **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based and task-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.model_armor.enabled`** | `false` | Opt-in: screens prompts and responses for PII, secrets, and prompt injection via regional GCP Model Armor templates. | [Smart Routing & Safety](../architecture/routing.md) |
 
 ---
 
 ## Minimal vs. Full Enterprise Feature Configuration
 
 === "Minimal (Default Quickstart)"
-    If you omit the `features:` block in `values.yaml`, sensible defaults are applied automatically. To disable optional external dependencies (like Model Armor or Invoice-Accurate Cost Attribution) during initial testing:
+    If you omit the `features:` block in `values.yaml`, sensible defaults (`auth`, `quotas`, `monetization` cost attribution, `llm_judge`, and `circuit_breaker`) are enabled automatically while external add-ons (`model_armor` and `enforce_apigee_wallet`) stay disabled until provisioned. To disable cost calculation or the LLM Judge explicitly:
 
     ```yaml
     features:
@@ -41,27 +42,35 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
     ```
 
 === "Full Enterprise Governance"
-    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, Fallback Chains with Rolling-Window Circuit Breaker, and Model Armor:
+    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, Fallback Chains with Rolling-Window Circuit Breaker, and regional Model Armor:
 
     ```yaml
     features:
       auth:
         enabled: true
-        allow_x_api_key_alias: true
-        oauth:
+        allow_bearer_api_key: true
+        apigee_oauth:
           enabled: true
         agent_identity:
           enabled: true
+          allowed_trust_domain: "agents.global.org-123456789012.system.id.goog"
+          allowed_email_suffix: "@your-gcp-project-id.iam.gserviceaccount.com"
         idp_jwt:
           enabled: true
           jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
+          issuer: "https://accounts.google.com"
+          persona_claim: "groups"
+        default_persona: "developer"
         personas:
-          claim_name: "groups"
-          default_persona: "developer-default"
-          mappings:
-            "ai-gateway-leads": "lead-ai-engineer:DEMO_KEY_LEAD_PERSONA"
-            "ai-gateway-PowerUsers": "power-developer:DEMO_KEY_POWER_PERSONA"
-            "default": "developer-default:DEMO_KEY_DEFAULT_PERSONA"
+          lead-ai-engineer:
+            match_claims: ["ai-gateway-leads", "lead-*"]
+            client_id: "DEMO_KEY_LEAD_PERSONA"
+          power-developer:
+            match_claims: ["ai-gateway-power-users", "swe-*"]
+            client_id: "DEMO_KEY_POWER_PERSONA"
+          developer:
+            match_claims: ["developer", "engineering"]
+            client_id: "DEMO_KEY_DEFAULT_PERSONA"
 
       quotas:
         enabled: true
@@ -84,6 +93,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       monetization:
         enabled: true
+        enforce_apigee_wallet: false
         default_currency: "USD"
         default_markup: 1.0
 
@@ -105,9 +115,9 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       circuit_breaker:
         enabled: true
-        failure_threshold: 3
-        interval: 1
-        time_unit: "minute"
+        error_threshold: 3
+        window_interval: 1
+        window_unit: "minute"
     ```
 
 

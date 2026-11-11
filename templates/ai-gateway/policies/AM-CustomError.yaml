@@ -5,7 +5,14 @@ AssignMessage:
   DisplayName: AM-CustomError
   Properties: {}
   Set:
-    StatusCode: 403
+    Headers:
+      Header:
+        .name: Content-Type
+        -Data: application/json
+    Payload:
+      .contentType: application/json
+      -Data: '{auth_error_payload}'
+    StatusCode: '{auth_error_status}'
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

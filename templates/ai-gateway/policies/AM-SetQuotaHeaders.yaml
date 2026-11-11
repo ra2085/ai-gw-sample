@@ -17,7 +17,7 @@ AssignMessage:
       - Header:
           .name: x-quota-unit
           -Data: '{primary_quota_mode}'
-      {{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window $.Values.features.quotas.secondary_window.enabled }}
+      {{- if and (or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false")) $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (eq (printf "%v" $.Values.features.quotas.secondary_window.enabled) "true") }}
       - Header:
           .name: x-quota-secondary-allowed
           -Data: '{ratelimit.LTQ-SecondaryEnforceOnly.allowed.count}'

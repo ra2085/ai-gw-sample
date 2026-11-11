@@ -9,14 +9,23 @@ Every API transaction processed by the AI Gateway emits standardized observabili
 ```http
 HTTP/1.1 200 OK
 Content-Type: application/json
-# 1. Routing & Identity Attribution
-X-Gateway-Requested-Model: auto:judge
+# 1. Routing, Safety & Identity Attribution
+X-Gateway-Requested-Model: auto:judge:high
 X-Gateway-Routed-Model: gemini-3.1-pro-preview
 X-Gateway-Cost-Tier: high
-X-Gateway-Auth-Method: idp_jwt
-X-Gateway-User-Id: alice@corp.com
-X-Gateway-Persona: lead-ai-engineer
-X-Gateway-Team: eng-ml
+X-Gateway-Fallback-Model: gemini-3.1-flash-lite
+X-Gateway-Fallback-Triggered: false
+X-Gateway-Circuit-Breaker: CLOSED
+X-Gateway-Judge-Task: coding
+X-Gateway-Judge-Complexity: 8
+X-Gateway-Judge-Tier: high
+X-Gateway-Model-Armor-Request-Template: ai-gw-template
+X-Gateway-Model-Armor-Response-Template: ai-gw-template
+X-Gateway-Model-Armor-Source: global_default
+X-Gateway-Auth-Source: google_iam
+X-Gateway-Identity-User: alice@corp.com
+X-Gateway-Identity-Persona: lead-ai-engineer
+X-Gateway-Identity-Team: eng-ml
 
 # 2. Multi-Bucket Token & Micro-Cost Telemetry
 X-Gateway-Prompt-Tokens: 2000
@@ -24,19 +33,27 @@ X-Gateway-Uncached-Prompt-Tokens: 500
 X-Gateway-Cache-Read-Tokens: 1500
 X-Gateway-Cache-Write-Tokens: 0
 X-Gateway-Completion-Tokens: 350
-X-Gateway-Reasoning-Tokens: 150
+X-Gateway-Thinking-Tokens: 150
 X-Gateway-Total-Tokens: 2500
 X-Gateway-Prompt-Cost-USD: 0.001094
+X-Gateway-Cache-Read-Cost-USD: 0.000300
 X-Gateway-Completion-Cost-USD: 0.005000
 X-Gateway-Total-Cost-USD: 0.006094
+X-Gateway-Total-Cost-Micro-USD: 6094
 X-Gateway-Cost-Currency: USD
 
 # 3. Quota & Rate Limit Headers
-X-RateLimit-Tier-Mode: team_budget
-X-RateLimit-Limit-Tokens: 500000
-X-RateLimit-Remaining-Tokens: 497500
-X-RateLimit-Limit-Tokens-Secondary: 10000000
-X-RateLimit-Remaining-Tokens-Secondary: 9842000
+x-quota-unit: tokens
+x-quota-allowed: 500000
+x-quota-used: 2500
+x-quota-available: 497500
+x-quota-secondary-allowed: 10000000
+x-quota-secondary-used: 158000
+x-quota-secondary-available: 9842000
+x-ratelimit-burst-rate: 600pm
+x-ratelimit-concurrency-limit: 20
+x-ratelimit-concurrency-active: 1
+x-ratelimit-concurrency-available: 19
 ```
 
 ---

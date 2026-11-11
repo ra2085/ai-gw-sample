@@ -27,12 +27,22 @@ models:
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
-    region: "global"
+    region: "us-east5"
     pricing:
       input_rate: 1.000
       output_rate: 5.000
       cache_read_rate: 0.100
       cache_write_rate: 1.250
+
+  - name: "text-embedding-005"
+    displayName: "Vertex AI Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "openai"
+    region: "us-central1"
+    pricing:
+      input_rate: 0.025
+      output_rate: 0.000
 
   # Bonus: Custom Self-Hosted Model in 4 lines!
   - name: "my-vllm-model"

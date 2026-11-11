@@ -14,7 +14,7 @@ Apigee provides an **out-of-the-box [Looker Studio (Data Studio) Integration](ht
 | **2. Prompt Caching & Context Optimization ROI** | FinOps, AI Platform Architects, Tooling Leads | • How many dollars (`Prompt Cache Net Savings ($)`) and what percentage of input spend (`Prompt Cache Cost Reduction (%)`) did prompt caching save across `Claude Code`, `Codex`, and agent loops?<br>• What is our **Prompt Cache Hit Rate (%)** by team, AI Product, and model?<br>• Which teams or workloads are sending large uncached prompts (`dc_uncached_prompt_token_count`) and missing out on 75%–90% cache discounts? | `dc_prompt_token_count`, `dc_uncached_prompt_token_count`, `dc_cache_read_token_count`, `dc_cache_write_token_count`, `dc_tx_prompt_cost_usd`, `dc_tx_uncached_prompt_cost_usd`, `dc_tx_cache_read_cost_usd`, `dc_tx_cache_write_cost_usd` |
 | **3. Team & Peer Consumption** | Engineering Managers, Team Leads | • How is our shared team token/USD budget (`dc_identity_team`) distributed among peers (`dc_identity_user_id`)?<br>• Which peers are heavily using frontier reasoning models (`claude-opus-4-6`, `gemini-3.1-pro-preview`) vs. fast models (`gemini-3.5-flash`), and who has the highest prompt cache efficiency? | `dc_identity_team`, `dc_identity_user_id`, `dc_model`, `dc_total_token_count`, `dc_cache_read_token_count`, `dc_thinking_token_count`, `dc_tx_cost_usd` |
 | **4. Personal Developer Self-Service View** | Individual Engineers & Consumers | • How many tokens and dollars have I consumed today/this week across uncached, cached, and reasoning buckets?<br>• How much of my personal quota/budget did prompt caching save me?<br>• How often am I hitting my quota limits (`429`) and what is my latency by model? | `dc_identity_user_id` *(filtered by viewer email)*, `dc_model`, `dc_total_token_count`, `dc_cache_read_token_count`, `dc_tx_cost_usd`, `response_status_code` |
-| **5. Security, Guardrails & Quota Governance** | Security (CISO), Platform Operations | • How many prompts were blocked by **Model Armor** (`HTTP 400`)?<br>• Which users, agents, or teams are being throttled by **Token / USD Spend Quotas** (`HTTP 429`)?<br>• Who needs a temporary quota exception? | `response_status_code`, `dc_identity_user_id`, `dc_identity_team`, `dc_identity_persona`, `proxy_basepath`, `dc_requested_model` |
+| **5. Security, Guardrails & Quota Governance** | Security (CISO), Platform Operations | • How many prompts or responses were blocked by **Model Armor** (`HTTP 403`)?<br>• Which users, agents, or teams are being throttled by **Token / USD Spend Quotas** (`HTTP 429`)?<br>• Who needs a temporary quota exception? | `response_status_code`, `dc_identity_user_id`, `dc_identity_team`, `dc_identity_persona`, `proxy_basepath`, `dc_requested_model` |
 | **6. Smart Router & LLM Judge ROI** | AI Platform Architects, FinOps | • How much money did `"model": "auto:judge"` and cost tiers save compared to routing all calls to `gemini-3.1-pro-preview` or `gpt-5.4`?<br>• How much did response latency improve? | `dc_requested_model`, `dc_model`, `dc_tx_cost_usd`, `Average Latency` (`total_response_time`) |
 
 ---
@@ -84,7 +84,7 @@ When you click **Connect** in Step 1, Looker Studio opens the **Data Source Fiel
 | **`Model Provider`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_model), "gemini|text-embedding-005") THEN "Google Vertex AI (Gemini)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "claude") THEN "Anthropic (Claude)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "gpt|o3|text-embedding-3") THEN "OpenAI" WHEN REGEXP_CONTAINS(LOWER(dc_model), "llama|mistral") THEN "Vertex Model Garden (MaaS)" ELSE "Custom / Self-Hosted" END` |
 | **`Routing Strategy`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_requested_model), "auto") THEN "Auto-Routed (Smart Router / Judge)" ELSE "Direct Model Request" END` |
 | **`Cost Tier`** | `CASE WHEN REGEXP_CONTAINS(LOWER(dc_model), "flash-lite") THEN "Tier Low (Gemini 3.1 Flash-Lite)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "flash") THEN "Tier Medium (Gemini 3.5 Flash)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "pro") THEN "Tier High (Gemini 3.1 Pro)" WHEN REGEXP_CONTAINS(LOWER(dc_model), "claude|gpt-5") THEN "Tier Max (Claude 4.6 / GPT-5.4)" ELSE "Other / Custom" END` |
-| **`Enforcement Status`** | `CASE WHEN response_status_code = 200 THEN "Allowed (200 OK)" WHEN response_status_code = 429 THEN "Throttled: Quota / Rate Limit (429)" WHEN response_status_code = 400 THEN "Blocked: Model Armor / Validation (400)" WHEN response_status_code IN (401, 403) THEN "Rejected: Unauthorized (401/403)" ELSE "Other / Provider Error" END` |
+| **`Enforcement Status`** | `CASE WHEN response_status_code = 200 THEN "Allowed (200 OK)" WHEN response_status_code = 429 THEN "Throttled: Quota / Rate Limit (429)" WHEN response_status_code = 403 THEN "Blocked: Model Armor / Forbidden (403)" WHEN response_status_code = 401 THEN "Rejected: Unauthorized (401)" WHEN response_status_code = 400 THEN "Client Validation Error (400)" ELSE "Other / Provider Error" END` |
 
 #### Calculated Metrics (Click `+ Add a field` &rarr; `Add calculated field`)
 
@@ -189,16 +189,16 @@ Select a tab below to build each page in your Looker Studio report (click **Page
 
 === "5. Security, Guardrails & Quota Governance"
 
-    **Goal:** Audit every enforcement action taken by the AI Gateway: **Model Armor content safety blocks (`HTTP 400`)**, **Token & USD Quota throttling (`HTTP 429`)**, and **Unauthorized calls (`HTTP 401/403`)**.
+    **Goal:** Audit every enforcement action taken by the AI Gateway: **Model Armor content safety blocks (`HTTP 403`)**, **Token & USD Quota throttling (`HTTP 429`)**, and **Unauthorized / Unauthenticated calls (`HTTP 401`)**.
 
     | Chart / Widget | Menu Action (`Insert > ...`) | Dimension(s) | Metric(s) | Setup Panel Configuration |
     | :--- | :--- | :--- | :--- | :--- |
     | **Quota Throttled Calls (429)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `429` |
-    | **Model Armor / Safety Blocks (400)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `400` |
-    | **Unauthorized Attempts (401/403)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `In` &rarr; `401, 403` |
+    | **Model Armor / Forbidden Blocks (403)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `403` |
+    | **Unauthorized Attempts (401)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `401` |
     | **Enforcement Trend Over Time** | `Insert > Stacked column chart` | `Time` *(or `Date`)* | `Traffic` | **Breakdown Dimension:** `Enforcement Status` |
     | **Users & Teams Hitting Quotas (429)** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `dc_identity_persona`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `429`. Identifies who may need a temporary `quota_override_tokens` or `quota_override_spend_micro_usd` exception |
-    | **Model Armor Blocks by User & Endpoint** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `proxy_basepath`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `400` |
+    | **Model Armor Blocks by User & Endpoint (403)** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `proxy_basepath`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `403` |
 
 === "6. Smart Router & LLM Judge ROI"
 
@@ -298,12 +298,12 @@ curl -s -X POST "https://apigee.googleapis.com/v1/organizations/$PROJECT_ID/repo
     "filter": "(apiproxy eq '\''ai-gateway'\'')"
   }'
 
-# 5. Security (Model Armor 400s) & Quota Enforcement (429s)
+# 5. Security (Model Armor 403s) & Quota Enforcement (429s)
 curl -s -X POST "https://apigee.googleapis.com/v1/organizations/$PROJECT_ID/reports" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "displayName": "5. AI Gateway - Security & Quota Enforcement (400 / 429)",
+    "displayName": "5. AI Gateway - Security & Quota Enforcement (403 / 429)",
     "chartType": "column",
     "metrics": [
       {"name": "message_count", "function": "sum"}

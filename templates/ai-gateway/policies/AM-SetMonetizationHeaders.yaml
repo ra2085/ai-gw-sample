@@ -9,6 +9,9 @@ AssignMessage:
           .name: X-Gateway-Prompt-Tokens
           -Data: '{prompt_tokens}'
       - Header:
+          .name: X-Gateway-Uncached-Prompt-Tokens
+          -Data: '{uncached_prompt_tokens}'
+      - Header:
           .name: X-Gateway-Cache-Read-Tokens
           -Data: '{cache_read_tokens}'
       - Header:

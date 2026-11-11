@@ -75,7 +75,7 @@ apigee-go-gen --help
 
 Verify installation:
 ```bash
-apigeecli version
+apigeecli --version
 ```
 
 
@@ -159,23 +159,33 @@ done
 
 ---
 
-## 6. Provision AI Products & Persona Apps (`scripts/sync-personas.sh`)
+## 6. Copy Starter Configuration & Provision AI Products (`scripts/sync-personas.sh`)
 
 To enforce per-model token counters (`LLMTokenQuota`) and authenticate API Keys or SSO/Agent tokens, Apigee requires **API Products** (configured with `llmOperationGroup` model quotas), a **Developer**, and **Developer Apps** (`client_id` / Consumer Keys).
 
-Instead of creating these manually in the Apigee UI, run [`scripts/sync-personas.sh`](https://github.com/ra2085/ai-gw-sample/blob/main/scripts/sync-personas.sh) to automatically provision or update them directly from your `values.yaml`:
+First, copy one of the starter templates to a local `./values.yaml` (gitignored) and set your `gateway.project_id` (and optionally `gateway.name` or your `models` list), then run [`scripts/sync-personas.sh`](https://github.com/ra2085/ai-gw-sample/blob/main/scripts/sync-personas.sh):
 
 ```bash
-# 1. Preview the API Products (llmOperationGroup) & Developer Apps (zero network calls)
+# 1. Select one of the following starter configurations:
+
+# Option A: Copy the minimal 15-line Quickstart configuration
+cp ./templates/ai-gateway/values.quickstart.yaml ./values.yaml
+
+# Option B: Or copy the full Enterprise configuration (Model Armor, LLM Judge, SSO, Spend Wallets)
+cp ./templates/ai-gateway/values.yaml ./values.yaml
+
+# 2. Update ./values.yaml (set at least gateway.project_id to "$PROJECT_ID", and customize gateway.name / models as needed)
+
+# 3. Preview the API Products (llmOperationGroup) & Developer Apps (zero network calls)
 bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
     --dry-run
 
-# 2. Create or update the Developer, API Products, and Developer Apps in Apigee
+# 4. Create or update the Developer, API Products, and Developer Apps in Apigee
 bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV"
 ```

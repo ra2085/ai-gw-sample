@@ -33,6 +33,8 @@ APIGEE_ORG="${APIGEE_ORG:-}"
 APIGEE_ENV="${APIGEE_ENV:-qa}"
 PROXY_NAME=""
 DEV_EMAIL=""
+TOKEN="${APIGEE_TOKEN:-}"
+EXISTING_PRODUCTS_DIR=""
 DRY_RUN=false
 
 usage() {
@@ -43,14 +45,16 @@ Safely creates or updates (upserts) Apigee API Products and Developer Apps
 for each audience/persona defined in values.yaml.
 
 Options:
-  --values <path>      Path to values.yaml (default: templates/ai-gateway/values.yaml)
-  --bundle <path>      Path to already-rendered apiproxy directory (optional)
-  --org <org_id>       Apigee Organization / GCP Project ID (or set APIGEE_ORG)
-  --env <env_name>     Apigee Environment name (default: qa, or set APIGEE_ENV)
-  --proxy <name>       API Proxy name override (defaults to gateway.name in values.yaml)
-  --developer <email>  Developer email owning Persona Apps (default: ai-gateway-personas@<org>.iam.gserviceaccount.com)
-  --dry-run            Preview all API Product & App upserts without calling Apigee APIs
-  -h, --help           Show this help message
+  --values <path>                 Path to values.yaml (default: templates/ai-gateway/values.yaml)
+  --bundle <path>                 Path to already-rendered apiproxy directory (optional)
+  --org <org_id>                  Apigee Organization / GCP Project ID (or set APIGEE_ORG)
+  --env <env_name>                Apigee Environment name (default: qa, or set APIGEE_ENV)
+  --proxy <name>                  API Proxy name override (defaults to gateway.name in values.yaml)
+  --developer <email>             Developer email owning Persona Apps (default: ai-gateway-personas@<org>.iam.gserviceaccount.com)
+  --token <bearer_token>          OAuth access token override (or set APIGEE_TOKEN)
+  --existing-products-dir <path>  Optional directory of existing <product>.json snapshots for offline merge preview
+  --dry-run                       Preview all API Product & App upserts without calling Apigee APIs
+  -h, --help                      Show this help message
 EOF
 }
 
@@ -78,6 +82,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --developer)
             DEV_EMAIL="$2"
+            shift 2
+            ;;
+        --token)
+            TOKEN="$2"
+            shift 2
+            ;;
+        --existing-products-dir)
+            EXISTING_PRODUCTS_DIR="$2"
             shift 2
             ;;
         --dry-run)
@@ -181,11 +193,12 @@ echo -e "  Personas     : ${GREEN}${PERSONAS_CSV}${NC}"
 echo -e "  Mode         : $(if $DRY_RUN; then echo -e "${YELLOW}DRY-RUN (no changes will be applied)${NC}"; else echo -e "${GREEN}LIVE UPSERT (additive create-or-update)${NC}"; fi)"
 echo -e "${BLUE}======================================================================${NC}"
 
-TOKEN=""
 if ! $DRY_RUN; then
-    TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
     if [[ -z "$TOKEN" ]]; then
-        echo -e "${RED}✗ Error: Unable to obtain gcloud access token. Run 'gcloud auth login' or use --dry-run.${NC}" >&2
+        TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+    fi
+    if [[ -z "$TOKEN" ]]; then
+        echo -e "${RED}✗ Error: Unable to obtain OAuth access token. Pass --token <token>, run 'gcloud auth login', or use --dry-run.${NC}" >&2
         exit 1
     fi
 fi
@@ -227,8 +240,14 @@ for raw_p in "${PERSONAS_ARRAY[@]}"; do
 
     PRODUCT_NAME="${PROXY_NAME}-${p}"
     APP_NAME="${PROXY_NAME}-${p}-app"
-    DISPLAY_NAME=$(get_prop "persona.${p}.display_name")
-    [[ -z "$DISPLAY_NAME" ]] && DISPLAY_NAME="${PROXY_NAME} Persona: ${p}"
+    RAW_DISPLAY_NAME=$(get_prop "persona.${p}.display_name")
+    HAS_EXPLICIT_DISPLAY="false"
+    if [[ -n "$RAW_DISPLAY_NAME" ]]; then
+        DISPLAY_NAME="$RAW_DISPLAY_NAME"
+        HAS_EXPLICIT_DISPLAY="true"
+    else
+        DISPLAY_NAME="${PROXY_NAME} Persona: ${p}"
+    fi
 
     MATCH_CLAIMS=$(get_prop "persona.${p}.match_claims")
     MODELS=$(get_prop "persona.${p}.models")
@@ -251,24 +270,51 @@ for raw_p in "${PERSONAS_ARRAY[@]}"; do
 
     echo -e "\n${YELLOW}Step 2.${p}: Syncing Persona '${p}' -> Product '${PRODUCT_NAME}' & App '${APP_NAME}'...${NC}"
 
-    # Build API Product JSON with Apigee X llmOperationGroup.operationConfigs
-    # expanding concrete catalog models (and aliases) so LTQ-EnforceOnly / LTQ-CountOnly
-    # token or micro-USD counters track every authorized model and per-model quota accurately.
-    PRODUCT_JSON=$(python3 - "$PRODUCT_NAME" "$DISPLAY_NAME" "$APIGEE_ENV" "$PROXY_NAME" "$p" \
+    PROD_CHECK_FILE="$TMP_WORK_DIR/prod_check_${p}.json"
+    PROD_RESP_FILE="$TMP_WORK_DIR/prod_resp_${p}.json"
+    APP_RESP_FILE="$TMP_WORK_DIR/app_resp_${p}.json"
+    PROD_STATUS="404"
+    EXISTING_PROD_PATH=""
+
+    if $DRY_RUN; then
+        if [[ -n "$EXISTING_PRODUCTS_DIR" && -f "$EXISTING_PRODUCTS_DIR/${PRODUCT_NAME}.json" ]]; then
+            EXISTING_PROD_PATH="$EXISTING_PRODUCTS_DIR/${PRODUCT_NAME}.json"
+            PROD_STATUS="200"
+        fi
+    else
+        PROD_STATUS=$(curl -s -o "$PROD_CHECK_FILE" -w "%{http_code}" \
+            -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/apiproducts/${PRODUCT_NAME}")
+        if [[ "$PROD_STATUS" == "200" && -s "$PROD_CHECK_FILE" ]]; then
+            EXISTING_PROD_PATH="$PROD_CHECK_FILE"
+        fi
+    fi
+
+    # Build (or non-destructively deep-merge) API Product JSON with Apigee X
+    # llmOperationGroup.operationConfigs while preserving existing environments,
+    # non-target proxy operations, top-level metadata, and unmanaged attributes.
+    PRODUCT_JSON=$(python3 - "$PRODUCT_NAME" "$DISPLAY_NAME" "$HAS_EXPLICIT_DISPLAY" "$APIGEE_ENV" "$PROXY_NAME" "$p" \
         "$MATCH_CLAIMS" "$MODELS" "$QUOTA_MODE" "$QUOTA_LIMIT" "$QUOTA_LIMIT_USD" "$QUOTA_INTERVAL" "$QUOTA_UNIT" \
         "$PER_MODEL_QUOTAS" "$TEAM_MODE" "$TEAM_LIMIT" "$TEAM_LIMIT_USD" "$TEAM_INTERVAL" "$TEAM_UNIT" "$BURST_RATE" "$CONCURRENCY" \
-        "$MA_TMPL" "$MA_REQ" "$MA_RESP" "$MODEL_PROPS" <<'PYEOF'
+        "$MA_TMPL" "$MA_REQ" "$MA_RESP" "$MODEL_PROPS" "$EXISTING_PROD_PATH" <<'PYEOF'
+import copy
 import fnmatch
 import json
 import os
 import sys
 
 (
-    product_name, display_name, env_name, proxy_name, persona,
+    product_name, display_name, has_explicit_display, env_name, proxy_name, persona,
     match_claims, models, q_mode, q_limit, q_limit_usd, q_interval, q_unit,
     per_model_quotas, t_mode, t_limit, t_limit_usd, t_interval, t_unit, burst, concurrency,
-    ma_tmpl, ma_req, ma_resp, model_props_path
-) = sys.argv[1:25]
+    ma_tmpl, ma_req, ma_resp, model_props_path, existing_prod_path
+) = sys.argv[1:27]
+
+existing_product = None
+if existing_prod_path and os.path.isfile(existing_prod_path):
+    with open(existing_prod_path, "r", encoding="utf-8") as ef:
+        loaded = json.load(ef)
+        if isinstance(loaded, dict) and loaded.get("name"):
+            existing_product = loaded
 
 # 1. Parse models.catalog and alias.* from model_locations.properties
 catalog_models = []
@@ -304,11 +350,6 @@ if per_model_quotas:
                 per_model_map[mk] = mv
 
 # 3. Expand persona models for RBAC (allowed_models) and build full catalog list for llmOperationGroup
-# Note: llmOperationGroup.operationConfigs includes all catalog models + aliases (matching live
-# ai-product-gold/silver/bronze in cymbal-ai) so that if an exception unlocks a frontier model
-# for a user on a restricted persona (or circuit-breaker fallback triggers), LTQ-EnforceOnly
-# and LTQ-CountOnly still have a valid token counter bucket for {model}, while JS-resolve-model-location
-# and models_endpoint.js enforce the persona/exception RBAC allowlist before LTQ-EnforceOnly runs.
 raw_patterns = [p.strip() for p in models.split(",") if p.strip()] if models else []
 unrestricted = (not raw_patterns) or ("*" in raw_patterns)
 
@@ -369,62 +410,145 @@ for m_id in counter_models:
         }
     })
 
-attrs = [{"name": "access", "value": "public"}, {"name": "persona", "value": persona}]
-if match_claims:
-    attrs.append({"name": "match_claims", "value": match_claims})
-if models:
-    # Store concrete expanded model names (or '*' if unrestricted)
-    expanded_attr_models = "*" if unrestricted else ",".join(rbac_allowed)
-    attrs.append({"name": "allowed_models", "value": expanded_attr_models})
-if q_mode:
-    attrs.append({"name": "quota_mode", "value": q_mode})
-if q_limit_usd:
-    attrs.append({"name": "quota_limit_usd", "value": q_limit_usd})
-if per_model_quotas:
-    attrs.append({"name": "per_model_quotas", "value": per_model_quotas})
-if t_mode:
-    attrs.append({"name": "team_quota_mode", "value": t_mode})
-    attrs.append({"name": "secondary_quota_mode", "value": t_mode})
-if t_limit_usd:
-    attrs.append({"name": "team_quota_limit_usd", "value": t_limit_usd})
-    attrs.append({"name": "secondary_quota_limit_usd", "value": t_limit_usd})
-if t_limit:
-    attrs.append({"name": "team_quota_limit", "value": t_limit})
-    attrs.append({"name": "secondary_quota_limit", "value": t_limit})
-    attrs.append({"name": "secondary_quota_scope", "value": "team"})
-if t_interval:
-    attrs.append({"name": "team_quota_interval", "value": t_interval})
-    attrs.append({"name": "secondary_quota_interval", "value": t_interval})
-if t_unit:
-    attrs.append({"name": "team_quota_unit", "value": t_unit})
-    attrs.append({"name": "secondary_quota_unit", "value": t_unit})
-if burst:
-    attrs.append({"name": "burst_rate", "value": burst})
-if concurrency:
-    attrs.append({"name": "concurrency_limit", "value": concurrency})
-if ma_tmpl:
-    attrs.append({"name": "model_armor_template", "value": ma_tmpl})
-if ma_req:
-    attrs.append({"name": "model_armor_request_template", "value": ma_req})
-if ma_resp:
-    attrs.append({"name": "model_armor_response_template", "value": ma_resp})
-
-product = {
-    "name": product_name,
-    "displayName": display_name,
-    "approvalType": "auto",
-    "environments": [env_name],
-    "llmOperationGroup": {
-        "operationConfigs": llm_op_configs
-    },
-    "attributes": attrs
+MANAGED_ATTR_KEYS = {
+    "persona",
+    "match_claims",
+    "allowed_models",
+    "quota_mode",
+    "quota_limit_usd",
+    "per_model_quotas",
+    "team_quota_mode",
+    "secondary_quota_mode",
+    "team_quota_limit_usd",
+    "secondary_quota_limit_usd",
+    "team_quota_limit",
+    "secondary_quota_limit",
+    "secondary_quota_scope",
+    "team_quota_interval",
+    "secondary_quota_interval",
+    "team_quota_unit",
+    "secondary_quota_unit",
+    "burst_rate",
+    "concurrency_limit",
+    "model_armor_template",
+    "model_armor_request_template",
+    "model_armor_response_template",
 }
 
-if q_limit:
-    product["quota"] = str(q_limit)
-    product["quotaInterval"] = eff_interval
-    product["quotaTimeUnit"] = eff_unit
-    product["quotaCounterScope"] = "PROXY"
+managed_attrs = [{"name": "persona", "value": persona}]
+if match_claims:
+    managed_attrs.append({"name": "match_claims", "value": match_claims})
+if models:
+    expanded_attr_models = "*" if unrestricted else ",".join(rbac_allowed)
+    managed_attrs.append({"name": "allowed_models", "value": expanded_attr_models})
+if q_mode:
+    managed_attrs.append({"name": "quota_mode", "value": q_mode})
+if q_limit_usd:
+    managed_attrs.append({"name": "quota_limit_usd", "value": q_limit_usd})
+if per_model_quotas:
+    managed_attrs.append({"name": "per_model_quotas", "value": per_model_quotas})
+if t_mode:
+    managed_attrs.append({"name": "team_quota_mode", "value": t_mode})
+    managed_attrs.append({"name": "secondary_quota_mode", "value": t_mode})
+if t_limit_usd:
+    managed_attrs.append({"name": "team_quota_limit_usd", "value": t_limit_usd})
+    managed_attrs.append({"name": "secondary_quota_limit_usd", "value": t_limit_usd})
+if t_limit:
+    managed_attrs.append({"name": "team_quota_limit", "value": t_limit})
+    managed_attrs.append({"name": "secondary_quota_limit", "value": t_limit})
+    managed_attrs.append({"name": "secondary_quota_scope", "value": "team"})
+if t_interval:
+    managed_attrs.append({"name": "team_quota_interval", "value": t_interval})
+    managed_attrs.append({"name": "secondary_quota_interval", "value": t_interval})
+if t_unit:
+    managed_attrs.append({"name": "team_quota_unit", "value": t_unit})
+    managed_attrs.append({"name": "secondary_quota_unit", "value": t_unit})
+if burst:
+    managed_attrs.append({"name": "burst_rate", "value": burst})
+if concurrency:
+    managed_attrs.append({"name": "concurrency_limit", "value": concurrency})
+if ma_tmpl:
+    managed_attrs.append({"name": "model_armor_template", "value": ma_tmpl})
+if ma_req:
+    managed_attrs.append({"name": "model_armor_request_template", "value": ma_req})
+if ma_resp:
+    managed_attrs.append({"name": "model_armor_response_template", "value": ma_resp})
+
+if existing_product:
+    product = copy.deepcopy(existing_product)
+    # Strip read-only Apigee server timestamps
+    product.pop("createdAt", None)
+    product.pop("lastModifiedAt", None)
+
+    product["name"] = product_name
+    if has_explicit_display == "true" or not product.get("displayName"):
+        product["displayName"] = display_name
+    if not product.get("approvalType"):
+        product["approvalType"] = "auto"
+
+    # Union environments (preserving existing environment promotions)
+    merged_envs = []
+    for e in product.get("environments", []) or []:
+        if isinstance(e, str) and e.strip() and e.strip() not in merged_envs:
+            merged_envs.append(e.strip())
+    if env_name and env_name.strip() and env_name.strip() not in merged_envs:
+        merged_envs.append(env_name.strip())
+    product["environments"] = merged_envs
+
+    # Preserve llmOperationGroup configs belonging to other proxies (apiSource != proxy_name)
+    existing_llm_group = product.get("llmOperationGroup")
+    if not isinstance(existing_llm_group, dict):
+        existing_llm_group = {}
+    else:
+        existing_llm_group = copy.deepcopy(existing_llm_group)
+    preserved_llm_ops = [
+        cfg for cfg in (existing_llm_group.get("operationConfigs") or [])
+        if isinstance(cfg, dict) and cfg.get("apiSource") != proxy_name
+    ]
+    existing_llm_group["operationConfigs"] = preserved_llm_ops + llm_op_configs
+    product["llmOperationGroup"] = existing_llm_group
+
+    # Merge attributes: preserve existing access (or default to public) + all unmanaged custom attributes
+    existing_attrs = product.get("attributes") or []
+    existing_access = None
+    unmanaged_attrs = []
+    for attr in existing_attrs:
+        if not isinstance(attr, dict) or not attr.get("name"):
+            continue
+        a_name = attr["name"]
+        if a_name == "access":
+            existing_access = attr
+        elif a_name not in MANAGED_ATTR_KEYS:
+            unmanaged_attrs.append(attr)
+
+    access_attr = existing_access if existing_access is not None else {"name": "access", "value": "public"}
+    product["attributes"] = [access_attr] + unmanaged_attrs + managed_attrs
+
+    if q_limit:
+        product["quota"] = str(q_limit)
+        product["quotaInterval"] = eff_interval
+        product["quotaTimeUnit"] = eff_unit
+        product["quotaCounterScope"] = "PROXY"
+    else:
+        for q_field in ("quota", "quotaInterval", "quotaTimeUnit", "quotaCounterScope"):
+            product.pop(q_field, None)
+else:
+    attrs = [{"name": "access", "value": "public"}] + managed_attrs
+    product = {
+        "name": product_name,
+        "displayName": display_name,
+        "approvalType": "auto",
+        "environments": [env_name] if env_name else [],
+        "llmOperationGroup": {
+            "operationConfigs": llm_op_configs
+        },
+        "attributes": attrs
+    }
+    if q_limit:
+        product["quota"] = str(q_limit)
+        product["quotaInterval"] = eff_interval
+        product["quotaTimeUnit"] = eff_unit
+        product["quotaCounterScope"] = "PROXY"
 
 print(json.dumps(product, indent=2))
 PYEOF
@@ -436,12 +560,6 @@ PYEOF
         echo -e "  ${BLUE}[DRY-RUN]${NC} Upsert Developer App ${APP_NAME} (preserving existing consumerKey if present)"
         CLIENT_ID="<dry-run-${p}-client-id>"
     else
-        PROD_CHECK_FILE="$TMP_WORK_DIR/prod_check_${p}.json"
-        PROD_RESP_FILE="$TMP_WORK_DIR/prod_resp_${p}.json"
-        APP_RESP_FILE="$TMP_WORK_DIR/app_resp_${p}.json"
-
-        PROD_STATUS=$(curl -s -o "$PROD_CHECK_FILE" -w "%{http_code}" \
-            -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/apiproducts/${PRODUCT_NAME}")
         if [[ "$PROD_STATUS" == "200" ]]; then
             UPD_STATUS=$(curl -s -o "$PROD_RESP_FILE" -w "%{http_code}" \
                 -X PUT "${APIGEE_API}/apiproducts/${PRODUCT_NAME}" \
@@ -449,7 +567,7 @@ PYEOF
                 -H "Content-Type: application/json" \
                 -d "$PRODUCT_JSON")
             if [[ "$UPD_STATUS" == "200" ]]; then
-                echo -e "  ${GREEN}✓ Updated existing API Product ${PRODUCT_NAME} in-place.${NC}"
+                echo -e "  ${GREEN}✓ Merged & updated existing API Product ${PRODUCT_NAME} in-place (preserved environments, custom attributes & external operations).${NC}"
             else
                 echo -e "  ${RED}✗ Failed to update API Product ${PRODUCT_NAME} (HTTP ${UPD_STATUS}): $(cat "$PROD_RESP_FILE")${NC}" >&2
                 exit 1
@@ -468,19 +586,21 @@ PYEOF
             fi
         fi
 
-        # Safe Upsert of Developer App (preserving existing consumerKey)
+        # Safe Upsert of Developer App (preserving existing consumerKey & existing product bindings)
         APP_STATUS=$(curl -s -o "$APP_RESP_FILE" -w "%{http_code}" \
             -H "Authorization: Bearer ${TOKEN}" "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}")
         if [[ "$APP_STATUS" == "200" ]]; then
             CLIENT_ID=$(python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); print(d.get("credentials",[{}])[0].get("consumerKey",""))' "$APP_RESP_FILE")
+            ALREADY_BOUND=$(python3 -c 'import json, sys; d=json.load(open(sys.argv[1])); p=sys.argv[2]; prods=d.get("credentials",[{}])[0].get("apiProducts",[]); print("true" if any(isinstance(x,dict) and x.get("apiproduct")==p for x in prods) else "false")' "$APP_RESP_FILE" "$PRODUCT_NAME")
             echo -e "  ${GREEN}✓ Preserved existing Developer App ${APP_NAME} (client_id: ${CLIENT_ID:0:8}...).${NC}"
-            # Ensure PRODUCT_NAME is associated with the existing credential
-            ASSOC_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"apiProducts": [sys.argv[1]]}))' "$PRODUCT_NAME")
-            curl -s -o /dev/null -X POST \
-                "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}" \
-                -H "Authorization: Bearer ${TOKEN}" \
-                -H "Content-Type: application/json" \
-                -d "$ASSOC_PAYLOAD" || true
+            if [[ "$ALREADY_BOUND" != "true" ]]; then
+                ASSOC_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"apiProducts": [sys.argv[1]]}))' "$PRODUCT_NAME")
+                curl -s -o /dev/null -X POST \
+                    "${APIGEE_API}/developers/${DEV_EMAIL}/apps/${APP_NAME}/keys/${CLIENT_ID}" \
+                    -H "Authorization: Bearer ${TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "$ASSOC_PAYLOAD" || true
+            fi
         else
             APP_CREATE_PAYLOAD=$(python3 -c 'import json, sys; print(json.dumps({"name": sys.argv[1], "apiProducts": [sys.argv[2]], "attributes": [{"name": "persona", "value": sys.argv[3]}]}))' "$APP_NAME" "$PRODUCT_NAME" "$p")
             APP_CRT_STATUS=$(curl -s -o "$APP_RESP_FILE" -w "%{http_code}" \

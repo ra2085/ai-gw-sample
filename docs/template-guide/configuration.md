@@ -27,18 +27,18 @@ features:
   # 1. Invoice-Accurate Cost Attribution
   monetization:
     enabled: true                                     # Calculates exact USD cost (cached & reasoning tokens)
-    enforce_apigee_wallet: true                       # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer wallets
+    enforce_apigee_wallet: false                      # Opt-in: set true ONLY when Apigee Monetization Add-on + funded developer wallets exist
     default_currency: "USD"                           # Default currency code
     default_markup: 1.0                               # Default markup multiplier
 
-  # 2. GCP Model Armor Context-Aware Prompt & Response Sanitization
+  # 2. GCP Model Armor Context-Aware Prompt & Response Sanitization (Opt-In)
   model_armor:
-    enabled: true                                     # Screens prompts and responses via Google Cloud Model Armor
-    project_id: "your-gcp-project-id"                 # Default GCP Project hosting Model Armor templates
-    location: "us-central1"                           # Default GCP Region hosting Model Armor templates
-    template: "standard-safety-template"              # Global fallback template ID
-    request_template: "standard-request-template"     # Optional: global default template for user prompts (or "none")
-    response_template: "standard-response-template"   # Optional: global default template for model responses (or "none")
+    enabled: false                                    # Opt-in: set true once regional Model Armor templates are provisioned
+    project_id: "your-gcp-project-id"                 # Default GCP Project hosting Model Armor templates (falls back to Apigee org name)
+    location: "us-central1"                           # Regional GCP endpoint hosting Model Armor templates (must NOT be "global")
+    template: "ai-gw-template"                        # Global fallback template ID
+    request_template: "ai-gw-template"                # Optional: global default template for user prompts (or "none")
+    response_template: "ai-gw-template"               # Optional: global default template for model responses (or "none")
     identity_rules:                                   # Optional: Tier 2 identity/team '*' glob overrides (ranked by specificity)
       - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
         request_template: "strict-pci-dlp-template"
@@ -49,7 +49,7 @@ features:
 
   # 3. Real-Time LLM Judge Classifier (auto:judge)
   llm_judge:
-    enabled: true                                     # Enables automatic prompt complexity classification
+    enabled: true                                     # Enables automatic prompt complexity & task classification
     classifier_model: "gemini-3.1-flash-lite"         # Fast model used for classification
 
   # 4. Rolling-Window Quotas & Team Budgets (Tokens or Virtual USD Spend Wallets)
@@ -87,21 +87,17 @@ features:
     window_interval: 1                                # Rolling error budget window duration
     window_unit: "minute"                             # Rolling window unit (minute | hour | day)
 
-  # 7. CORS Support
-  cors:
-    enabled: true                                     # Emits CORS headers & handles OPTIONS preflight
-
-  # 8. Authentication & AI Product Persona Mapping
+  # 7. Authentication & AI Product Persona Mapping
   auth:
     enabled: true                                     # Enforces zero-passthrough authentication
     allow_bearer_api_key: true                        # Option 1: Allows passing Apigee API Key via x-apikey, x-api-key, or Authorization: Bearer <api-key>
     apigee_oauth:
-      enabled: true                                   # Option 2: Native Apigee OAuth 2.0 tokens (<1ms L1 cache)
+      enabled: true                                   # Option 2: Native Apigee OAuth 2.0 tokens (<1ms L1 cache); set false to skip OA-VerifyAccessToken
     agent_identity:
       enabled: true                                   # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      allowed_trust_domain: ".system.id.goog"         # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
-      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
+      allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Vertex Agent Engine SPIFFE tokens (comma-separated or glob)
+      allowed_email_suffix: "@my-project.iam.gserviceaccount.com" # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com" (comma-separated or glob)
       persona: "agent"                                # Default persona tier for verified GCP agents
       token_ttl_ms: 3600000
     idp_opaque:
@@ -116,6 +112,7 @@ features:
       enabled: true                                   # Option 4b: Corporate SSO JWTs (JWKS signature verification)
       jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
       issuer: "https://login.corp.example.com"
+      # audience: "api://ai-gateway,cli-client-id"    # Optional single/comma-separated/glob JWT 'aud' allowlist (omitted by default)
       user_claim: "email"
       persona_claim: "role"
       team_claim: "department"
@@ -241,7 +238,7 @@ endpoints:
 
 ## 4. Models Catalog (`models`)
 
-Each entry in `models` registers a model in `/v1/models`, configures its backend routing target, and defines its token pricing for **Invoice-Accurate Cost Attribution**:
+Each entry in `models` registers a model in `/v1/models`, configures its backend routing target, and defines its token pricing for **Invoice-Accurate Cost Attribution**. Note on default model precedence: if top-level `defaults.model` is set, it takes precedence; when `defaults:` is omitted (such as in `values.quickstart.yaml`), `is_default: true` on a catalog entry selects `default.model`:
 
 ```yaml
 models:
@@ -252,6 +249,7 @@ models:
     target: "gemini"                                  # gemini | claude | gemini-openai-compat | openai-custom
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
     region: "global"                                  # Vertex AI region: global | us-east5 | us-central1 | europe-west1
+    is_default: false                                 # Used when top-level `defaults.model` is omitted
     created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
       request_template: "frontier-request-template"

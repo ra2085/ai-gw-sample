@@ -3,6 +3,7 @@
 
 var rawContent = context.getVariable("response.event.current.content");
 var targetName = context.getVariable("route.target") || context.getVariable("target.name") || context.getVariable("route_target");
+var routeFormat = context.getVariable("route_format") || "";
 var bufferSize = context.getVariable("buffer_size");
 if (!bufferSize) {
     bufferSize = parseInt(context.getVariable("propertyset.extract_expressions.buffer_size")) || 10;
@@ -183,7 +184,21 @@ if (rawContent && dataIdx !== -1) {
                 }
 
                 var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
-                eventText = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) ? (candidate.content.parts[0].text || "") : "";
+                var nativeParts = (candidate && candidate.content && Array.isArray(candidate.content.parts))
+                                  ? candidate.content.parts
+                                  : null;
+                if (nativeParts) {
+                    var nativeTxtArr = [];
+                    for (var npIdx = 0; npIdx < nativeParts.length; npIdx++) {
+                        var np = nativeParts[npIdx];
+                        if (np && np.thought !== true && np.text) {
+                            nativeTxtArr.push(np.text);
+                        }
+                    }
+                    eventText = nativeTxtArr.join("");
+                } else {
+                    eventText = "";
+                }
                 finishReason = candidate ? candidate.finishReason : null;
                 if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
                     isFinished = true;
@@ -220,8 +235,11 @@ if (rawContent && dataIdx !== -1) {
                 // -------------------------------------------------------------
                 var modelName = rawModel || "claude";
 
-                if (targetName === "claude" || parsedEvent.type) {
+                if (!parsedEvent.choices && !parsedEvent.candidates && (targetName === "claude" || routeFormat === "anthropic" || parsedEvent.type)) {
                     // Target is Anthropic Claude -> Translate Anthropic SSE chunk to OpenAI SSE!
+                    var anthToolStart = null;
+                    var anthToolJsonDelta = null;
+                    var anthStopReason = null;
                     if (parsedEvent.type === "message_start") {
                         var msgStartUsage = (parsedEvent.message && parsedEvent.message.usage) ? parsedEvent.message.usage : {};
                         if (msgStartUsage.input_tokens !== undefined) {
@@ -236,8 +254,18 @@ if (rawContent && dataIdx !== -1) {
                         if (parsedEvent.message && parsedEvent.message.id) {
                             context.setVariable("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
                         }
+                    } else if (parsedEvent.type === "content_block_start") {
+                        if (parsedEvent.content_block && parsedEvent.content_block.type === "tool_use") {
+                            anthToolStart = parsedEvent.content_block;
+                        }
                     } else if (parsedEvent.type === "content_block_delta") {
-                        eventText = (parsedEvent.delta && parsedEvent.delta.text) ? parsedEvent.delta.text : "";
+                        if (parsedEvent.delta) {
+                            if (parsedEvent.delta.type === "input_json_delta" && parsedEvent.delta.partial_json !== undefined) {
+                                anthToolJsonDelta = parsedEvent.delta.partial_json;
+                            } else if (parsedEvent.delta.type !== "thinking_delta" && parsedEvent.delta.text) {
+                                eventText = parsedEvent.delta.text;
+                            }
+                        }
                     } else if (parsedEvent.type === "message_delta") {
                         if (parsedEvent.usage) {
                             if (parsedEvent.usage.input_tokens !== undefined) {
@@ -253,20 +281,25 @@ if (rawContent && dataIdx !== -1) {
                                 context.setVariable("saved_stream_completion_tokens", String(parsedEvent.usage.output_tokens));
                             }
                         }
-                        finishReason = "stop";
+                        anthStopReason = (parsedEvent.delta && parsedEvent.delta.stop_reason) ? parsedEvent.delta.stop_reason : null;
+                        finishReason = anthStopReason === "tool_use" ? "tool_calls" : (anthStopReason === "max_tokens" ? "length" : "stop");
                         isFinished = true;
                     } else if (parsedEvent.type === "message_stop") {
                         isFinished = true;
                     }
 
                     var msgId = context.getVariable("stream_msg_id") || ("chatcmpl-" + Math.random().toString(36).substring(2, 12));
+                    var oaiToolIdxRaw = (anthToolStart || anthToolJsonDelta !== null || isFinished)
+                                        ? context.getVariable("oai_tool_idx")
+                                        : null;
                     var outputChunks = [];
+                    var nowSec = Math.floor(Date.now() / 1000);
 
                     if (eventText) {
                         var openAiChunk = {
                             id: msgId,
                             object: "chat.completion.chunk",
-                            created: Math.floor(Date.now() / 1000),
+                            created: nowSec,
                             model: modelName,
                             choices: [
                                 {
@@ -281,17 +314,79 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("data: " + JSON.stringify(openAiChunk));
                     }
 
-                    if (isFinished) {
+                    if (anthToolStart) {
+                        var nextToolIdx = oaiToolIdxRaw !== null ? (parseInt(oaiToolIdxRaw, 10) + 1) : 0;
+                        context.setVariable("oai_tool_idx", String(nextToolIdx));
+                        oaiToolIdxRaw = String(nextToolIdx);
+                        var tcStartChunk = {
+                            id: msgId,
+                            object: "chat.completion.chunk",
+                            created: nowSec,
+                            model: modelName,
+                            choices: [
+                                {
+                                    index: 0,
+                                    delta: {
+                                        tool_calls: [
+                                            {
+                                                index: nextToolIdx,
+                                                id: anthToolStart.id || ("call_" + Math.random().toString(36).substring(2, 12)),
+                                                type: "function",
+                                                function: {
+                                                    name: anthToolStart.name || "tool",
+                                                    arguments: ""
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    finish_reason: null
+                                }
+                            ]
+                        };
+                        outputChunks.push("data: " + JSON.stringify(tcStartChunk));
+                    } else if (anthToolJsonDelta !== null) {
+                        var activeToolIdx = oaiToolIdxRaw !== null ? parseInt(oaiToolIdxRaw, 10) : 0;
+                        var tcDeltaChunk = {
+                            id: msgId,
+                            object: "chat.completion.chunk",
+                            created: nowSec,
+                            model: modelName,
+                            choices: [
+                                {
+                                    index: 0,
+                                    delta: {
+                                        tool_calls: [
+                                            {
+                                                index: activeToolIdx,
+                                                function: {
+                                                    arguments: anthToolJsonDelta
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    finish_reason: null
+                                }
+                            ]
+                        };
+                        outputChunks.push("data: " + JSON.stringify(tcDeltaChunk));
+                    }
+
+                    if (parsedEvent.type === "message_delta" || (parsedEvent.type === "message_stop" && !context.getVariable("oai_sent_final"))) {
+                        context.setVariable("oai_sent_final", "true");
+                        var finalFinishReason = finishReason || (oaiToolIdxRaw !== null ? "tool_calls" : "stop");
+                        if (oaiToolIdxRaw !== null && finalFinishReason === "stop") {
+                            finalFinishReason = "tool_calls";
+                        }
                         var finalChunk = {
                             id: msgId,
                             object: "chat.completion.chunk",
-                            created: Math.floor(Date.now() / 1000),
+                            created: nowSec,
                             model: modelName,
                             choices: [
                                 {
                                     index: 0,
                                     delta: {},
-                                    finish_reason: "stop"
+                                    finish_reason: finalFinishReason
                                 }
                             ]
                         };
@@ -304,6 +399,95 @@ if (rawContent && dataIdx !== -1) {
                     } else {
                         context.setVariable("response.event.current.content", "");
                     }
+
+                } else if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini")) {
+                    // Target is Gemini SSE -> Translate Gemini SSE chunk to OpenAI SSE (stripping thought parts)!
+                    if (parsedEvent.usageMetadata) {
+                        var gInT = parsedEvent.usageMetadata.promptTokenCount || 0;
+                        var gCachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
+                        var gOutT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+                        var gThoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+                        if (gInT > 0 || gOutT > 0 || gCachedT > 0 || gThoughtsT > 0) {
+                            context.setVariable("saved_stream_prompt_tokens", String(gInT));
+                            context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, gInT - gCachedT)));
+                            context.setVariable("saved_stream_cached_tokens", String(gCachedT));
+                            context.setVariable("saved_stream_completion_tokens", String(gOutT + gThoughtsT));
+                            context.setVariable("saved_stream_thinking_tokens", String(gThoughtsT));
+                        }
+                    }
+                    var gCand = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+                    var gParts = (gCand && gCand.content && Array.isArray(gCand.content.parts)) ? gCand.content.parts : [];
+                    var gTxtParts = [];
+                    var gFuncCalls = [];
+                    for (var gpIdx = 0; gpIdx < gParts.length; gpIdx++) {
+                        var gp = gParts[gpIdx];
+                        if (!gp || gp.thought === true) {
+                            continue;
+                        }
+                        if (gp.text) {
+                            gTxtParts.push(gp.text);
+                        }
+                        if (gp.functionCall) {
+                            gFuncCalls.push(gp.functionCall);
+                        }
+                    }
+                    eventText = gTxtParts.join("");
+                    finishReason = gCand ? gCand.finishReason : null;
+                    if (finishReason || (gCand === null && parsedEvent.usageMetadata)) {
+                        isFinished = true;
+                    }
+
+                    var gOutChunks = [];
+                    var gNowSec = Math.floor(Date.now() / 1000);
+                    var gMsgId = "chatcmpl-gem";
+                    var gPrevTcIdxStr = (gFuncCalls.length > 0 || isFinished) ? context.getVariable("oai_gem_tool_idx") : null;
+                    var gToolCount = gPrevTcIdxStr !== null ? parseInt(gPrevTcIdxStr, 10) : 0;
+
+                    if (eventText) {
+                        gOutChunks.push("data: " + JSON.stringify({
+                            id: gMsgId,
+                            object: "chat.completion.chunk",
+                            created: gNowSec,
+                            model: modelName,
+                            choices: [{ index: 0, delta: { content: eventText }, finish_reason: null }]
+                        }));
+                    }
+                    if (gFuncCalls.length > 0) {
+                        var oaiDeltaTcs = [];
+                        for (var gfcIdx = 0; gfcIdx < gFuncCalls.length; gfcIdx++) {
+                            var gfc = gFuncCalls[gfcIdx];
+                            oaiDeltaTcs.push({
+                                index: gToolCount,
+                                id: gfc.id || ("call_" + Math.random().toString(36).substring(2, 12)),
+                                type: "function",
+                                function: {
+                                    name: gfc.name || "tool",
+                                    arguments: JSON.stringify(gfc.args || {})
+                                }
+                            });
+                            gToolCount++;
+                        }
+                        context.setVariable("oai_gem_tool_idx", String(gToolCount));
+                        gOutChunks.push("data: " + JSON.stringify({
+                            id: gMsgId,
+                            object: "chat.completion.chunk",
+                            created: gNowSec,
+                            model: modelName,
+                            choices: [{ index: 0, delta: { tool_calls: oaiDeltaTcs }, finish_reason: null }]
+                        }));
+                    }
+                    if (isFinished) {
+                        var gFinish = gToolCount > 0 ? "tool_calls" : (finishReason === "MAX_TOKENS" ? "length" : "stop");
+                        gOutChunks.push("data: " + JSON.stringify({
+                            id: gMsgId,
+                            object: "chat.completion.chunk",
+                            created: gNowSec,
+                            model: modelName,
+                            choices: [{ index: 0, delta: {}, finish_reason: gFinish }]
+                        }));
+                        gOutChunks.push("data: [DONE]");
+                    }
+                    context.setVariable("response.event.current.content", gOutChunks.length > 0 ? (gOutChunks.join("\n\n") + "\n\n") : "");
 
                 } else {
                     if (parsedEvent.usage) {
@@ -362,9 +546,9 @@ if (rawContent && dataIdx !== -1) {
                 // -------------------------------------------------------------
                 var modelName = rawModel || "unknown";
 
-                if (targetName === "claude") {
+                if (targetName === "claude" || routeFormat === "anthropic") {
                     // Target is Native Claude:
-                    if (parsedEvent.delta && parsedEvent.delta.text !== undefined) {
+                    if (parsedEvent.delta && parsedEvent.delta.type !== "thinking_delta" && parsedEvent.delta.text !== undefined) {
                         eventText = parsedEvent.delta.text;
                     } else if (parsedEvent.type === "message_delta") {
                         if (parsedEvent.delta && parsedEvent.delta.stop_reason) {
@@ -402,10 +586,30 @@ if (rawContent && dataIdx !== -1) {
 
                 } else {
                     // Non-Claude target (Gemini or OpenAI): Translate chunks to Claude SSE!
-                    if (targetName === "gemini") {
+                    var streamFuncCalls = [];
+                    if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini" || routeFormat === "gemini")) {
                         var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
-                        var parts = (candidate && candidate.content) ? candidate.content.parts : null;
-                        eventText = (parts && parts[0]) ? (parts[0].text || "") : "";
+                        var parts = (candidate && candidate.content && Array.isArray(candidate.content.parts))
+                                    ? candidate.content.parts
+                                    : null;
+                        if (parts) {
+                            var gemVisibleTexts = [];
+                            for (var pIdx = 0; pIdx < parts.length; pIdx++) {
+                                var pItem = parts[pIdx];
+                                if (!pItem || pItem.thought === true) {
+                                    continue;
+                                }
+                                if (pItem.text) {
+                                    gemVisibleTexts.push(pItem.text);
+                                }
+                                if (pItem.functionCall) {
+                                    streamFuncCalls.push(pItem.functionCall);
+                                }
+                            }
+                            eventText = gemVisibleTexts.join("");
+                        } else {
+                            eventText = "";
+                        }
                         finishReason = candidate ? candidate.finishReason : null;
 
                         if (parsedEvent.usageMetadata) {
@@ -421,7 +625,7 @@ if (rawContent && dataIdx !== -1) {
                                 context.setVariable("saved_stream_thinking_tokens", String(thoughtsT));
                             }
                         }
-                        if (finishReason) {
+                        if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
                             isFinished = true;
                         }
                     } else {
@@ -519,38 +723,44 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(blockDelta));
                     }
 
-                    // 4. Handle streaming functionCall from Gemini or tool_calls from OpenAI
-                    var streamFuncCall = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) 
-                                         ? candidate.content.parts[0].functionCall 
-                                         : null;
+                    // 4. Handle streaming functionCall(s) from Gemini or tool_calls from OpenAI
+                    var prevStreamToolCount = (streamFuncCalls.length > 0 || isFinished)
+                                              ? parseInt(context.getVariable("stream_tool_count") || "0", 10)
+                                              : 0;
                     var openAiToolCalls = (typeof choice !== "undefined" && choice && choice.delta && Array.isArray(choice.delta.tool_calls))
                                           ? choice.delta.tool_calls
                                           : null;
-                    if (streamFuncCall) {
-                        var toolCallId = "call_" + Math.random().toString(36).substring(2, 12);
-                        var toolBlockStart = {
-                            "type": "content_block_start",
-                            "index": 1,
-                            "content_block": {
-                                "type": "tool_use",
-                                "id": toolCallId,
-                                "name": streamFuncCall.name,
-                                "input": {}
-                            }
-                        };
-                        outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(toolBlockStart));
+                    if (streamFuncCalls.length > 0) {
+                        for (var sfcIdx = 0; sfcIdx < streamFuncCalls.length; sfcIdx++) {
+                            var streamFuncCall = streamFuncCalls[sfcIdx];
+                            prevStreamToolCount++;
+                            var gemBlockIdx = prevStreamToolCount;
+                            var toolCallId = streamFuncCall.id || ("toolu_" + Math.random().toString(36).substring(2, 12));
+                            var toolBlockStart = {
+                                "type": "content_block_start",
+                                "index": gemBlockIdx,
+                                "content_block": {
+                                    "type": "tool_use",
+                                    "id": toolCallId,
+                                    "name": streamFuncCall.name,
+                                    "input": {}
+                                }
+                            };
+                            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(toolBlockStart));
 
-                        var toolBlockDelta = {
-                            "type": "content_block_delta",
-                            "index": 1,
-                            "delta": {
-                                "type": "input_json_delta",
-                                "partial_json": JSON.stringify(streamFuncCall.args || {})
-                            }
-                        };
-                        outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(toolBlockDelta));
+                            var toolBlockDelta = {
+                                "type": "content_block_delta",
+                                "index": gemBlockIdx,
+                                "delta": {
+                                    "type": "input_json_delta",
+                                    "partial_json": JSON.stringify(streamFuncCall.args || {})
+                                }
+                            };
+                            outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(toolBlockDelta));
 
-                        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 1 }));
+                            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": gemBlockIdx }));
+                        }
+                        context.setVariable("stream_tool_count", String(prevStreamToolCount));
                         finishReason = "tool_use";
                     } else if (openAiToolCalls && openAiToolCalls.length > 0) {
                         for (var tcIdx = 0; tcIdx < openAiToolCalls.length; tcIdx++) {
@@ -599,7 +809,7 @@ if (rawContent && dataIdx !== -1) {
                         outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify(blockStop));
                         
                         var stopReasonMapped = "end_turn";
-                        if (finishReason === "tool_use" || finishReason === "tool_calls" || streamFuncCall || openToolIdx) {
+                        if (finishReason === "tool_use" || finishReason === "tool_calls" || prevStreamToolCount > 0 || openToolIdx) {
                             stopReasonMapped = "tool_use";
                         } else if (finishReason === "MAX_TOKENS" || finishReason === "length") {
                             stopReasonMapped = "max_tokens";
@@ -670,7 +880,7 @@ if (rawContent && dataIdx !== -1) {
         }
         // If request format is not OpenAI and target is not Claude, clear [DONE] so it's not sent to Claude/Gemini clients
         var reqFmt = context.getVariable("request_format") || "claude";
-        if (reqFmt !== "openai" && targetName !== "claude") {
+        if (reqFmt !== "openai" && targetName !== "claude" && routeFormat !== "anthropic") {
             context.setVariable("response.event.current.content", "");
         }
     }

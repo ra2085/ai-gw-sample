@@ -15,15 +15,15 @@ gateway:
 features:
   monetization:
     enabled: true
-    enforce_apigee_wallet: true            # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer billing wallets
+    enforce_apigee_wallet: false           # Opt-in: set true ONLY when Apigee Monetization Add-on + funded developer wallets are provisioned
     default_currency: "USD"
     default_markup: 1.0
   model_armor:
-    enabled: true
-    location: "global"
-    template: "ai-gateway-filter"               # Global fallback template (used for both request & response unless overridden)
-    request_template: "ai-gateway-filter"       # Default user prompt sanitization template (or "none" to skip request scanning)
-    response_template: "ai-gateway-filter"      # Default model response sanitization template (or "none" to skip response scanning)
+    enabled: false                         # Opt-in: set true once a regional Model Armor template is provisioned in your GCP project
+    location: "us-central1"                # Must be a regional endpoint (e.g., us-central1, europe-west4), not "global"
+    template: "ai-gw-template"             # Global fallback template (used for both request & response unless overridden)
+    request_template: "ai-gw-template"     # Default user prompt sanitization template (or "none" to skip request scanning)
+    response_template: "ai-gw-template"    # Default model response sanitization template (or "none" to skip response scanning)
     # Optional context-aware template enforcement by Persona or Identity/Team glob pattern:
     # personas:
     #   knowledge-worker:
@@ -85,8 +85,6 @@ features:
       limit: 20                            # Fallback max simultaneous in-flight requests per application
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1                       # Dead-man switch window (minutes) to auto-expire leaked slots on client disconnect
-  cors:
-    enabled: true
   auth:
     enabled: true
     allow_bearer_api_key: true             # Option 1: Allow passing Apigee API Key inside Authorization: Bearer <api-key>
@@ -95,8 +93,8 @@ features:
     agent_identity:
       enabled: false                       # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      allowed_trust_domain: ".system.id.goog"          # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
-      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
+      # allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Vertex Agent Engine SPIFFE tokens (comma-separated or glob)
+      # allowed_email_suffix: "@your-gcp-project-id.iam.gserviceaccount.com"  # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com" (same-project SAs only)
       persona: "agent"
       token_ttl_ms: 3600000
     idp_opaque:
@@ -111,6 +109,7 @@ features:
       enabled: false                       # Option 4b: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP JWT
       jwks_uri: "https://idp.example.com/oauth2/v1/keys"
       issuer: "https://idp.example.com"
+      # audience: ""                       # Optional single or comma-separated allowed JWT 'aud' values (omitted by default for multi-client/CLI setups)
       user_claim: "email"
       persona_claim: "role"
       team_claim: "department"
@@ -231,9 +230,10 @@ routing:
   tasks:
     coding: "gemini-3.1-pro-preview"
     reasoning: "gemini-3.1-pro-preview"
+    creative_writing: "claude-sonnet-4-6"
     summarization: "gemini-3.1-flash-lite"
+    extraction: "gemini-3.1-flash-lite"
     simple_chat: "gemini-3.5-flash"
-    classifier_model: "gemini-3.1-flash-lite"
   aliases:
     # Legacy Gemini Aliases
     "gemini-1.5-flash": "gemini-3.5-flash"

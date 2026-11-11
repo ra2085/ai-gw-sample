@@ -29,3 +29,4 @@ mock-servers/
 .agents
 callout
 apiproxy/
+/values.yaml
