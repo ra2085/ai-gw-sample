@@ -221,7 +221,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     features:
       auth:
         enabled: true
-        oauth:
+        apigee_oauth:
           enabled: true
     ```
 
@@ -242,9 +242,10 @@ Because persona settings (`models`, `quota`, `per_model`, `team_budget`, `rate_l
    features:
      auth:
        exceptions:
-         # 1. Individual time-bound quota boost + full model catalog access:
+         # 1. Individual time-bound quota boost + emergency team-budget isolation + full catalog access:
          - match: ["alice@corp.example.com"]
-           quota_limit: 5000000                  # Overrides primary quota AND isolates Alice if her team budget is exhausted
+           quota_limit: 5000000                  # Overrides Alice's individual primary quota cap
+           bypass_team_budget: true              # Isolates Alice so she keeps working even if her shared team budget is exhausted
            expires_at: "2026-12-31T17:00:00Z"    # Automatically reverts to baseline persona quota after this UTC timestamp
            models: ["*"]
 

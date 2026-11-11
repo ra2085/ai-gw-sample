@@ -1,6 +1,7 @@
 # Core Routing & Error Policies
 - {{ include "./policies/AM-CustomError.yaml" . | indent 2 | trim }}
 - {{ include "./policies/AM-DisablePathSuffixCopy.yaml" . | indent 2 | trim }}
+- {{ include "./policies/AM-SanitizeGeminiNativeTarget.yaml" . | indent 2 | trim }}
 - {{ include "./policies/AM-NormalizePathSuffix.yaml" . | indent 2 | trim }}
 - {{ include "./policies/AM-model.yaml" . | indent 2 | trim }}
 - {{ include "./policies/EV-Model.yaml" . | indent 2 | trim }}

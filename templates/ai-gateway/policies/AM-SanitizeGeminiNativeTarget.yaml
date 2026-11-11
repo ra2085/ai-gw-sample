@@ -1,0 +1,32 @@
+AssignMessage:
+  .continueOnError: false
+  .enabled: true
+  .name: AM-SanitizeGeminiNativeTarget
+  DisplayName: AM-SanitizeGeminiNativeTarget
+  Properties: {}
+  Remove:
+    QueryParams:
+      - QueryParam:
+          .name: fields
+      - QueryParam:
+          .name: $fields
+      - QueryParam:
+          .name: prettyPrint
+      - QueryParam:
+          .name: callback
+      - QueryParam:
+          .name: key
+      - QueryParam:
+          .name: apikey
+    Headers:
+      - Header:
+          .name: X-Goog-FieldMask
+      - Header:
+          .name: X-Goog-User-Project
+      - Header:
+          .name: x-goog-api-key
+  IgnoreUnresolvedVariables: true
+  AssignTo:
+    .createNew: false
+    .transport: http
+    .type: request

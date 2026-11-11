@@ -7,6 +7,11 @@ servers:
   - url: https://workshop.iloveapi.management
 security:
   - ApiKeyAuth: []
+  - GoogleApiKeyAuth: []
+  - AnthropicApiKeyAuth: []
+  - AnthropicAltApiKeyAuth: []
+  - AzureApiKeyAuth: []
+  - BearerAuth: []
 paths:
   /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
     post:
@@ -28,6 +33,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -72,6 +93,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -112,6 +149,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -156,6 +209,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -196,6 +265,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -240,6 +325,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -280,6 +381,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -324,6 +441,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -366,6 +499,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -400,6 +549,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -437,6 +602,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -466,6 +647,22 @@ paths:
         - name: modelId
           in: path
           required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
           schema:
             type: string
       requestBody:
@@ -499,6 +696,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -530,6 +743,22 @@ paths:
           required: true
           schema:
             type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -546,6 +775,25 @@ components:
       type: apiKey
       in: header
       name: x-apikey
+    GoogleApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+    AnthropicApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    AnthropicAltApiKeyAuth:
+      type: apiKey
+      in: header
+      name: anthropic-api-key
+    AzureApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+    BearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     GeminiRequest:
       type: object
@@ -830,15 +1078,20 @@ components:
             $ref: '#/components/schemas/GeminiEmbedContentRequest'
     ErrorResponse:
       type: object
+      additionalProperties: true
       properties:
-        fault:
+        error:
           type: object
+          additionalProperties: true
           properties:
-            faultstring:
+            type:
               type: string
-            detail:
-              type: object
-              properties:
-                errorcode:
-                  type: string
-                  example: steps.sanitize.user.prompt.FilterMatched
+              example: invalid_request_error
+            message:
+              type: string
+              example: Request blocked by AI Gateway policy.
+            code:
+              oneOf:
+                - type: integer
+                - type: string
+              example: 403

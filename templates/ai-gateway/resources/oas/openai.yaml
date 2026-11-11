@@ -6,7 +6,12 @@ info:
 servers:
   - url: https://workshop.iloveapi.management
 security:
+  - BearerAuth: []
   - ApiKeyAuth: []
+  - AnthropicApiKeyAuth: []
+  - AnthropicAltApiKeyAuth: []
+  - GoogleApiKeyAuth: []
+  - AzureApiKeyAuth: []
 paths:
   /:
     post:
@@ -14,6 +19,22 @@ paths:
         - OpenAI Completions Format
       summary: Send a chat completion request (OpenAI format)
       description: Sends a chat completion prompt to the Gemini model using standard OpenAI payload formats. Supports both streaming (SSE) and non-streaming responses.
+      parameters:
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: api-version
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -44,10 +65,29 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
     ApiKeyAuth:
       type: apiKey
       in: header
       name: x-apikey
+    AnthropicApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    AnthropicAltApiKeyAuth:
+      type: apiKey
+      in: header
+      name: anthropic-api-key
+    GoogleApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+    AzureApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
   schemas:
     OpenAIRequest:
       type: object
@@ -59,6 +99,17 @@ components:
           type: string
           description: Target model identifier.
           example: gemini-3.1-flash-lite
+        models:
+          type: array
+          description: Optional fallback model array (OpenRouter / AI Gateway convention).
+          items:
+            type: string
+        plugins:
+          type: array
+          description: Optional AI Gateway plugins (e.g. judge, auto-router, task-classifier).
+          items:
+            type: object
+            additionalProperties: true
         stream:
           type: boolean
           description: Enable SSE streaming response.
@@ -179,15 +230,20 @@ components:
               type: integer
     ErrorResponse:
       type: object
+      additionalProperties: true
       properties:
-        fault:
+        error:
           type: object
+          additionalProperties: true
           properties:
-            faultstring:
+            type:
               type: string
-            detail:
-              type: object
-              properties:
-                errorcode:
-                  type: string
-                  example: steps.sanitize.user.prompt.FilterMatched
+              example: invalid_request_error
+            message:
+              type: string
+              example: Request blocked by AI Gateway policy.
+            code:
+              oneOf:
+                - type: integer
+                - type: string
+              example: 403

@@ -2,8 +2,8 @@ openapi: 3.0.3
 info:
   title: AI Gateway API
   description: |
-    Unified Gateway API for accessing Anthropic Claude and Google Gemini models.
-    Supports both Anthropic Claude Messages API format and native Google Gemini Vertex AI format, supporting standard and streaming traffic.
+    Unified Gateway API for accessing Anthropic Claude, Google Gemini, OpenAI, and BYO LLM/Embedding models.
+    Supports Anthropic Claude Messages API, OpenAI Chat Completions & Embeddings, Vertex AI Anthropic (:rawPredict/:streamRawPredict), and native Google Gemini Vertex AI (:generateContent/:streamGenerateContent/:predict/:embedContent/:batchEmbedContents), across both standard JSON and Server-Sent Events (SSE) streaming traffic.
   version: 1.0.0
 servers:
   - url: https://workshop.iloveapi.management
@@ -11,6 +11,9 @@ servers:
 security:
   - ApiKeyHeaderAuth: []
   - ApiKeyAuth: []
+  - AnthropicAltApiKeyAuth: []
+  - GoogleApiKeyAuth: []
+  - AzureApiKeyAuth: []
   - BearerAuth: []
 paths:
   /v1/messages:
@@ -19,6 +22,22 @@ paths:
         - Claude Messages Format
       summary: Send a message to Claude
       description: Sends a prompt to the assistant and receives a response in Claude's messages format.
+      parameters:
+        - name: beta
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -68,8 +87,14 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        '401':
+          description: Unauthorized. Missing or invalid authentication credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized model/persona.
           content:
             application/json:
               schema:
@@ -86,7 +111,23 @@ paths:
       tags:
         - OpenAI Completions Format
       summary: Send a chat completion request (OpenAI format)
-      description: Sends a chat completion prompt to the Gemini model using standard OpenAI payload formats. Supports both streaming (SSE) and non-streaming responses.
+      description: Sends a chat completion prompt using standard OpenAI payload formats (including tool calling, multimodal blocks, developer/tool roles, and reasoning controls). Supports both streaming (SSE) and non-streaming responses.
+      parameters:
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: api-version
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -134,8 +175,14 @@ paths:
             text/event-stream:
               schema:
                 type: string
+        '401':
+          description: Unauthorized. Missing or invalid authentication credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized model/persona.
           content:
             application/json:
               schema:
@@ -153,6 +200,22 @@ paths:
         - OpenAI Completions Format
       summary: Create embeddings (OpenAI format)
       description: Creates an embedding vector representing the input text using Vertex AI or OpenAI-compatible embedding models.
+      parameters:
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: api-version
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -169,6 +232,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmbeddingResponse'
+        '401':
+          description: Unauthorized. Missing or invalid authentication credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized model.
           content:
@@ -181,37 +250,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-
-  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
-    post:
-      tags:
-        - Native Gemini Format
-      summary: Generate text embeddings (Vertex :predict)
-      parameters:
-        - name: projectId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: locationId
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: modelId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Successful Vertex embedding response.
 
   /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:generateContent:
     post:
@@ -241,6 +279,22 @@ paths:
           schema:
             type: string
             example: gemini-2.5-flash
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -271,7 +325,7 @@ paths:
                   candidatesTokenCount: 14
                   totalTokenCount: 22
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
           content:
             application/json:
               schema:
@@ -305,6 +359,22 @@ paths:
           schema:
             type: string
             example: gemini-2.5-flash
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -335,7 +405,7 @@ paths:
                   candidatesTokenCount: 14
                   totalTokenCount: 22
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
           content:
             application/json:
               schema:
@@ -369,6 +439,22 @@ paths:
           schema:
             type: string
             example: gemini-2.5-flash
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -388,7 +474,7 @@ paths:
               schema:
                 type: string
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
           content:
             application/json:
               schema:
@@ -422,6 +508,22 @@ paths:
           schema:
             type: string
             example: gemini-2.5-flash
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -441,7 +543,567 @@ paths:
               schema:
                 type: string
         '403':
-          description: Forbidden. Prompt blocked by safety filters (Model Armor).
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:rawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Predict Claude (Non-Streaming)
+      description: Sends a prompt in Claude format to Vertex AI Anthropic Claude models.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeVertexRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:rawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Predict Claude (Non-Streaming)
+      description: Sends a prompt in Claude format to Vertex AI Anthropic Claude models.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeVertexRequest'
+      responses:
+        '200':
+          description: Successful response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaudeResponse'
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:streamRawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Stream Predict Claude (Streaming)
+      description: Sends a prompt in Claude format to Vertex AI Anthropic Claude models and receives a real-time event stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeVertexRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/anthropic/models/{modelId}:streamRawPredict:
+    post:
+      tags:
+        - Vertex Anthropic Format
+      summary: Stream Predict Claude (Streaming)
+      description: Sends a prompt in Claude format to Vertex AI Anthropic Claude models and receives a real-time event stream.
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaudeVertexRequest'
+      responses:
+        '200':
+          description: Successful streaming event stream response.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '403':
+          description: Forbidden. Prompt blocked by safety filters (Model Armor) or unauthorized project/model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Generate text embeddings (:predict)
+      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VertexPredictEmbeddingRequest'
+      responses:
+        '200':
+          description: Successful Vertex embedding response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VertexPredictEmbeddingResponse'
+        '403':
+          description: Forbidden. Unauthorized project or model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:predict:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Generate text embeddings (:predict)
+      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VertexPredictEmbeddingRequest'
+      responses:
+        '200':
+          description: Successful Vertex embedding response.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VertexPredictEmbeddingResponse'
+        '403':
+          description: Forbidden. Unauthorized project or model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:embedContent:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Embed content (:embedContent)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiEmbedContentRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+        '403':
+          description: Forbidden. Unauthorized project or model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:embedContent:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Embed content (:embedContent)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiEmbedContentRequest'
+      responses:
+        '200':
+          description: Successful embedding response.
+        '403':
+          description: Forbidden. Unauthorized project or model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:batchEmbedContents:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Batch embed contents (:batchEmbedContents)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiBatchEmbedContentsRequest'
+      responses:
+        '200':
+          description: Successful batch embedding response.
+        '403':
+          description: Forbidden. Unauthorized project or model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1beta1/projects/{projectId}/locations/{locationId}/publishers/google/models/{modelId}:batchEmbedContents:
+    post:
+      tags:
+        - Vertex Embeddings Format
+      summary: Batch embed contents (:batchEmbedContents)
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: locationId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: modelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: alt
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [sse, json]
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeminiBatchEmbedContentsRequest'
+      responses:
+        '200':
+          description: Successful batch embedding response.
+        '403':
+          description: Forbidden. Unauthorized project or model.
           content:
             application/json:
               schema:
@@ -450,9 +1112,20 @@ paths:
   /v1/models:
     get:
       tags:
-        - Claude Models API
+        - Models Catalog API
       summary: List available models
-      description: Returns a list of Claude models available in the API Gateway.
+      description: Returns a list of models available to the caller's persona in the AI Gateway.
+      parameters:
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: Successful response. Returns a list of models.
@@ -461,16 +1134,24 @@ paths:
               schema:
                 $ref: '#/components/schemas/ModelListResponse'
         '401':
-          description: Unauthorized. Missing or invalid API key.
+          description: Unauthorized. Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '500':
           description: Internal gateway error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /v1/models/{modelId}:
     get:
       tags:
-        - Claude Models API
+        - Models Catalog API
       summary: Retrieve model details
-      description: Returns details of a specific Claude model.
+      description: Returns details of a specific model available in the AI Gateway.
       parameters:
         - name: modelId
           in: path
@@ -478,7 +1159,17 @@ paths:
           description: The ID of the model to retrieve.
           schema:
             type: string
-            example: claude-3-5-sonnet
+            example: claude-sonnet-4-6
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: Successful response. Returns the model details.
@@ -487,7 +1178,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/Model'
         '401':
-          description: Unauthorized. Missing or invalid API key.
+          description: Unauthorized. Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Model not found.
           content:
@@ -505,12 +1200,79 @@ components:
       type: apiKey
       in: header
       name: x-apikey
+    AnthropicAltApiKeyAuth:
+      type: apiKey
+      in: header
+      name: anthropic-api-key
+    GoogleApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+    AzureApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
     BearerAuth:
       type: http
       scheme: bearer
   schemas:
+    ClaudeMessageItem:
+      type: object
+      additionalProperties: true
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+          example: user
+        content:
+          oneOf:
+            - type: string
+              example: Explain gravity in one sentence.
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+                properties:
+                  type:
+                    type: string
+                    description: Content block type (text, image, document, tool_use, tool_result, thinking, redacted_thinking).
+                  text:
+                    type: string
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  input:
+                    type: object
+                    additionalProperties: true
+                  tool_use_id:
+                    type: string
+                  content:
+                    oneOf:
+                      - type: string
+                      - type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                  is_error:
+                    type: boolean
+                  source:
+                    type: object
+                    additionalProperties: true
+                  cache_control:
+                    type: object
+                    additionalProperties: true
+                  thinking:
+                    type: string
+                  signature:
+                    type: string
+
     ClaudeRequest:
       type: object
+      additionalProperties: true
       required:
         - model
         - max_tokens
@@ -520,6 +1282,17 @@ components:
           type: string
           description: Target model identifier.
           example: claude-haiku-4-5
+        models:
+          type: array
+          description: Optional fallback model array.
+          items:
+            type: string
+        plugins:
+          type: array
+          description: Optional AI Gateway plugins (e.g. judge, auto-router, task-classifier).
+          items:
+            type: object
+            additionalProperties: true
         max_tokens:
           type: integer
           description: Maximum tokens to generate.
@@ -528,23 +1301,107 @@ components:
           type: boolean
           description: Enable SSE streaming response.
           default: false
-        messages:
+        system:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+        temperature:
+          type: number
+        top_p:
+          type: number
+        top_k:
+          type: integer
+        stop_sequences:
+          type: array
+          items:
+            type: string
+        tools:
           type: array
           items:
             type: object
-            required:
-              - role
-              - content
-            properties:
-              role:
-                type: string
-                enum: [user, assistant]
-                example: user
-              content:
-                type: string
-                example: Explain gravity in one sentence.
+            additionalProperties: true
+        tool_choice:
+          type: object
+          additionalProperties: true
+        thinking:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        service_tier:
+          type: string
+        anthropic_version:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaudeMessageItem'
+
+    ClaudeVertexRequest:
+      type: object
+      additionalProperties: true
+      required:
+        - max_tokens
+        - messages
+      properties:
+        model:
+          type: string
+          description: Target model identifier (optional when passed in Vertex URL path).
+          example: claude-haiku-4-5
+        anthropic_version:
+          type: string
+          example: vertex-2023-10-16
+        max_tokens:
+          type: integer
+          description: Maximum tokens to generate.
+          example: 100
+        stream:
+          type: boolean
+          description: Enable SSE streaming response.
+          default: false
+        system:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+        temperature:
+          type: number
+        top_p:
+          type: number
+        top_k:
+          type: integer
+        stop_sequences:
+          type: array
+          items:
+            type: string
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tool_choice:
+          type: object
+          additionalProperties: true
+        thinking:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaudeMessageItem'
+
     ClaudeResponse:
       type: object
+      additionalProperties: true
       properties:
         id:
           type: string
@@ -560,57 +1417,128 @@ components:
           type: array
           items:
             type: object
+            additionalProperties: true
             properties:
               type:
                 type: string
                 example: text
               text:
                 type: string
+              id:
+                type: string
+              name:
+                type: string
+              input:
+                type: object
+                additionalProperties: true
+              thinking:
+                type: string
+              signature:
+                type: string
         stop_reason:
           type: string
           example: end_turn
         usage:
           type: object
+          additionalProperties: true
           properties:
             input_tokens:
               type: integer
             output_tokens:
               type: integer
+            cache_creation_input_tokens:
+              type: integer
+            cache_read_input_tokens:
+              type: integer
+
     GeminiRequest:
       type: object
+      additionalProperties: true
       required:
         - contents
       properties:
+        systemInstruction:
+          type: object
+          additionalProperties: true
+        system_instruction:
+          type: object
+          additionalProperties: true
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        toolConfig:
+          type: object
+          additionalProperties: true
+        tool_config:
+          type: object
+          additionalProperties: true
+        generationConfig:
+          type: object
+          additionalProperties: true
+        generation_config:
+          type: object
+          additionalProperties: true
+        safetySettings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        cachedContent:
+          type: string
+        labels:
+          type: object
+          additionalProperties: true
         contents:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
-              - role
               - parts
             properties:
               role:
                 type: string
-                enum: [user, model]
+                enum: [user, model, function, tool]
                 example: user
               parts:
                 type: array
                 items:
                   type: object
+                  additionalProperties: true
                   properties:
                     text:
                       type: string
                       example: Describe gravity in one sentence.
+                    inlineData:
+                      type: object
+                      additionalProperties: true
+                    fileData:
+                      type: object
+                      additionalProperties: true
+                    functionCall:
+                      type: object
+                      additionalProperties: true
+                    functionResponse:
+                      type: object
+                      additionalProperties: true
+                    thought:
+                      type: boolean
+
     GeminiResponse:
       type: object
+      additionalProperties: true
       properties:
         candidates:
           type: array
           items:
             type: object
+            additionalProperties: true
             properties:
               content:
                 type: object
+                additionalProperties: true
                 properties:
                   role:
                     type: string
@@ -619,6 +1547,7 @@ components:
                     type: array
                     items:
                       type: object
+                      additionalProperties: true
                       properties:
                         text:
                           type: string
@@ -627,6 +1556,7 @@ components:
                 example: STOP
         usageMetadata:
           type: object
+          additionalProperties: true
           properties:
             promptTokenCount:
               type: integer
@@ -634,8 +1564,10 @@ components:
               type: integer
             totalTokenCount:
               type: integer
+
     OpenAIRequest:
       type: object
+      additionalProperties: true
       required:
         - model
         - messages
@@ -644,27 +1576,88 @@ components:
           type: string
           description: Target model identifier.
           example: gemini-3.1-flash-lite
+        models:
+          type: array
+          description: Optional fallback model array (OpenRouter / AI Gateway convention).
+          items:
+            type: string
+        plugins:
+          type: array
+          description: Optional AI Gateway plugins (e.g. judge, auto-router, task-classifier).
+          items:
+            type: object
+            additionalProperties: true
         stream:
           type: boolean
           description: Enable SSE streaming response.
           default: false
+        stream_options:
+          type: object
+          additionalProperties: true
+        max_tokens:
+          type: integer
+        max_completion_tokens:
+          type: integer
+        temperature:
+          type: number
+        top_p:
+          type: number
+        reasoning_effort:
+          type: string
+        tools:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        tool_choice:
+          oneOf:
+            - type: string
+            - type: object
+              additionalProperties: true
+        parallel_tool_calls:
+          type: boolean
+        response_format:
+          type: object
+          additionalProperties: true
+        metadata:
+          type: object
+          additionalProperties: true
+        user:
+          type: string
         messages:
           type: array
           items:
             type: object
+            additionalProperties: true
             required:
               - role
-              - content
             properties:
               role:
                 type: string
-                enum: [user, assistant, system]
+                enum: [user, assistant, system, developer, tool, function]
                 example: user
               content:
+                nullable: true
+                oneOf:
+                  - type: string
+                    example: Explain gravity in one sentence.
+                  - type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+              name:
                 type: string
-                example: Explain gravity in one sentence.
+              tool_call_id:
+                type: string
+              tool_calls:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+
     OpenAIResponse:
       type: object
+      additionalProperties: true
       properties:
         id:
           type: string
@@ -680,22 +1673,31 @@ components:
           type: array
           items:
             type: object
+            additionalProperties: true
             properties:
               index:
                 type: integer
               message:
                 type: object
+                additionalProperties: true
                 properties:
                   role:
                     type: string
                     example: assistant
                   content:
                     type: string
+                    nullable: true
+                  tool_calls:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
               finish_reason:
                 type: string
                 example: stop
         usage:
           type: object
+          additionalProperties: true
           properties:
             prompt_tokens:
               type: integer
@@ -703,8 +1705,10 @@ components:
               type: integer
             total_tokens:
               type: integer
+
     EmbeddingRequest:
       type: object
+      additionalProperties: true
       required:
         - model
         - input
@@ -732,8 +1736,10 @@ components:
           description: Optional Vertex AI embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
         user:
           type: string
+
     EmbeddingResponse:
       type: object
+      additionalProperties: true
       properties:
         object:
           type: string
@@ -763,22 +1769,113 @@ components:
               type: integer
             total_tokens:
               type: integer
+
+    VertexPredictEmbeddingRequest:
+      type: object
+      additionalProperties: true
+      required:
+        - instances
+      properties:
+        instances:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              content:
+                type: string
+              text:
+                type: string
+              task_type:
+                type: string
+              title:
+                type: string
+        parameters:
+          type: object
+          additionalProperties: true
+          properties:
+            outputDimensionality:
+              type: integer
+            autoTruncate:
+              type: boolean
+
+    VertexPredictEmbeddingResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        predictions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+            properties:
+              embeddings:
+                type: object
+                additionalProperties: true
+                properties:
+                  values:
+                    type: array
+                    items:
+                      type: number
+                  statistics:
+                    type: object
+                    properties:
+                      truncated:
+                        type: boolean
+                      token_count:
+                        type: integer
+
+    GeminiEmbedContentRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        model:
+          type: string
+        content:
+          type: object
+          additionalProperties: true
+        taskType:
+          type: string
+        title:
+          type: string
+        outputDimensionality:
+          type: integer
+
+    GeminiBatchEmbedContentsRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeminiEmbedContentRequest'
+
     ErrorResponse:
       type: object
+      additionalProperties: true
       properties:
-        fault:
+        type:
+          type: string
+          example: error
+        error:
           type: object
+          additionalProperties: true
           properties:
-            faultstring:
+            type:
               type: string
-            detail:
-              type: object
-              properties:
-                errorcode:
-                  type: string
-                  example: steps.sanitize.user.prompt.FilterMatched
+              example: invalid_request_error
+            message:
+              type: string
+              example: Request blocked by AI Gateway policy.
+            code:
+              oneOf:
+                - type: integer
+                - type: string
+              example: 403
+
     Model:
       type: object
+      additionalProperties: true
       properties:
         type:
           type: string
@@ -793,8 +1890,10 @@ components:
           type: string
           format: date-time
           example: 2026-05-01T00:00:00Z
+
     ModelListResponse:
       type: object
+      additionalProperties: true
       properties:
         data:
           type: array
@@ -809,11 +1908,14 @@ components:
         last_id:
           type: string
           example: claude-sonnet-4-6
+
     ModelErrorResponse:
       type: object
+      additionalProperties: true
       properties:
         error:
           type: object
+          additionalProperties: true
           properties:
             type:
               type: string
@@ -821,4 +1923,3 @@ components:
             message:
               type: string
               example: Model not found
-
