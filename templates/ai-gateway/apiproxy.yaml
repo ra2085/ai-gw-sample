@@ -26,7 +26,7 @@ ProxyEndpoints:
                 -Data:
                   {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
                   - Step:
-                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                       Name: RQ-ReleaseConcurrencySlot
                   {{- end }}
                   - Step:
@@ -113,7 +113,7 @@ ProxyEndpoints:
             Response:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'ratelimit.Q-ConcurrencyLimit.used.count != null'{{ else }}'!(stream = true) or (response.status.code >= 400)'{{ end }}
+                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'(ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ else }}'(!(stream = true) or (response.status.code >= 400) or !(response.header.Content-Type =| "text/event-stream")) and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ end }}
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
@@ -196,7 +196,7 @@ ProxyEndpoints:
                 -Data:
                   {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
                   - Step:
-                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                       Name: RQ-ReleaseConcurrencySlot
                   {{- end }}
                   - Step:
@@ -282,7 +282,7 @@ ProxyEndpoints:
             Response:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'ratelimit.Q-ConcurrencyLimit.used.count != null'{{ else }}'!(stream = true) or (response.status.code >= 400)'{{ end }}
+                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'(ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ else }}'(!(stream = true) or (response.status.code >= 400) or !(response.header.Content-Type =| "text/event-stream")) and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ end }}
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
@@ -363,7 +363,7 @@ ProxyEndpoints:
                 -Data:
                   {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
                   - Step:
-                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                       Name: RQ-ReleaseConcurrencySlot
                   {{- end }}
                   - Step:
@@ -448,7 +448,7 @@ ProxyEndpoints:
             Response:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'ratelimit.Q-ConcurrencyLimit.used.count != null'{{ else }}'!(stream = true) or (response.status.code >= 400)'{{ end }}
+                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'(ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ else }}'(!(stream = true) or (response.status.code >= 400) or !(response.header.Content-Type =| "text/event-stream")) and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ end }}
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
@@ -526,7 +526,7 @@ ProxyEndpoints:
                 -Data:
                   {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
                   - Step:
-                      Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                       Name: RQ-ReleaseConcurrencySlot
                   {{- end }}
                   - Step:
@@ -600,7 +600,7 @@ ProxyEndpoints:
             Response:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'ratelimit.Q-ConcurrencyLimit.used.count != null'{{ else }}'!(stream = true) or (response.status.code >= 400)'{{ end }}
+                  Condition: {{ if and $secondaryQuotaEnabled $modelArmorEnabled }}'(ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ else }}'(!(stream = true) or (response.status.code >= 400) or !(response.header.Content-Type =| "text/event-stream")) and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'{{ end }}
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
@@ -669,7 +669,7 @@ ProxyEndpoints:
         -Data:
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
           - Step:
-              Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+              Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -731,7 +731,7 @@ TargetEndpoints:
             -Data:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                  Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               - Step:
@@ -768,7 +768,7 @@ TargetEndpoints:
               Name: JS-combine-resp
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $secondaryQuotaEnabled $modelArmorEnabled)) }}
           - Step:
-              Condition: release_concurrency_slot = "true"
+              Condition: (release_concurrency_slot = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -776,11 +776,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $quotasEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (primary_quota_usage != null) and (primary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if $secondaryQuotaEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (secondary_quota_usage != null) and (secondary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -823,7 +823,7 @@ TargetEndpoints:
             -Data:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                  Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               - Step:
@@ -853,7 +853,7 @@ TargetEndpoints:
               Name: JS-combine-resp
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $secondaryQuotaEnabled $modelArmorEnabled)) }}
           - Step:
-              Condition: release_concurrency_slot = "true"
+              Condition: (release_concurrency_slot = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -861,11 +861,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $quotasEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (primary_quota_usage != null) and (primary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if $secondaryQuotaEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (secondary_quota_usage != null) and (secondary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -908,7 +908,7 @@ TargetEndpoints:
             -Data:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                  Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               - Step:
@@ -943,7 +943,7 @@ TargetEndpoints:
               Name: JS-combine-resp
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $secondaryQuotaEnabled $modelArmorEnabled)) }}
           - Step:
-              Condition: release_concurrency_slot = "true"
+              Condition: (release_concurrency_slot = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -951,11 +951,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $quotasEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (primary_quota_usage != null) and (primary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if $secondaryQuotaEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (secondary_quota_usage != null) and (secondary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -998,7 +998,7 @@ TargetEndpoints:
             -Data:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                  Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               - Step:
@@ -1043,7 +1043,7 @@ TargetEndpoints:
               Name: JS-combine-resp
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $secondaryQuotaEnabled $modelArmorEnabled)) }}
           - Step:
-              Condition: release_concurrency_slot = "true"
+              Condition: (release_concurrency_slot = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -1051,11 +1051,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $quotasEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (primary_quota_usage != null) and (primary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if $secondaryQuotaEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (secondary_quota_usage != null) and (secondary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}
@@ -1094,7 +1094,7 @@ TargetEndpoints:
             -Data:
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
-                  Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+                  Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
                   Name: RQ-ReleaseConcurrencySlot
               {{- end }}
               - Step:
@@ -1130,7 +1130,7 @@ TargetEndpoints:
               Name: JS-combine-resp
           {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) (not (and $secondaryQuotaEnabled $modelArmorEnabled)) }}
           - Step:
-              Condition: release_concurrency_slot = "true"
+              Condition: (release_concurrency_slot = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
               Name: RQ-ReleaseConcurrencySlot
           {{- end }}
           - Step:
@@ -1138,11 +1138,11 @@ TargetEndpoints:
               Name: DC-CaptureTokenCountsStreaming
           {{- if $quotasEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (primary_quota_usage != null) and (primary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-CountOnly
           {{- if $secondaryQuotaEnabled }}
           - Step:
-              Condition: (usage_total_tokens != null) and (usage_total_tokens != "0") and (apiproduct.name != null)
+              Condition: (secondary_quota_usage != null) and (secondary_quota_usage != "0") and (apiproduct.name != null)
               Name: LTQ-SecondaryCountOnly
           {{- end }}
           {{- end }}

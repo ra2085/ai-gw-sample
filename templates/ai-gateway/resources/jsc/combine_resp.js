@@ -48,7 +48,7 @@ if (getVar("release_concurrency_slot") === "true") {
     remVar("release_concurrency_slot");
 }
 
-function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, thinkingTokens) {
+function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, thinkingTokens, isCheckpointOnly) {
     var totalIn = uncachedIn + cacheRead + cacheWrite;
     var totalT = totalIn + outTokens;
     if (totalT > 0) {
@@ -73,7 +73,11 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
         setVar("completion_tokens", outTokensStr);
         setVar("usage_completion_tokens", outTokensStr);
         setVar("usage_total_tokens", totalTStr);
-        setVar("stream_tokens_already_counted", "true");
+        if (isCheckpointOnly) {
+            setVar("stream_prompt_checkpointed", "true");
+        } else {
+            setVar("stream_tokens_already_counted", "true");
+        }
 
         // Inline Monetization & Virtual USD Spend Wallet Calculation (keeps EventFlow <= 5 policies)
         var model = rawModel || "default";
@@ -156,6 +160,12 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
 
         var primaryQuotaMode = getVar("primary_quota_mode") || "tokens";
         var secondaryQuotaMode = getVar("secondary_quota_mode") || "tokens";
+        var rawPrimaryUsage = primaryQuotaMode === "usd" ? totalCostMicro : totalT;
+        var rawSecondaryUsage = secondaryQuotaMode === "usd" ? totalCostMicro : totalT;
+        var prevPrimary = parseInt(getVar("billed_primary_quota") || "0", 10);
+        var prevSecondary = parseInt(getVar("billed_secondary_quota") || "0", 10);
+        var deltaPrimary = prevPrimary > 0 ? Math.max(0, rawPrimaryUsage - prevPrimary) : rawPrimaryUsage;
+        var deltaSecondary = prevSecondary > 0 ? Math.max(0, rawSecondaryUsage - prevSecondary) : rawSecondaryUsage;
 
         setVar("tx_cost_usd", totalCostStr);
         setVar("tx_cost_micro_usd", totalCostMicroStr);
@@ -165,8 +175,10 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
         setVar("tx_cache_write_cost_usd", cacheWriteCost.toFixed(6));
         setVar("tx_completion_cost_usd", completionCost.toFixed(6));
         setVar("tx_currency", currency);
-        setVar("primary_quota_usage", primaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
-        setVar("secondary_quota_usage", secondaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
+        setVar("primary_quota_usage", deltaPrimary.toFixed(0));
+        setVar("secondary_quota_usage", deltaSecondary.toFixed(0));
+        setVar("billed_primary_quota", Math.max(prevPrimary, rawPrimaryUsage).toFixed(0));
+        setVar("billed_secondary_quota", Math.max(prevSecondary, rawSecondaryUsage).toFixed(0));
 
         setVar("perUnitPriceMultiplier", totalCostStr);
         setVar("currency", currency);
@@ -1057,6 +1069,22 @@ if (rawContent && dataIdx !== -1) {
                 }
             } else if (hasSecondData) {
                 multiFrameOut.push("data: [DONE]");
+            }
+        }
+    }
+
+    if (getVar("stream_prompt_checkpointed") === null && getVar("stream_tokens_already_counted") !== "true") {
+        if (getVar("propertyset.config.stream_prompt_checkpoint") !== "true") {
+            setVar("stream_prompt_checkpointed", "skip");
+        } else if (getVar("saved_stream_uncached_prompt_tokens") !== null || getVar("saved_stream_prompt_tokens") !== null || getVar("saved_stream_cached_tokens") !== null || getVar("saved_stream_cache_write_tokens") !== null) {
+            var ckptCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+            var ckptCacheWrite = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+            var ckptUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+            var ckptUncached = ckptUncachedStr !== null
+                ? parseInt(ckptUncachedStr, 10)
+                : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - ckptCacheRead - ckptCacheWrite);
+            if ((ckptUncached + ckptCacheRead + ckptCacheWrite) > 0) {
+                emitStreamTokenVariables(ckptUncached, ckptCacheRead, ckptCacheWrite, 0, 0, true);
             }
         }
     }

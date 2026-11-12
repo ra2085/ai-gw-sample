@@ -56,6 +56,7 @@ features:
     window_unit: "minute"                # Rolling recovery window unit (minute, hour, day)
   quotas:
     enabled: true
+    stream_prompt_checkpoint: false        # Opt-in: checkpoints exact initial prompt tokens/spend at SSE stream start so early disconnects still account for prompt usage
     # Primary window uses auth-agnostic dynamic quota variables (primary_quota_limit / primary_quota_interval / primary_quota_unit)
     # isolated by SharedName: "llm-token-counter", Identifier: "rate_limit_client_id", and LLMModelSource: "{model}".
     # Supports either token budgets (`limit`) or Virtual USD Spend Wallets (`limit_usd`, tracked in micro-USD: $1.00 = 1,000,000).
@@ -95,6 +96,8 @@ features:
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
       # allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Vertex Agent Engine SPIFFE tokens (comma-separated or glob)
       # allowed_email_suffix: "@your-gcp-project-id.iam.gserviceaccount.com"  # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com" (same-project SAs only)
+      # expected_audience: ""              # Optional comma-separated allowed 'aud' values on tokeninfo responses
+      # required_scopes: ""                # Optional comma/space-separated required OAuth2 'scope' values (e.g. "https://www.googleapis.com/auth/cloud-platform")
       persona: "agent"
       token_ttl_ms: 3600000
     idp_opaque:

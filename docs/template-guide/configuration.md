@@ -55,6 +55,7 @@ features:
   # 4. Rolling-Window Quotas & Team Budgets (Tokens or Virtual USD Spend Wallets)
   quotas:
     enabled: true                                     # Enforces AI Product rolling token or micro-USD quotas and per-model limits
+    stream_prompt_checkpoint: false                   # Opt-in: checkpoints initial prompt tokens/spend at SSE stream start to protect against early disconnects
     secondary_window:
       enabled: false                                  # Opt-in: 2nd rolling window (7-day cap OR shared Team Budget)
       shared_name: "llm-token-counter-secondary"      # Isolated counter namespace for secondary/team budgets

@@ -349,6 +349,7 @@ default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_lim
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
 cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
 cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
+stream_prompt_checkpoint={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "stream_prompt_checkpoint") }}{{ $.Values.features.quotas.stream_prompt_checkpoint }}{{ else }}false{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
 openai_base_url={{ $.Values.gateway.openai_base_url }}
 {{- end }}
@@ -374,6 +375,14 @@ auth_apigee_oauth_enabled={{ if and $auth.apigee_oauth (hasKey $auth.apigee_oaut
 auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
 auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ if kindIs "slice" $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain | join "," }}{{ else }}{{ $auth.agent_identity.allowed_trust_domain }}{{ end }}{{ end }}
 auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ if kindIs "slice" $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix | join "," }}{{ else }}{{ $auth.agent_identity.allowed_email_suffix }}{{ end }}{{ else if $gwProjStr }}@{{ $gwProjStr }}.iam.gserviceaccount.com{{ end }}
+{{- if and $auth.agent_identity (or $auth.agent_identity.expected_audience $auth.agent_identity.audience) }}
+{{- $agentAud := default $auth.agent_identity.audience $auth.agent_identity.expected_audience }}
+auth_agent_expected_audience={{ if kindIs "slice" $agentAud }}{{ $agentAud | join "," }}{{ else }}{{ $agentAud }}{{ end }}
+{{- end }}
+{{- if and $auth.agent_identity (or $auth.agent_identity.required_scopes $auth.agent_identity.scope) }}
+{{- $agentScopes := default $auth.agent_identity.scope $auth.agent_identity.required_scopes }}
+auth_agent_required_scopes={{ if kindIs "slice" $agentScopes }}{{ $agentScopes | join "," }}{{ else }}{{ $agentScopes }}{{ end }}
+{{- end }}
 auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
 auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
 
@@ -768,7 +777,7 @@ buffer_size=50
     -Data:
       {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
       - Step:
-          Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
           Name: RQ-ReleaseConcurrencySlot
       {{- end }}
       - Step:
@@ -782,7 +791,7 @@ buffer_size=50
     -Data:
       {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
       - Step:
-          Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
           Name: RQ-ReleaseConcurrencySlot
       {{- end }}
       - Step:
@@ -799,7 +808,7 @@ DefaultFaultRule:
   -Data:
     {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
     - Step:
-        Condition: ratelimit.Q-ConcurrencyLimit.used.count != null
+        Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
         Name: RQ-ReleaseConcurrencySlot
     {{- end }}
     - Step:

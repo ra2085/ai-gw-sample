@@ -11,6 +11,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.auth.enabled`** | `true` | Authenticates callers (API Keys, Corporate SSO, GCP Agents, OAuth) and maps them to **AI Products**. | [AI Products & Auth](../architecture/security.md) |
 | **`features.auth.apigee_oauth.enabled`** | `true` | Enables native Apigee OAuth 2.0 bearer token verification (`OA-VerifyAccessToken`). | [AI Products & Auth](../architecture/security.md) |
 | **`features.quotas.enabled`** | `true` | Enforces rolling token or Virtual USD Spend Wallet allowances defined on your **AI Products**. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.quotas.stream_prompt_checkpoint`** | `false` | Opt-in: immediately checkpoints exact initial prompt tokens and spend when an SSE stream starts, ensuring early client disconnects still account for prompt usage. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.quotas.secondary_window.enabled`** | `false` | Adds a second rolling window for **Shared Team Budgets** or 7-day weekly caps. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.burst.enabled`** | `false` | Smooths sudden request-per-second/minute spikes per user or agent. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
@@ -74,6 +75,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       quotas:
         enabled: true
+        stream_prompt_checkpoint: true
         secondary_window:
           enabled: true
           shared_name: "llm-token-counter-secondary"

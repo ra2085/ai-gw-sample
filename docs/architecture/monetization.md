@@ -244,6 +244,7 @@ models:
 | **Vertex MaaS (Llama, Mistral), Embeddings, & Self-Hosted (`vLLM`)** | Required | Not needed | Not needed | These endpoints do not bill separate cached token rates; if omitted, any reported cached tokens default to `input_rate`. |
 
 * **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd` and `X-Gateway-Total-Cost-Micro-USD`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
+* **Early-Disconnect Stream Protection (`features.quotas.stream_prompt_checkpoint: true`):** Optionally checkpoints exact initial prompt and cache tokens as soon as an SSE stream starts—ensuring large-context requests still deduct prompt quota and record spend even if a client disconnects mid-stream, before settling the remaining completion delta when the stream finishes.
 * **Two Wallet Enforcement Modes:**
   1. **Virtual USD Spend Wallets (`limit_usd` + `enforce_apigee_wallet: false`):** Recommended when onboarding users via SSO/JWT/SPIFFE onto shared Persona AI Products without creating an Apigee Developer entity per user. Enforces per-user, per-model, and shared team USD spend caps in micro-dollars (`$1.00 = 1,000,000` micro-USD).
   2. **Native Apigee Monetization Wallets (`enforce_apigee_wallet: true`):** Uses `MLC-EnforceMonetizationLimits` to verify prepaid/postpaid balances on the Apigee Developer entity owning the Developer App.
