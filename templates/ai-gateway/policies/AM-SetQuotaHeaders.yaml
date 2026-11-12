@@ -74,6 +74,9 @@ AssignMessage:
           .name: X-Gateway-Judge-Tier
           -Data: '{judge_tier}'
       - Header:
+          .name: X-Gateway-Judge-Tokens
+          -Data: '{judge_total_tokens}'
+      - Header:
           .name: X-Gateway-Model-Armor-Request-Template
           -Data: '{model_armor_request_template}'
       - Header:

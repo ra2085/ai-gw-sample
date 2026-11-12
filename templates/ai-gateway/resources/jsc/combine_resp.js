@@ -153,15 +153,19 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
         var cacheWriteCost = (cacheWrite / 1000000.0) * cacheWriteRate * markupMultiplier;
         var promptCost = uncachedPromptCost + cacheReadCost + cacheWriteCost;
         var completionCost = (outTokens / 1000000.0) * outputRate * markupMultiplier;
-        var totalCost = promptCost + completionCost;
+        var judgeTotalT = parseInt(getVar("judge_total_tokens") || "0", 10);
+        if (isNaN(judgeTotalT) || judgeTotalT < 0) judgeTotalT = 0;
+        var judgeCost = judgeTotalT > 0 ? computeJudgeStreamCost(markupMultiplier) : 0.0;
+        var totalCost = promptCost + completionCost + judgeCost;
         var totalCostStr = totalCost.toFixed(6);
         var totalCostMicro = totalCost > 0 ? Math.max(1, Math.round(totalCost * 1000000)) : 0;
         var totalCostMicroStr = totalCostMicro.toFixed(0);
+        var billedTotalT = totalT + judgeTotalT;
 
         var primaryQuotaMode = getVar("primary_quota_mode") || "tokens";
         var secondaryQuotaMode = getVar("secondary_quota_mode") || "tokens";
-        var rawPrimaryUsage = primaryQuotaMode === "usd" ? totalCostMicro : totalT;
-        var rawSecondaryUsage = secondaryQuotaMode === "usd" ? totalCostMicro : totalT;
+        var rawPrimaryUsage = primaryQuotaMode === "usd" ? totalCostMicro : billedTotalT;
+        var rawSecondaryUsage = secondaryQuotaMode === "usd" ? totalCostMicro : billedTotalT;
         var prevPrimary = parseInt(getVar("billed_primary_quota") || "0", 10);
         var prevSecondary = parseInt(getVar("billed_secondary_quota") || "0", 10);
         var deltaPrimary = prevPrimary > 0 ? Math.max(0, rawPrimaryUsage - prevPrimary) : rawPrimaryUsage;
@@ -184,9 +188,37 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
         setVar("currency", currency);
         setVar("transactionSuccess", "true");
         setVar("mint.tx_cost", totalCostStr);
-        setVar("mint.tx_volume", totalTStr);
+        setVar("mint.tx_volume", billedTotalT.toFixed(0));
         setVar("mint.tx_currency", currency);
     }
+}
+
+function computeJudgeStreamCost(defaultMarkup) {
+    var jm = getVar("judge_model") || "gemini-2.5-flash-lite";
+    var bareJm = jm.indexOf("/") !== -1 ? jm.split("/").slice(1).join("/") : jm;
+    var hasBare = (bareJm !== jm && bareJm !== "default");
+    var jInStr = getVar("propertyset.monetization_rates." + jm + ".input_rate_per_m") ||
+                 getVar("propertyset.monetization_rates." + jm + ".input_rate") ||
+                 (hasBare ? (getVar("propertyset.monetization_rates." + bareJm + ".input_rate_per_m") ||
+                             getVar("propertyset.monetization_rates." + bareJm + ".input_rate")) : null) ||
+                 getVar("propertyset.monetization_rates.default.input_rate_per_m") ||
+                 getVar("propertyset.monetization_rates.default.input_rate") || "0.10";
+    var jOutStr = getVar("propertyset.monetization_rates." + jm + ".output_rate_per_m") ||
+                  getVar("propertyset.monetization_rates." + jm + ".output_rate") ||
+                  (hasBare ? (getVar("propertyset.monetization_rates." + bareJm + ".output_rate_per_m") ||
+                              getVar("propertyset.monetization_rates." + bareJm + ".output_rate")) : null) ||
+                  getVar("propertyset.monetization_rates.default.output_rate_per_m") ||
+                  getVar("propertyset.monetization_rates.default.output_rate") || "0.40";
+    var jInRate = parseFloat(String(jInStr).replace(/^\$/, ""));
+    if (isNaN(jInRate) || jInRate < 0) jInRate = 0.10;
+    var jOutRate = parseFloat(String(jOutStr).replace(/^\$/, ""));
+    if (isNaN(jOutRate) || jOutRate < 0) jOutRate = 0.40;
+    var jUncached = parseInt(getVar("judge_uncached_prompt_tokens") || getVar("judge_prompt_tokens") || "0", 10) || 0;
+    var jCached = parseInt(getVar("judge_cache_read_tokens") || "0", 10) || 0;
+    var jOut = parseInt(getVar("judge_completion_tokens") || "0", 10) || 0;
+    var jCost = (((jUncached + jCached) / 1000000.0) * jInRate + (jOut / 1000000.0) * jOutRate) * defaultMarkup;
+    setVar("tx_judge_cost_usd", jCost.toFixed(6));
+    return jCost;
 }
 
 function appendBoundedScan(base, extra) {

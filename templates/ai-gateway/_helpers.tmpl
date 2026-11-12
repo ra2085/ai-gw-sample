@@ -764,11 +764,52 @@ buffer_size=50
 */}}
 {{- define "circuit_breaker_preflow_steps" -}}
 - Step:
-    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Condition: '(judge_routing_requested != "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
     Name: LTQ-CircuitBreakerCheck
 - Step:
-    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Condition: '(judge_routing_requested != "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
     Name: JS-resolve-model-location
+{{- end -}}
+
+{{/*
+  Helper: judge_post_guardrail_steps
+  Executes LLM Judge classification strictly AFTER Persona RBAC, Burst/Quota/Concurrency rate limits, and Model Armor request sanitization
+*/}}
+{{- define "judge_post_guardrail_steps" -}}
+{{- $quotasEnabled := or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false") -}}
+- Step:
+    Condition: '(judge_routing_requested = "true") or (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (has_judge_payload = "true")'
+    Name: JS-prepare-judge-request
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: SC-LLMJudge
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: JS-process-judge-response
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: JS-resolve-model-location
+{{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+- Step:
+    Condition: '(trigger_judge = "true") and (model_access_denied = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'
+    Name: RQ-ReleaseConcurrencySlot
+{{- end }}
+- Step:
+    Condition: '(trigger_judge = "true") and (model_access_denied = "true")'
+    Name: RF-Unauthorized
+{{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
+- Step:
+    Condition: '(trigger_judge = "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCheck
+- Step:
+    Condition: '(trigger_judge = "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Name: JS-resolve-model-location
+{{- end }}
+{{- if $quotasEnabled }}
+- Step:
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null)'
+    Name: LTQ-EnforceOnly
+{{- end }}
 {{- end -}}
 
 {{/*

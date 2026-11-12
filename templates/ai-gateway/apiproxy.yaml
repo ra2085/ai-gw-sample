@@ -43,6 +43,11 @@ ProxyEndpoints:
             - FaultRule:
                 .name: rate-limit
                 -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
                   - Step:
                       Name: JS-format-rate-limit-error
                   - Step:
@@ -68,17 +73,6 @@ ProxyEndpoints:
                   Name: OAS-VerifyClaude
               - Step:
                   Name: JS-extract-vars-claude
-              {{- if $llmJudgeEnabled }}
-              - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (judge_plugin_id = "auto-router") or (has_judge_payload = "true")
-                  Name: JS-prepare-judge-request
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: SC-LLMJudge
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: JS-process-judge-response
-              {{- end }}
               - Step:
                   Name: JS-resolve-model-location
               - Step:
@@ -109,6 +103,9 @@ ProxyEndpoints:
               - Step:
                   Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
+              {{- end }}
+              {{- if $llmJudgeEnabled }}
+              {{- include "judge_post_guardrail_steps" . | nindent 14 }}
               {{- end }}
             Response: {}
         - PostFlow:
@@ -144,11 +141,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -226,6 +223,11 @@ ProxyEndpoints:
             - FaultRule:
                 .name: rate-limit
                 -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
                   - Step:
                       Name: JS-format-rate-limit-error
                   - Step:
@@ -248,17 +250,6 @@ ProxyEndpoints:
                   Name: OAS-VerifyGemini
               - Step:
                   Name: JS-extract-vars-gemini
-              {{- if $llmJudgeEnabled }}
-              - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (has_judge_payload = "true")
-                  Name: JS-prepare-judge-request
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: SC-LLMJudge
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: JS-process-judge-response
-              {{- end }}
               - Step:
                   Name: JS-resolve-model-location
               - Step:
@@ -292,6 +283,9 @@ ProxyEndpoints:
               - Step:
                   Condition: (model_armor_request_enabled != "false") and (request_format = "claude") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
+              {{- end }}
+              {{- if $llmJudgeEnabled }}
+              {{- include "judge_post_guardrail_steps" . | nindent 14 }}
               {{- end }}
             Response: {}
         - PostFlow:
@@ -330,11 +324,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -404,6 +398,11 @@ ProxyEndpoints:
             - FaultRule:
                 .name: rate-limit
                 -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
                   - Step:
                       Name: JS-format-rate-limit-error
                   - Step:
@@ -429,17 +428,6 @@ ProxyEndpoints:
                   Name: OAS-VerifyOpenAI
               - Step:
                   Name: JS-extract-vars-openai
-              {{- if $llmJudgeEnabled }}
-              - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (has_judge_payload = "true")
-                  Name: JS-prepare-judge-request
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: SC-LLMJudge
-              - Step:
-                  Condition: trigger_judge = "true"
-                  Name: JS-process-judge-response
-              {{- end }}
               - Step:
                   Name: JS-resolve-model-location
               - Step:
@@ -470,6 +458,9 @@ ProxyEndpoints:
               - Step:
                   Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
                   Name: SUP-SanitizeUserPrompt
+              {{- end }}
+              {{- if $llmJudgeEnabled }}
+              {{- include "judge_post_guardrail_steps" . | nindent 14 }}
               {{- end }}
             Response: {}
         - PostFlow:
@@ -505,11 +496,11 @@ ProxyEndpoints:
                   Name: DC-CaptureTokenCountsNonStreaming
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-CountOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (usage_total_tokens != null) AND (usage_total_tokens != "0") AND (apiproduct.name != null)
+                  Condition: (!(stream = true)) AND (response.status.code < 400) AND (((usage_total_tokens != null) AND (usage_total_tokens != "0")) OR ((judge_total_tokens != null) AND (judge_total_tokens != "0"))) AND (apiproduct.name != null)
                   Name: LTQ-SecondaryCountOnly
               {{- end }}
               - Step:
@@ -579,6 +570,11 @@ ProxyEndpoints:
             - FaultRule:
                 .name: rate-limit
                 -Data:
+                  {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+                  - Step:
+                      Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+                      Name: RQ-ReleaseConcurrencySlot
+                  {{- end }}
                   - Step:
                       Name: JS-format-rate-limit-error
                   - Step:
