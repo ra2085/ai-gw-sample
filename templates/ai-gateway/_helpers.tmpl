@@ -340,6 +340,7 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
 gateway_name={{ if and $.Values.gateway $.Values.gateway.name }}{{ $.Values.gateway.name }}{{ else }}ai-gateway{{ end }}
 project_id={{ $gwProjStr }}
 model_armor_enabled={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "enabled") }}{{ $.Values.features.model_armor.enabled }}{{ else }}false{{ end }}
+llm_judge_enabled={{ if or (not $.Values.features) (not $.Values.features.llm_judge) (not (hasKey $.Values.features.llm_judge "enabled")) (ne (printf "%v" $.Values.features.llm_judge.enabled) "false") }}true{{ else }}false{{ end }}
 model_armor_project_id={{ $maProjStr }}
 model_armor_location={{ $maLocStr }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
