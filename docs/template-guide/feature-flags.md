@@ -19,6 +19,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.monetization.enforce_apigee_wallet`** | `false` | Opt-in: enforces native Apigee Monetization Add-on developer billing wallets (`MLC-EnforceMonetizationLimits`). | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based and task-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.streaming.dedicated_sse_targets`** | `false` | Opt-in (Apigee Known Issue `#449012244`): renders dedicated `*-sse` `TargetEndpoint`s (`stream = true` `RouteRule`s) separated from non-SSE `PostFlow` targets. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.model_armor.enabled`** | `false` | Opt-in: screens prompts and responses for PII, secrets, and prompt injection via regional GCP Model Armor templates. | [Smart Routing & Safety](../architecture/routing.md) |
 
 ---

@@ -4,6 +4,11 @@
 {{- $enforceApigeeWallet := and $monetizationEnabled $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "enforce_apigee_wallet") (eq (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "true") -}}
 {{- $llmJudgeEnabled := or (not $.Values.features) (not $.Values.features.llm_judge) (not (hasKey $.Values.features.llm_judge "enabled")) (ne (printf "%v" $.Values.features.llm_judge.enabled) "false") -}}
 {{- $modelArmorEnabled := and $.Values.features $.Values.features.model_armor (eq (printf "%v" $.Values.features.model_armor.enabled) "true") -}}
+{{- $dedicatedSseTargets := and $.Values.features $.Values.features.streaming (eq (printf "%v" $.Values.features.streaming.dedicated_sse_targets) "true") -}}
+{{- $targetVariants := list false -}}
+{{- if $dedicatedSseTargets -}}
+  {{- $targetVariants = list false true -}}
+{{- end -}}
 APIProxy:
   .revision: {{ $.Values.gateway.revision | default 1 }}
   .name: {{ $.Values.gateway.name | default "ai-gateway" }}
@@ -158,14 +163,28 @@ ProxyEndpoints:
         - Flows: {}
         - HTTPProxyConnection:
             BasePath: {{ if and $.Values.endpoints $.Values.endpoints.claude }}{{ $.Values.endpoints.claude.base_path | default "/v1/messages" }}{{ else }}/v1/messages{{ end }}
-
             Properties:
-              - Property:
-                  .name: response.streaming.enabled
-                  -Data: true
               - Property:
                   .name: api.timeout
                   -Data: 300000
+        {{- if $dedicatedSseTargets }}
+        - RouteRule:
+            .name: openai-custom-sse
+            Condition: (stream = true) and (route_target = "openai-custom")
+            TargetEndpoint: openai-custom-sse
+        - RouteRule:
+            .name: claude-sse
+            Condition: (stream = true) and (route_target = "claude")
+            TargetEndpoint: claude-sse
+        - RouteRule:
+            .name: gemini-openai-compat-sse
+            Condition: (stream = true) and ((route_target = "gemini-openai-compat") or (model_format = "openai"))
+            TargetEndpoint: gemini-openai-compat-sse
+        - RouteRule:
+            .name: gemini-sse
+            Condition: stream = true
+            TargetEndpoint: gemini-sse
+        {{- end }}
         - RouteRule:
             .name: openai-custom
             Condition: route_target = "openai-custom"
@@ -332,11 +351,22 @@ ProxyEndpoints:
             BasePath: {{ if and $.Values.endpoints $.Values.endpoints.gemini_native }}{{ $.Values.endpoints.gemini_native.base_path | default "/ai-gateway" }}{{ else }}/ai-gateway{{ end }}
             Properties:
               - Property:
-                  .name: response.streaming.enabled
-                  -Data: true
-              - Property:
                   .name: api.timeout
                   -Data: 300000
+        {{- if $dedicatedSseTargets }}
+        - RouteRule:
+            .name: openai-custom-sse
+            Condition: (stream = true) and (route_target = "openai-custom")
+            TargetEndpoint: openai-custom-sse
+        - RouteRule:
+            .name: claude-sse
+            Condition: (stream = true) and ((route_target = "claude") or (proxy.pathsuffix MatchesPath "/v1/projects/*/locations/*/publishers/anthropic/models/*"))
+            TargetEndpoint: claude-sse
+        - RouteRule:
+            .name: gemini-native-target-sse
+            Condition: stream = true
+            TargetEndpoint: gemini-native-target-sse
+        {{- end }}
         - RouteRule:
             .name: openai-custom
             Condition: route_target = "openai-custom"
@@ -496,11 +526,22 @@ ProxyEndpoints:
             BasePath: {{ if and $.Values.endpoints $.Values.endpoints.openai_compat }}{{ $.Values.endpoints.openai_compat.base_path | default "/v1/chat/completions" }}{{ else }}/v1/chat/completions{{ end }}
             Properties:
               - Property:
-                  .name: response.streaming.enabled
-                  -Data: true
-              - Property:
                   .name: api.timeout
                   -Data: 300000
+        {{- if $dedicatedSseTargets }}
+        - RouteRule:
+            .name: openai-custom-sse
+            Condition: (stream = true) and (route_target = "openai-custom")
+            TargetEndpoint: openai-custom-sse
+        - RouteRule:
+            .name: claude-sse
+            Condition: (stream = true) and ((route_target = "claude") or (route_format = "anthropic"))
+            TargetEndpoint: claude-sse
+        - RouteRule:
+            .name: gemini-openai-compat-sse
+            Condition: stream = true
+            TargetEndpoint: gemini-openai-compat-sse
+        {{- end }}
         - RouteRule:
             .name: openai-custom
             Condition: route_target = "openai-custom"
@@ -644,9 +685,6 @@ ProxyEndpoints:
             BasePath: {{ if and $.Values.endpoints $.Values.endpoints.openai_embeddings }}{{ $.Values.endpoints.openai_embeddings.base_path | default "/v1/embeddings" }}{{ else }}/v1/embeddings{{ end }}
             Properties:
               - Property:
-                  .name: response.streaming.enabled
-                  -Data: false
-              - Property:
                   .name: api.timeout
                   -Data: 300000
         - RouteRule:
@@ -729,9 +767,12 @@ ProxyEndpoints:
 
 
 TargetEndpoints:
+  {{- range $isSse := $targetVariants }}
+  {{- $includePostFlow := or (not $dedicatedSseTargets) (not $isSse) }}
+  {{- $includeEventFlow := or (not $dedicatedSseTargets) $isSse }}
   - TargetEndpoint:
-      .name: claude
-      Description: Target Endpoint for Vertex Claude models
+      .name: claude{{ if $isSse }}-sse{{ end }}
+      Description: Target Endpoint for Vertex Claude models{{ if $isSse }} (SSE EventFlow){{ end }}
       FaultRules:
         {{- if $modelArmorEnabled }}
         - FaultRule:
@@ -748,8 +789,8 @@ TargetEndpoints:
                   Name: AM-CustomError
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
-        {{- include "callout_abort_faultrule" . | nindent 8 }}
-      {{- include "default_fault_rule_map" . | nindent 6 }}
+        {{- include "callout_abort_faultrule" $ | nindent 8 }}
+      {{- include "default_fault_rule_map" $ | nindent 6 }}
 
       PreFlow:
         .name: PreFlow
@@ -762,12 +803,17 @@ TargetEndpoints:
       PostFlow:
         .name: PostFlow
         Request: {}
+        {{- if $includePostFlow }}
         Response:
           - Step:
               Condition: '!(stream = true) and (response.status.code < 400) and request_format = "openai"'
               Name: JS-anthropic-to-openai-resp
+        {{- else }}
+        Response: {}
+        {{- end }}
 
       Flows: {}
+      {{- if $includeEventFlow }}
       EventFlow:
         .name: EventFlow
         .content-type: text/event-stream
@@ -797,6 +843,7 @@ TargetEndpoints:
               Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
+      {{- end }}
       HTTPTargetConnection:
         Properties:
           - Property:
@@ -820,10 +867,13 @@ TargetEndpoints:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
         URL: https://{endpoint_host}/v1/projects/{gcp_project_id}/locations/{model_location}/publishers/anthropic/models/{model}:streamRawPredict
+  {{- end }}
 
+  {{- range $isSse := $targetVariants }}
+  {{- $includeEventFlow := or (not $dedicatedSseTargets) $isSse }}
   - TargetEndpoint:
-      .name: gemini-native-target
-      Description: Target Endpoint for native Gemini requests
+      .name: gemini-native-target{{ if $isSse }}-sse{{ end }}
+      Description: Target Endpoint for native Gemini requests{{ if $isSse }} (SSE EventFlow){{ end }}
       FaultRules:
         {{- if $modelArmorEnabled }}
         - FaultRule:
@@ -840,8 +890,8 @@ TargetEndpoints:
                   Name: AM-CustomError
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
-        {{- include "callout_abort_faultrule" . | nindent 8 }}
-      {{- include "default_fault_rule_map" . | nindent 6 }}
+        {{- include "callout_abort_faultrule" $ | nindent 8 }}
+      {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
         Request:
@@ -853,6 +903,7 @@ TargetEndpoints:
         Request: {}
         Response: {}
       Flows: {}
+      {{- if $includeEventFlow }}
       EventFlow:
         .name: EventFlow
         .content-type: text/event-stream
@@ -882,6 +933,7 @@ TargetEndpoints:
               Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
+      {{- end }}
       HTTPTargetConnection:
         Properties:
           - Property:
@@ -905,10 +957,14 @@ TargetEndpoints:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
         URL: https://{endpoint_host}
+  {{- end }}
 
+  {{- range $isSse := $targetVariants }}
+  {{- $includePostFlow := or (not $dedicatedSseTargets) (not $isSse) }}
+  {{- $includeEventFlow := or (not $dedicatedSseTargets) $isSse }}
   - TargetEndpoint:
-      .name: gemini-openai-compat
-      Description: Target Endpoint for OpenAI-compatible Gemini requests
+      .name: gemini-openai-compat{{ if $isSse }}-sse{{ end }}
+      Description: Target Endpoint for OpenAI-compatible Gemini requests{{ if $isSse }} (SSE EventFlow){{ end }}
       FaultRules:
         {{- if $modelArmorEnabled }}
         - FaultRule:
@@ -925,8 +981,8 @@ TargetEndpoints:
                   Name: AM-CustomError
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
-        {{- include "callout_abort_faultrule" . | nindent 8 }}
-      {{- include "default_fault_rule_map" . | nindent 6 }}
+        {{- include "callout_abort_faultrule" $ | nindent 8 }}
+      {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
         Request:
@@ -938,11 +994,16 @@ TargetEndpoints:
       PostFlow:
         .name: PostFlow
         Request: {}
+        {{- if $includePostFlow }}
         Response:
           - Step:
               Condition: '!(stream = true) and (response.status.code < 400) and (request_format != "openai")'
               Name: JS-gemini-to-anthropic-resp
+        {{- else }}
+        Response: {}
+        {{- end }}
       Flows: {}
+      {{- if $includeEventFlow }}
       EventFlow:
         .name: EventFlow
         .content-type: text/event-stream
@@ -972,6 +1033,7 @@ TargetEndpoints:
               Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
+      {{- end }}
       HTTPTargetConnection:
         Properties:
           - Property:
@@ -995,10 +1057,14 @@ TargetEndpoints:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
         URL: https://{endpoint_host}/v1/projects/{gcp_project_id}/locations/{model_location}/endpoints/openapi/chat/completions
+  {{- end }}
 
+  {{- range $isSse := $targetVariants }}
+  {{- $includePostFlow := or (not $dedicatedSseTargets) (not $isSse) }}
+  {{- $includeEventFlow := or (not $dedicatedSseTargets) $isSse }}
   - TargetEndpoint:
-      .name: openai-custom
-      Description: Target Endpoint for Direct OpenAI and External OpenAI-Compatible Endpoints
+      .name: openai-custom{{ if $isSse }}-sse{{ end }}
+      Description: Target Endpoint for Direct OpenAI and External OpenAI-Compatible Endpoints{{ if $isSse }} (SSE EventFlow){{ end }}
       FaultRules:
         {{- if $modelArmorEnabled }}
         - FaultRule:
@@ -1015,8 +1081,8 @@ TargetEndpoints:
                   Name: AM-CustomError
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
-        {{- include "callout_abort_faultrule" . | nindent 8 }}
-      {{- include "default_fault_rule_map" . | nindent 6 }}
+        {{- include "callout_abort_faultrule" $ | nindent 8 }}
+      {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
         Request:
@@ -1035,6 +1101,7 @@ TargetEndpoints:
       PostFlow:
         .name: PostFlow
         Request: {}
+        {{- if $includePostFlow }}
         Response:
           - Step:
               Condition: '!(stream = true) and (response.status.code < 400) and (model_format != "anthropic") and (request_format != "openai") and (request_format != "gemini")'
@@ -1042,7 +1109,11 @@ TargetEndpoints:
           - Step:
               Condition: '!(stream = true) and (response.status.code < 400) and ((model_format = "anthropic") or (model_format = "gemini")) and (request_format = "openai")'
               Name: JS-anthropic-to-openai-resp
+        {{- else }}
+        Response: {}
+        {{- end }}
       Flows: {}
+      {{- if $includeEventFlow }}
       EventFlow:
         .name: EventFlow
         .content-type: text/event-stream
@@ -1072,6 +1143,7 @@ TargetEndpoints:
               Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
+      {{- end }}
       HTTPTargetConnection:
         Properties:
           - Property:
@@ -1091,10 +1163,14 @@ TargetEndpoints:
           Enforce: true
           IgnoreValidationErrors: false
         URL: https://api.openai.com/v1/chat/completions
+  {{- end }}
 
+  {{- range $isSse := $targetVariants }}
+  {{- $includePostFlow := or (not $dedicatedSseTargets) (not $isSse) }}
+  {{- $includeEventFlow := or (not $dedicatedSseTargets) $isSse }}
   - TargetEndpoint:
-      .name: gemini
-      Description: Target Endpoint for translated Gemini requests
+      .name: gemini{{ if $isSse }}-sse{{ end }}
+      Description: Target Endpoint for translated Gemini requests{{ if $isSse }} (SSE EventFlow){{ end }}
       FaultRules:
         {{- if $modelArmorEnabled }}
         - FaultRule:
@@ -1111,8 +1187,8 @@ TargetEndpoints:
                   Name: AM-CustomError
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
-        {{- include "callout_abort_faultrule" . | nindent 8 }}
-      {{- include "default_fault_rule_map" . | nindent 6 }}
+        {{- include "callout_abort_faultrule" $ | nindent 8 }}
+      {{- include "default_fault_rule_map" $ | nindent 6 }}
 
       PreFlow:
         .name: PreFlow
@@ -1125,11 +1201,16 @@ TargetEndpoints:
         Request:
           Step:
             Name: JS-anthropic-to-gemini
+        {{- if $includePostFlow }}
         Response:
           Step:
             Condition: '!(stream = true) and (response.status.code < 400)'
             Name: JS-gemini-to-anthropic-resp
+        {{- else }}
+        Response: {}
+        {{- end }}
       Flows: {}
+      {{- if $includeEventFlow }}
       EventFlow:
         .name: EventFlow
         .content-type: text/event-stream
@@ -1159,6 +1240,7 @@ TargetEndpoints:
               Condition: (model_armor_response_enabled != "false") and (buff_ready = "true") and (response_partial != null) and (response_partial != "")
               Name: SMR-SanitizeModelResponse
           {{- end }}
+      {{- end }}
       HTTPTargetConnection:
         Properties:
           - Property:
@@ -1182,6 +1264,7 @@ TargetEndpoints:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
         URL: https://aiplatform.googleapis.com/v1/projects/{gcp_project_id}/locations/global/publishers/google/models/{model}:generateContent
+  {{- end }}
 
 Resources:
   # Dynamic PropertySets Generated from values.yaml
