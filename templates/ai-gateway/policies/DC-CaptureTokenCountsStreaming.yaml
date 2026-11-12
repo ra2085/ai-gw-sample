@@ -96,10 +96,11 @@ DataCapture:
           .ref: identity_team
           .default: default
         DataCollector: dc_identity_team
+    {{- if or (not $.Values.features) (not $.Values.features.monetization) (not (hasKey $.Values.features.monetization "enabled")) (ne (printf "%v" $.Values.features.monetization.enabled) "false") }}
     - Capture:
         Collect:
           .ref: perUnitPriceMultiplier
-          .default: 1.0
+          .default: 0.0
         DataCollector:
           .scope: monetization
           -Data: perUnitPriceMultiplier
@@ -113,7 +114,8 @@ DataCapture:
     - Capture:
         Collect:
           .ref: transactionSuccess
-          .default: true
+          .default: false
         DataCollector:
           .scope: monetization
           -Data: transactionSuccess
+    {{- end }}

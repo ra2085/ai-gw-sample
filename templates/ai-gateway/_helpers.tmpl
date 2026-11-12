@@ -849,6 +849,69 @@ buffer_size=50
     -Data: {{ include "generate_extract_expressions_properties" . | b64enc }}
 {{- end -}}
 
+{{- define "target_transport_fallback_faultrule" -}}
+{{- $quotasEnabled := or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false") -}}
+{{- $secondaryQuotaEnabled := and $quotasEnabled $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (eq (printf "%v" $.Values.features.quotas.secondary_window.enabled) "true") -}}
+{{- $monetizationEnabled := or (not $.Values.features) (not $.Values.features.monetization) (not (hasKey $.Values.features.monetization "enabled")) (ne (printf "%v" $.Values.features.monetization.enabled) "false") -}}
+{{- $modelArmorEnabled := and $.Values.features $.Values.features.model_armor (eq (printf "%v" $.Values.features.model_armor.enabled) "true") -}}
+{{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
+- FaultRule:
+    .name: transport-fallback
+    -Data:
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: LTQ-CircuitBreakerCount
+      - Step:
+          Condition: '!(stream = true) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: JS-prepare-fallback-request
+      - Step:
+          Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
+          Name: SC-FallbackGoogleIAM
+      - Step:
+          Condition: '(fallback_ready = "true") and (fallback_use_google_iam != "true")'
+          Name: SC-FallbackExternal
+      - Step:
+          Condition: 'fallback_ready = "true"'
+          Name: JS-apply-fallback-response
+      - Step:
+          Condition: 'fallback_succeeded = "true"'
+          Name: JS-calculate-tokens-non-streaming
+      {{- if $modelArmorEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
+          Name: SMR-SanitizeFallbackInFault
+      {{- end }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND")'
+          Name: JS-calculate-monetization-cost
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND")'
+          Name: DC-CaptureTokenCountsNonStreaming
+      {{- if $quotasEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND") and (((usage_total_tokens != null) and (usage_total_tokens != "0")) or ((judge_total_tokens != null) and (judge_total_tokens != "0"))) and (apiproduct.name != null)'
+          Name: LTQ-CountOnly
+      {{- if $secondaryQuotaEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND") and (((usage_total_tokens != null) and (usage_total_tokens != "0")) or ((judge_total_tokens != null) and (judge_total_tokens != "0"))) and (apiproduct.name != null)'
+          Name: LTQ-SecondaryCountOnly
+      {{- end }}
+      {{- end }}
+      - Step:
+          Condition: '(fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")'
+          Name: JS-inject-deidentified-finding
+      - Step:
+          Condition: '(fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")'
+          Name: AM-CustomError
+      - Condition: (fault.category = "Transport") or (fault.name = "GatewayTimeout") or (fault.name = "ConnectTimeout") or (fault.name = "ServiceUnavailable") or (fault.name = "HostNotReachable") or (fault.name = "NoResolvedHost") or (fault.name = "UnresolvedHost") or (fault.name = "ErrorDnsLookupFailed") or (fault.name = "DnsLookupFailed") or (fault.name = "DNSLookupFailed") or (fault.name = "DNSLookupTimeout") or (fault.name = "UnexpectedEOFAtTarget") or (fault.name = "PrematurelyClosed") or (fault.name = "ConnectionResetByPeer") or (fault.name = "SslHandshakeFailed") or (fault.name = "SSLHandshakeFailed") or (fault.name = "GeneralSSLEngineProblem") or (fault.name = "NoActiveTargets") or (fault.name = "BadGateway") or (fault.name = "TargetConnectError") or ((callout_aborted != "true") and (response.status.code = null) and (fault.name != "RaiseFault") and (fault.name != "raisefault"))
+{{- end }}
+{{- end -}}
+
 {{- define "callout_abort_faultrule" -}}
 - FaultRule:
     .name: callout-abort
@@ -873,10 +936,10 @@ buffer_size=50
           Name: RQ-ReleaseConcurrencySlot
       {{- end }}
       - Step:
-          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
           Name: JS-inject-deidentified-finding
       - Step:
-          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
           Name: AM-CustomError
 {{- end -}}
 
@@ -890,10 +953,10 @@ DefaultFaultRule:
         Name: RQ-ReleaseConcurrencySlot
     {{- end }}
     - Step:
-        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
         Name: JS-inject-deidentified-finding
     - Step:
-        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
+        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
         Name: AM-CustomError
 {{- end -}}
 

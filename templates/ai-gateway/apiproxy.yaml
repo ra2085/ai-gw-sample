@@ -786,6 +786,7 @@ TargetEndpoints:
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
         {{- include "callout_abort_faultrule" $ | nindent 8 }}
+        {{- include "target_transport_fallback_faultrule" $ | nindent 8 }}
       {{- include "default_fault_rule_map" $ | nindent 6 }}
 
       PreFlow:
@@ -887,6 +888,7 @@ TargetEndpoints:
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
         {{- include "callout_abort_faultrule" $ | nindent 8 }}
+        {{- include "target_transport_fallback_faultrule" $ | nindent 8 }}
       {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
@@ -978,6 +980,7 @@ TargetEndpoints:
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
         {{- include "callout_abort_faultrule" $ | nindent 8 }}
+        {{- include "target_transport_fallback_faultrule" $ | nindent 8 }}
       {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
@@ -1078,6 +1081,7 @@ TargetEndpoints:
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
         {{- include "callout_abort_faultrule" $ | nindent 8 }}
+        {{- include "target_transport_fallback_faultrule" $ | nindent 8 }}
       {{- include "default_fault_rule_map" $ | nindent 6 }}
       PreFlow:
         .name: PreFlow
@@ -1184,6 +1188,7 @@ TargetEndpoints:
               - Condition: (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")
         {{- end }}
         {{- include "callout_abort_faultrule" $ | nindent 8 }}
+        {{- include "target_transport_fallback_faultrule" $ | nindent 8 }}
       {{- include "default_fault_rule_map" $ | nindent 6 }}
 
       PreFlow:

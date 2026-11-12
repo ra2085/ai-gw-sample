@@ -54,6 +54,9 @@
 - {{ include "./policies/SUP-SanitizeUserPrompt.yaml" . | indent 2 | trim }}
 - {{ include "./policies/SUP-SanitizeUserPromptGemini.yaml" . | indent 2 | trim }}
 - {{ include "./policies/SMR-SanitizeModelResponse.yaml" . | indent 2 | trim }}
+{{- if and $.Values.features $.Values.features.model_armor (eq (printf "%v" $.Values.features.model_armor.enabled) "true") }}
+- {{ include "./policies/SMR-SanitizeFallbackInFault.yaml" . | indent 2 | trim }}
+{{- end }}
 - {{ include "./policies/JS-inject-deidentified-finding.yaml" . | indent 2 | trim }}
 
 # Monetization & Quota Policies
