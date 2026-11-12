@@ -39,6 +39,7 @@ features:
     template: "ai-gw-template"                        # Global fallback template ID
     request_template: "ai-gw-template"                # Optional: global default template for user prompts (or "none")
     response_template: "ai-gw-template"               # Optional: global default template for model responses (or "none")
+    allow_claim_bypass: true                          # Set false to prevent token claims from passing "none" or overriding admin identity_rules
     identity_rules:                                   # Optional: Tier 2 identity/team '*' glob overrides (ranked by specificity)
       - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
         request_template: "strict-pci-dlp-template"
@@ -113,7 +114,8 @@ features:
       enabled: true                                   # Option 4b: Corporate SSO JWTs (JWKS signature verification)
       jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
       issuer: "https://login.corp.example.com"
-      # audience: "api://ai-gateway,cli-client-id"    # Optional single/comma-separated/glob JWT 'aud' allowlist (omitted by default)
+      audience: "api://ai-gateway,cli-client-id"      # Required when enabled=true: single value, comma-separated list, or glob
+      algorithm: "RS256"                              # Asymmetric RSA family (RS256/PS256/...) or ECDSA family (ES256/ES384/ES512)
       user_claim: "email"
       persona_claim: "role"
       team_claim: "department"

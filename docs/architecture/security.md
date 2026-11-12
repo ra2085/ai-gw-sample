@@ -40,6 +40,8 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
           enabled: true
           jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
           issuer: "https://login.corp.example.com"
+          audience: "api://ai-gateway"
+          algorithm: "RS256"
           user_claim: "email"
           persona_claim: "groups"
           team_claim: "department"

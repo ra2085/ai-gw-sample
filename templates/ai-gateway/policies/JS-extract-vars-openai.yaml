@@ -10,6 +10,9 @@ JavaCallout:
     - Property:
         .name: error_prefix
         -Data: router.
+    - Property:
+        .name: require_json_content_type
+        -Data: true
     {{- include "javacallout_embedded_propertysets" . | nindent 4 }}
   ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
   ResourceURL: java://ai-gateway-callouts.jar

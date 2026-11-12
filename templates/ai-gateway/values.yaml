@@ -24,6 +24,7 @@ features:
     template: "ai-gw-template"             # Global fallback template (used for both request & response unless overridden)
     request_template: "ai-gw-template"     # Default user prompt sanitization template (or "none" to skip request scanning)
     response_template: "ai-gw-template"    # Default model response sanitization template (or "none" to skip response scanning)
+    allow_claim_bypass: true               # Set false to block token claims from disabling Model Armor ("none") or overriding admin identity_rules
     # Optional context-aware template enforcement by Persona or Identity/Team glob pattern:
     # personas:
     #   knowledge-worker:
@@ -112,7 +113,8 @@ features:
       enabled: false                       # Option 4b: Local Harness (Claude App, Copilot, CLI) with Enterprise IdP JWT
       jwks_uri: "https://idp.example.com/oauth2/v1/keys"
       issuer: "https://idp.example.com"
-      # audience: ""                       # Optional single or comma-separated allowed JWT 'aud' values (omitted by default for multi-client/CLI setups)
+      audience: "https://ai-gateway.example.com" # Required when enabled=true (single value, comma-separated list, or glob)
+      algorithm: "RS256"                   # Asymmetric JWS algorithm(s): RSA family (RS256/RS384/RS512/PS256/PS384/PS512) or ECDSA family (ES256/ES384/ES512)
       user_claim: "email"
       persona_claim: "role"
       team_claim: "department"

@@ -1,0 +1,18 @@
+JavaCallout:
+  .continueOnError: false
+  .enabled: true
+  .name: JS-extract-vars-claude
+  DisplayName: JS-extract-vars-claude
+  Properties:
+    - Property:
+        .name: action
+        -Data: extract_vars_claude
+    - Property:
+        .name: error_prefix
+        -Data: router.
+    - Property:
+        .name: require_json_content_type
+        -Data: true
+    {{- include "javacallout_embedded_propertysets" . | nindent 4 }}
+  ClassName: com.google.apigee.callouts.RequestRouterAndTranscoderCallout
+  ResourceURL: java://ai-gateway-callouts.jar

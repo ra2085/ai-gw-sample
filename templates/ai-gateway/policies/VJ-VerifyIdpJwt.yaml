@@ -1,11 +1,11 @@
 VerifyJWT:
-  .continueOnError: true
+  .continueOnError: false
   .enabled: true
   .name: VJ-VerifyIdpJwt
   DisplayName: VJ-VerifyIdpJwt
-  Algorithm: RS256
+  Algorithm: {{ include "resolve_idp_jwt_algorithm" . }}
   Source: auth_bearer_token
-  IgnoreUnresolvedVariables: true
+  IgnoreUnresolvedVariables: false
   IgnoreCriticalHeaders: false
   IgnoreIssuedAt: false
   TimeAllowance: 30s
@@ -14,3 +14,7 @@ VerifyJWT:
       .uriRef: propertyset.config.auth_idp_jwt_jwks_uri
   Issuer:
     .ref: propertyset.config.auth_idp_jwt_issuer
+  {{- if eq (include "has_single_exact_idp_jwt_audience" .) "true" }}
+  Audience:
+    .ref: propertyset.config.auth_idp_jwt_audience
+  {{- end }}

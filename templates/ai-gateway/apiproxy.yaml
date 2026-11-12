@@ -57,14 +57,15 @@ ProxyEndpoints:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
               - Step:
+                  Condition: '(proxy.pathsuffix = "") or (proxy.pathsuffix = null)'
                   Name: AM-NormalizePathSuffix
               - Step:
                   Name: OAS-VerifyClaude
               - Step:
-                  Name: EV-Model
+                  Name: JS-extract-vars-claude
               {{- if $llmJudgeEnabled }}
               - Step:
-                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (judge_plugin_id = "auto-router")
+                  Condition: (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (judge_plugin_id = "auto-router") or (has_judge_payload = "true")
                   Name: JS-prepare-judge-request
               - Step:
                   Condition: trigger_judge = "true"
@@ -99,8 +100,6 @@ ProxyEndpoints:
               - Step:
                   Name: Q-ConcurrencyLimit
               {{- end }}
-              - Step:
-                  Name: JS-extract-prompt
               {{- if $modelArmorEnabled }}
               - Step:
                   Condition: (model_armor_request_enabled != "false") and (extracted_prompt != null) and (extracted_prompt != "")
@@ -120,7 +119,7 @@ ProxyEndpoints:
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
               - Step:
-                  Condition: '!(stream = true) and (response.status.code < 400)'
+                  Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreaming
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
@@ -289,10 +288,10 @@ ProxyEndpoints:
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
               - Step:
-                  Condition: '!(stream = true) and (response.status.code < 400) and (request_format = "gemini") and (gemini_json_array_stream != "true")'
+                  Condition: '!(stream = true) and (response.status.code < 400) and (request_format = "gemini") and (gemini_json_array_stream != "true") and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingGemini
               - Step:
-                  Condition: '!(stream = true) and (response.status.code < 400) and request_format = "claude"'
+                  Condition: '!(stream = true) and (response.status.code < 400) and (request_format = "claude") and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreaming
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
@@ -394,6 +393,7 @@ ProxyEndpoints:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
               - Step:
+                  Condition: '(proxy.pathsuffix = "") or (proxy.pathsuffix = null)'
                   Name: AM-NormalizePathSuffix
               - Step:
                   Name: OAS-VerifyOpenAI
@@ -455,7 +455,7 @@ ProxyEndpoints:
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
               - Step:
-                  Condition: '!(stream = true) and (response.status.code < 400)'
+                  Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingOpenAI
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
@@ -557,6 +557,7 @@ ProxyEndpoints:
                   Name: MLC-EnforceMonetizationLimits
               {{- end }}
               - Step:
+                  Condition: '(proxy.pathsuffix = "") or (proxy.pathsuffix = null)'
                   Name: AM-NormalizePathSuffix
               - Step:
                   Name: OAS-VerifyOpenAI
@@ -607,7 +608,7 @@ ProxyEndpoints:
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
               - Step:
-                  Condition: '!(stream = true) and (response.status.code < 400)'
+                  Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingOpenAI
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400)'
@@ -708,11 +709,18 @@ ProxyEndpoints:
         - Flow:
             .name: retrieveModel
             Description: Retrieve model details
-            Condition: (request.verb = "GET") AND (proxy.pathsuffix MatchesPath "/*")
+            Condition: request.verb = "GET"
             Request: {}
             Response:
               Step:
                 Name: JS-models-endpoint
+        - Flow:
+            .name: unsupportedModelsMethod
+            Description: Reject unsupported HTTP methods before loopback no-target
+            Request:
+              Step:
+                Name: JS-models-endpoint
+            Response: {}
       HTTPProxyConnection:
         BasePath: {{ if and $.Values.endpoints $.Values.endpoints.models_catalog }}{{ $.Values.endpoints.models_catalog.base_path | default "/v1/models" }}{{ else }}/v1/models{{ end }}
       RouteRule:
@@ -1029,7 +1037,7 @@ TargetEndpoints:
         Request: {}
         Response:
           - Step:
-              Condition: '!(stream = true) and (response.status.code < 400) and (((model_format != "anthropic") and (request_format != "openai") and (request_format != "gemini")) or ((model_format = "gemini") and (request_format = "openai")))'
+              Condition: '!(stream = true) and (response.status.code < 400) and (model_format != "anthropic") and (request_format != "openai") and (request_format != "gemini")'
               Name: JS-gemini-to-anthropic-resp
           - Step:
               Condition: '!(stream = true) and (response.status.code < 400) and ((model_format = "anthropic") or (model_format = "gemini")) and (request_format = "openai")'

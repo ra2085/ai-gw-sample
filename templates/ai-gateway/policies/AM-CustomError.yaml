@@ -6,9 +6,12 @@ AssignMessage:
   Properties: {}
   Set:
     Headers:
-      Header:
-        .name: Content-Type
-        -Data: application/json
+      - Header:
+          .name: Content-Type
+          -Data: application/json
+      - Header:
+          .name: X-Content-Type-Options
+          -Data: nosniff
     Payload:
       .contentType: application/json
       -Data: '{auth_error_payload}'

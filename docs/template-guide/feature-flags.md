@@ -60,6 +60,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
           enabled: true
           jwks_uri: "https://www.googleapis.com/oauth2/v3/certs"
           issuer: "https://accounts.google.com"
+          audience: "api://ai-gateway"
           persona_claim: "groups"
         default_persona: "developer"
         personas:
@@ -106,6 +107,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
         template: "standard-safety-template"
         request_template: "standard-request-template"
         response_template: "standard-response-template"
+        allow_claim_bypass: false
         identity_rules:
           - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
             request_template: "strict-pci-dlp-template"

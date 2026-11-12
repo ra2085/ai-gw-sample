@@ -337,6 +337,7 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
     {{- $maLocStr = $rawMaLoc -}}
   {{- end -}}
 {{- end -}}
+gateway_name={{ if and $.Values.gateway $.Values.gateway.name }}{{ $.Values.gateway.name }}{{ else }}ai-gateway{{ end }}
 project_id={{ $gwProjStr }}
 model_armor_enabled={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "enabled") }}{{ $.Values.features.model_armor.enabled }}{{ else }}false{{ end }}
 model_armor_project_id={{ $maProjStr }}
@@ -344,6 +345,7 @@ model_armor_location={{ $maLocStr }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
 model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
+model_armor_allow_claim_bypass={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "allow_claim_bypass") }}{{ $.Values.features.model_armor.allow_claim_bypass }}{{ else }}true{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
@@ -394,12 +396,46 @@ auth_idp_opaque_team_claim={{ if and $auth.idp_opaque $auth.idp_opaque.team_clai
 auth_idp_opaque_quota_override_claim={{ if and $auth.idp_opaque $auth.idp_opaque.quota_override_claim }}{{ $auth.idp_opaque.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
 auth_idp_opaque_token_ttl_ms={{ if and $auth.idp_opaque $auth.idp_opaque.token_ttl_ms }}{{ $auth.idp_opaque.token_ttl_ms }}{{ else }}3600000{{ end }}
 
-auth_idp_jwt_enabled={{ if and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") }}{{ $auth.idp_jwt.enabled }}{{ else }}false{{ end }}
-auth_idp_jwt_jwks_uri={{ if and $auth.idp_jwt $auth.idp_jwt.jwks_uri }}{{ $auth.idp_jwt.jwks_uri }}{{ else }}https://idp.example.com/oauth2/v1/keys{{ end }}
-auth_idp_jwt_issuer={{ if and $auth.idp_jwt $auth.idp_jwt.issuer }}{{ $auth.idp_jwt.issuer }}{{ else }}https://idp.example.com{{ end }}
-{{- if and $auth.idp_jwt $auth.idp_jwt.audience }}
-auth_idp_jwt_audience={{ if kindIs "slice" $auth.idp_jwt.audience }}{{ $auth.idp_jwt.audience | join "," }}{{ else }}{{ $auth.idp_jwt.audience }}{{ end }}
+{{- $idpJwtEnabled := and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") (eq (printf "%v" $auth.idp_jwt.enabled) "true") }}
+{{- $idpJwtJwksUri := "" }}
+{{- if and $auth.idp_jwt (hasKey $auth.idp_jwt "jwks_uri") }}
+  {{- $idpJwtJwksUri = printf "%v" $auth.idp_jwt.jwks_uri | trim }}
+{{- else if not $idpJwtEnabled }}
+  {{- $idpJwtJwksUri = "https://idp.example.com/oauth2/v1/keys" }}
 {{- end }}
+{{- $idpJwtIssuer := "" }}
+{{- if and $auth.idp_jwt (hasKey $auth.idp_jwt "issuer") }}
+  {{- $idpJwtIssuer = printf "%v" $auth.idp_jwt.issuer | trim }}
+{{- else if not $idpJwtEnabled }}
+  {{- $idpJwtIssuer = "https://idp.example.com" }}
+{{- end }}
+{{- $idpJwtAudience := "" }}
+{{- if and $auth.idp_jwt $auth.idp_jwt.audience }}
+  {{- if kindIs "slice" $auth.idp_jwt.audience }}
+    {{- $idpJwtAudience = $auth.idp_jwt.audience | join "," | trim }}
+  {{- else }}
+    {{- $idpJwtAudience = printf "%v" $auth.idp_jwt.audience | trim }}
+  {{- end }}
+{{- end }}
+{{- if $idpJwtEnabled }}
+  {{- if eq $idpJwtJwksUri "" }}
+    {{- fail "features.auth.idp_jwt.jwks_uri must be non-empty when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+  {{- if eq $idpJwtIssuer "" }}
+    {{- fail "features.auth.idp_jwt.issuer must be non-empty when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+  {{- if or (eq $idpJwtAudience "") (eq $idpJwtAudience "*") }}
+    {{- fail "features.auth.idp_jwt.audience must be explicitly set (and cannot be '*') when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+{{- end }}
+{{- $idpJwtAlg := include "resolve_idp_jwt_algorithm" . }}
+auth_idp_jwt_enabled={{ if $idpJwtEnabled }}true{{ else }}false{{ end }}
+auth_idp_jwt_jwks_uri={{ $idpJwtJwksUri }}
+auth_idp_jwt_issuer={{ $idpJwtIssuer }}
+{{- if ne $idpJwtAudience "" }}
+auth_idp_jwt_audience={{ $idpJwtAudience }}
+{{- end }}
+auth_idp_jwt_algorithm={{ $idpJwtAlg }}
 auth_idp_jwt_user_claim={{ if and $auth.idp_jwt $auth.idp_jwt.user_claim }}{{ $auth.idp_jwt.user_claim }}{{ else }}email{{ end }}
 auth_idp_jwt_persona_claim={{ if and $auth.idp_jwt $auth.idp_jwt.persona_claim }}{{ $auth.idp_jwt.persona_claim }}{{ else }}role{{ end }}
 auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $auth.idp_jwt.team_claim }}{{ else }}department{{ end }}
@@ -819,8 +855,47 @@ DefaultFaultRule:
         Name: AM-CustomError
 {{- end -}}
 
+{{- define "resolve_idp_jwt_algorithm" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $rawAlg := "RS256" -}}
+{{- if and $auth.idp_jwt (or (hasKey $auth.idp_jwt "algorithm") (hasKey $auth.idp_jwt "algorithms")) -}}
+  {{- $cfgAlg := default $auth.idp_jwt.algorithms $auth.idp_jwt.algorithm -}}
+  {{- if kindIs "slice" $cfgAlg -}}
+    {{- $rawAlg = $cfgAlg | join "," | trim -}}
+  {{- else if $cfgAlg -}}
+    {{- $rawAlg = printf "%v" $cfgAlg | trim -}}
+  {{- else -}}
+    {{- $rawAlg = "" -}}
+  {{- end -}}
+{{- end -}}
+{{- $cleanAlg := ($rawAlg | upper | replace " " "" | replace "\t" "") -}}
+{{- if not (regexMatch "^((RS256|RS384|RS512|PS256|PS384|PS512)(,(RS256|RS384|RS512|PS256|PS384|PS512))*|(ES256|ES384|ES512)(,(ES256|ES384|ES512))*)$" $cleanAlg) -}}
+  {{- fail (printf "features.auth.idp_jwt.algorithm %q is invalid: must specify asymmetric RSA (RS256/RS384/RS512/PS256/PS384/PS512) or ECDSA (ES256/ES384/ES512) algorithms without mixing ES* with RS*/PS* families" $rawAlg) -}}
+{{- end -}}
+{{- $cleanAlg -}}
+{{- end -}}
+
+{{- define "has_single_exact_idp_jwt_audience" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $aud := "" -}}
+{{- if and $auth.idp_jwt $auth.idp_jwt.audience -}}
+  {{- if kindIs "slice" $auth.idp_jwt.audience -}}
+    {{- $aud = $auth.idp_jwt.audience | join "," | trim -}}
+  {{- else -}}
+    {{- $aud = printf "%v" $auth.idp_jwt.audience | trim -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (ne $aud "") (not (contains "," $aud)) (not (contains "*" $aud)) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
 {{- define "blank" -}}{{- end -}}
-
-
-
-
