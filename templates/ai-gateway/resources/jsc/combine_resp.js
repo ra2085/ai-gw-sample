@@ -101,10 +101,8 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
                                                 getVar("propertyset.monetization_rates.default.output_rate")) : null) ||
                             "0.40";
 
-        var inputRate = parseFloat(String(inputRateStr).replace(/^\$/, ""));
-        if (isNaN(inputRate) || inputRate < 0) inputRate = 0.10;
-        var outputRate = parseFloat(String(outputRateStr).replace(/^\$/, ""));
-        if (isNaN(outputRate) || outputRate < 0) outputRate = 0.40;
+        var inputRate = parseCleanRate(inputRateStr, 0.10, false);
+        var outputRate = parseCleanRate(outputRateStr, 0.40, false);
 
         var cacheReadRate = inputRate;
         if (cacheRead > 0) {
@@ -114,9 +112,8 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
                                                      getVar("propertyset.monetization_rates." + bareModel + ".cache_read_rate")) : null) ||
                                    (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
                                                        getVar("propertyset.monetization_rates.default.cache_read_rate")) : null);
-            if (cacheReadRateStr) {
-                var parsedCr = parseFloat(String(cacheReadRateStr).replace(/^\$/, ""));
-                if (!isNaN(parsedCr) && parsedCr >= 0) cacheReadRate = parsedCr;
+            if (cacheReadRateStr !== null && cacheReadRateStr !== undefined && cacheReadRateStr !== "") {
+                cacheReadRate = parseCleanRate(cacheReadRateStr, inputRate, false);
             }
         }
 
@@ -128,9 +125,8 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
                                                       getVar("propertyset.monetization_rates." + bareModel + ".cache_write_rate")) : null) ||
                                     (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
                                                         getVar("propertyset.monetization_rates.default.cache_write_rate")) : null);
-            if (cacheWriteRateStr) {
-                var parsedCw = parseFloat(String(cacheWriteRateStr).replace(/^\$/, ""));
-                if (!isNaN(parsedCw) && parsedCw >= 0) cacheWriteRate = parsedCw;
+            if (cacheWriteRateStr !== null && cacheWriteRateStr !== undefined && cacheWriteRateStr !== "") {
+                cacheWriteRate = parseCleanRate(cacheWriteRateStr, inputRate, false);
             }
         }
 
@@ -139,10 +135,7 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
                         getVar("propertyset.monetization_rates.platform.markup_multiplier") ||
                         (!isDefaultModel ? getVar("propertyset.monetization_rates.default.markup") : null) ||
                         "1.0";
-        var markupMultiplier = parseFloat(markupStr);
-        if (isNaN(markupMultiplier) || markupMultiplier <= 0) {
-            markupMultiplier = 1.0;
-        }
+        var markupMultiplier = parseCleanRate(markupStr, 1.0, true);
 
         var currency = getVar("propertyset.monetization_rates.platform.currency") ||
                        getVar("propertyset.monetization_rates.default.currency") ||
@@ -193,6 +186,13 @@ function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, 
     }
 }
 
+function parseCleanRate(rawStr, fallbackVal, minExclusive) {
+    if (rawStr === null || rawStr === undefined) return fallbackVal;
+    var v = parseFloat(String(rawStr).trim().replace(/^\$/, "").trim());
+    if (isNaN(v) || !isFinite(v) || (minExclusive ? v <= 0 : v < 0)) return fallbackVal;
+    return v;
+}
+
 function computeJudgeStreamCost(defaultMarkup) {
     var jm = getVar("judge_model") || "gemini-2.5-flash-lite";
     var bareJm = jm.indexOf("/") !== -1 ? jm.split("/").slice(1).join("/") : jm;
@@ -209,10 +209,8 @@ function computeJudgeStreamCost(defaultMarkup) {
                               getVar("propertyset.monetization_rates." + bareJm + ".output_rate")) : null) ||
                   getVar("propertyset.monetization_rates.default.output_rate_per_m") ||
                   getVar("propertyset.monetization_rates.default.output_rate") || "0.40";
-    var jInRate = parseFloat(String(jInStr).replace(/^\$/, ""));
-    if (isNaN(jInRate) || jInRate < 0) jInRate = 0.10;
-    var jOutRate = parseFloat(String(jOutStr).replace(/^\$/, ""));
-    if (isNaN(jOutRate) || jOutRate < 0) jOutRate = 0.40;
+    var jInRate = parseCleanRate(jInStr, 0.10, false);
+    var jOutRate = parseCleanRate(jOutStr, 0.40, false);
     var jUncached = parseInt(getVar("judge_uncached_prompt_tokens") || getVar("judge_prompt_tokens") || "0", 10) || 0;
     var jCached = parseInt(getVar("judge_cache_read_tokens") || "0", 10) || 0;
     var jOut = parseInt(getVar("judge_completion_tokens") || "0", 10) || 0;

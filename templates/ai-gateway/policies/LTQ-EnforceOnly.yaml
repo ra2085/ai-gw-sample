@@ -9,7 +9,7 @@ LLMTokenQuota:
   Identifier:
     .ref: rate_limit_client_id
   Allow:
-    .count: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.default_quota }}{{ $.Values.features.quotas.default_quota }}{{ else }}1000000{{ end }}
+    .count: {{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "default_quota") (ne $.Values.features.quotas.default_quota nil) (ne (printf "%v" $.Values.features.quotas.default_quota | trim) "") }}{{ include "positive_allow_count" $.Values.features.quotas.default_quota }}{{ else }}1000000{{ end }}
     .countRef: primary_quota_limit
   Interval:
     .ref: primary_quota_interval

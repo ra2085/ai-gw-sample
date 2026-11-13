@@ -283,29 +283,37 @@ default.auto_fallback={{ $.Values.defaults.auto_fallback }}
 # Default fallback pricing parameters
 default.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
 platform.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
-default.markup={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
-platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
-default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_input_rate }}{{ $.Values.features.monetization.default_input_rate }}{{ else }}0.10{{ end }}
-default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_output_rate }}{{ $.Values.features.monetization.default_output_rate }}{{ else }}0.40{{ end }}
+default.markup={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_markup") (ne $.Values.features.monetization.default_markup nil) }}{{ printf "%v" $.Values.features.monetization.default_markup | trim | trimPrefix "$" }}{{ else }}1.0{{ end }}
+platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_markup") (ne $.Values.features.monetization.default_markup nil) }}{{ printf "%v" $.Values.features.monetization.default_markup | trim | trimPrefix "$" }}{{ else }}1.0{{ end }}
+default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_input_rate") (ne $.Values.features.monetization.default_input_rate nil) }}{{ printf "%v" $.Values.features.monetization.default_input_rate | trim | trimPrefix "$" }}{{ else }}0.10{{ end }}
+default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_output_rate") (ne $.Values.features.monetization.default_output_rate nil) }}{{ printf "%v" $.Values.features.monetization.default_output_rate | trim | trimPrefix "$" }}{{ else }}0.40{{ end }}
 
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
-{{- if .pricing }}
+{{- if and .pricing (kindIs "map" .pricing) }}
 {{- $mPriceKey := (printf "%v" .name) | replace ":" "\\:" }}
-{{ $mPriceKey }}.input_rate_per_m={{ .pricing.input_rate | default 0 }}
-{{ $mPriceKey }}.output_rate_per_m={{ .pricing.output_rate | default 0 }}
-{{ $mPriceKey }}.input_rate={{ .pricing.input_rate | default 0 }}
-{{ $mPriceKey }}.output_rate={{ .pricing.output_rate | default 0 }}
-{{- if .pricing.cache_read_rate }}
-{{ $mPriceKey }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
-{{ $mPriceKey }}.cache_read_rate={{ .pricing.cache_read_rate }}
+{{- if and (hasKey .pricing "input_rate") (ne .pricing.input_rate nil) (ne (printf "%v" .pricing.input_rate | trim) "") }}
+{{- $inRate := printf "%v" .pricing.input_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.input_rate_per_m={{ $inRate }}
+{{ $mPriceKey }}.input_rate={{ $inRate }}
 {{- end }}
-{{- if .pricing.cache_write_rate }}
-{{ $mPriceKey }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
-{{ $mPriceKey }}.cache_write_rate={{ .pricing.cache_write_rate }}
+{{- if and (hasKey .pricing "output_rate") (ne .pricing.output_rate nil) (ne (printf "%v" .pricing.output_rate | trim) "") }}
+{{- $outRate := printf "%v" .pricing.output_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.output_rate_per_m={{ $outRate }}
+{{ $mPriceKey }}.output_rate={{ $outRate }}
 {{- end }}
-{{- if .pricing.markup }}
-{{ $mPriceKey }}.markup={{ .pricing.markup }}
+{{- if and (hasKey .pricing "cache_read_rate") (ne .pricing.cache_read_rate nil) (ne (printf "%v" .pricing.cache_read_rate | trim) "") }}
+{{- $crRate := printf "%v" .pricing.cache_read_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.cache_read_rate_per_m={{ $crRate }}
+{{ $mPriceKey }}.cache_read_rate={{ $crRate }}
+{{- end }}
+{{- if and (hasKey .pricing "cache_write_rate") (ne .pricing.cache_write_rate nil) (ne (printf "%v" .pricing.cache_write_rate | trim) "") }}
+{{- $cwRate := printf "%v" .pricing.cache_write_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.cache_write_rate_per_m={{ $cwRate }}
+{{ $mPriceKey }}.cache_write_rate={{ $cwRate }}
+{{- end }}
+{{- if and (hasKey .pricing "markup") (ne .pricing.markup nil) (ne (printf "%v" .pricing.markup | trim) "") }}
+{{ $mPriceKey }}.markup={{ printf "%v" .pricing.markup | trim | trimPrefix "$" }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -357,6 +365,18 @@ cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker
 cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
 preflight_prompt_guard={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "preflight_prompt_guard") }}{{ $.Values.features.quotas.preflight_prompt_guard }}{{ else }}false{{ end }}
 stream_prompt_checkpoint={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "stream_prompt_checkpoint") }}{{ $.Values.features.quotas.stream_prompt_checkpoint }}{{ else }}false{{ end }}
+secondary_quota_enabled={{ if and (or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false")) $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (eq (printf "%v" $.Values.features.quotas.secondary_window.enabled) "true") }}true{{ else }}false{{ end }}
+{{- if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "default_quota") (ne $.Values.features.quotas.default_quota nil) (eq (printf "%v" $.Values.features.quotas.default_quota | trim) "0") }}
+default_quota=0
+{{- end }}
+{{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}
+{{- if and (hasKey $.Values.features.quotas.secondary_window "allow_usd") (ne $.Values.features.quotas.secondary_window.allow_usd nil) (ne (printf "%v" $.Values.features.quotas.secondary_window.allow_usd | trim) "") }}
+secondary_default_quota_mode=usd
+secondary_default_quota={{ include "usd_to_micro" $.Values.features.quotas.secondary_window.allow_usd }}
+{{- else if and (hasKey $.Values.features.quotas.secondary_window "allow_count") (ne $.Values.features.quotas.secondary_window.allow_count nil) (eq (printf "%v" $.Values.features.quotas.secondary_window.allow_count | trim) "0") }}
+secondary_default_quota=0
+{{- end }}
+{{- end }}
 sanitize_upstream_errors={{ if and $.Values.features $.Values.features.security (hasKey $.Values.features.security "sanitize_upstream_errors") }}{{ $.Values.features.security.sanitize_upstream_errors }}{{ else if and $.Values.features $.Values.features.circuit_breaker (hasKey $.Values.features.circuit_breaker "sanitize_upstream_errors") }}{{ $.Values.features.circuit_breaker.sanitize_upstream_errors }}{{ else if and $.Values.gateway (hasKey $.Values.gateway "sanitize_upstream_errors") }}{{ $.Values.gateway.sanitize_upstream_errors }}{{ else }}false{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
 openai_base_url={{ $.Values.gateway.openai_base_url }}
@@ -477,12 +497,13 @@ persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayN
 {{- if or $pCfg.models $pCfg.allowed_models }}
 persona.{{ $pName }}.models={{ if $pCfg.models }}{{ if kindIs "slice" $pCfg.models }}{{ $pCfg.models | join "," }}{{ else }}{{ $pCfg.models }}{{ end }}{{ else if kindIs "slice" $pCfg.allowed_models }}{{ $pCfg.allowed_models | join "," }}{{ else }}{{ $pCfg.allowed_models }}{{ end }}
 {{- end }}
-{{- if $pCfg.quota }}
-{{- if $pCfg.quota.limit_usd }}
+{{- if and $pCfg.quota (kindIs "map" $pCfg.quota) }}
+{{- if and (hasKey $pCfg.quota "limit_usd") (ne $pCfg.quota.limit_usd nil) (ne (printf "%v" $pCfg.quota.limit_usd | trim) "") }}
+{{- $pCleanUsd := printf "%v" $pCfg.quota.limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.quota_mode=usd
-persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota.limit_usd }}
-persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota.limit_usd 1000000) }}
-{{- else if $pCfg.quota.limit }}
+persona.{{ $pName }}.quota_limit_usd={{ $pCleanUsd }}
+persona.{{ $pName }}.quota_limit={{ include "usd_to_micro" $pCfg.quota.limit_usd }}
+{{- else if and (hasKey $pCfg.quota "limit") (ne $pCfg.quota.limit nil) (ne (printf "%v" $pCfg.quota.limit | trim) "") }}
 {{- if $pCfg.quota.mode }}
 persona.{{ $pName }}.quota_mode={{ $pCfg.quota.mode }}
 {{- end }}
@@ -494,32 +515,38 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota.interval }}
 {{- if or $pCfg.quota.unit $pCfg.quota.time_unit }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota.unit | default $pCfg.quota.time_unit }}
 {{- end }}
-{{- if $pCfg.quota.per_model_usd }}
-{{- $pmUsdList := list -}}
+{{- $pmCombinedList := list }}
+{{- if and $pCfg.quota.per_model_usd (kindIs "map" $pCfg.quota.per_model_usd) }}
 {{- range $mName, $mLimitUsd := $pCfg.quota.per_model_usd }}
-{{- $mMicro := printf "%.0f" (mulf $mLimitUsd 1000000) -}}
-persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mMicro }}
-{{- $pmUsdList = append $pmUsdList (printf "%s:%s" $mName $mMicro) -}}
+{{- if and (ne $mLimitUsd nil) (ne (printf "%v" $mLimitUsd | trim) "") }}
+{{- $mKey := (printf "%v" $mName) | replace ":" "\\:" }}
+{{- $mCleanUsd := printf "%v" $mLimitUsd | trim | trimPrefix "$" }}
+{{- $mMicro := include "usd_to_micro" $mLimitUsd }}
+persona.{{ $pName }}.model_quota_usd.{{ $mKey }}={{ $mCleanUsd }}
+persona.{{ $pName }}.model_quota.{{ $mKey }}={{ $mMicro }}
+{{- $pmCombinedList = append $pmCombinedList (printf "%s:%s" $mName $mMicro) }}
 {{- end }}
-{{- if $pmUsdList }}
-persona.{{ $pName }}.per_model_quotas={{ $pmUsdList | sortAlpha | join "," }}
 {{- end }}
-{{- else if $pCfg.quota.per_model }}
-{{- $pmList := list -}}
+{{- end }}
+{{- if and $pCfg.quota.per_model (kindIs "map" $pCfg.quota.per_model) }}
 {{- range $mName, $mLimit := $pCfg.quota.per_model }}
-persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mLimit }}
-{{- $pmList = append $pmList (printf "%s:%v" $mName $mLimit) -}}
-{{- end }}
-{{- if $pmList }}
-persona.{{ $pName }}.per_model_quotas={{ $pmList | sortAlpha | join "," }}
-{{- end }}
+{{- if and (or (not $pCfg.quota.per_model_usd) (not (hasKey $pCfg.quota.per_model_usd $mName))) (ne $mLimit nil) (ne (printf "%v" $mLimit | trim) "") }}
+{{- $mKey := (printf "%v" $mName) | replace ":" "\\:" }}
+persona.{{ $pName }}.model_quota.{{ $mKey }}={{ $mLimit }}
+{{- $pmCombinedList = append $pmCombinedList (printf "%s:%v" $mName $mLimit) }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.quota_limit_usd }}
+{{- end }}
+{{- if $pmCombinedList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmCombinedList | sortAlpha | join "," }}
+{{- end }}
+{{- end }}
+{{- if and (hasKey $pCfg "quota_limit_usd") (ne $pCfg.quota_limit_usd nil) (ne (printf "%v" $pCfg.quota_limit_usd | trim) "") }}
+{{- $flatCleanUsd := printf "%v" $pCfg.quota_limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.quota_mode=usd
-persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota_limit_usd }}
-persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota_limit_usd 1000000) }}
-{{- else if $pCfg.quota_limit }}
+persona.{{ $pName }}.quota_limit_usd={{ $flatCleanUsd }}
+persona.{{ $pName }}.quota_limit={{ include "usd_to_micro" $pCfg.quota_limit_usd }}
+{{- else if and (hasKey $pCfg "quota_limit") (ne $pCfg.quota_limit nil) (ne (printf "%v" $pCfg.quota_limit | trim) "") }}
 persona.{{ $pName }}.quota_limit={{ $pCfg.quota_limit }}
 {{- end }}
 {{- if $pCfg.quota_interval }}
@@ -528,12 +555,13 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota_interval }}
 {{- if or $pCfg.quota_unit $pCfg.quota_time_unit }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota_unit | default $pCfg.quota_time_unit }}
 {{- end }}
-{{- if $pCfg.team_budget }}
-{{- if $pCfg.team_budget.limit_usd }}
+{{- if and $pCfg.team_budget (kindIs "map" $pCfg.team_budget) }}
+{{- if and (hasKey $pCfg.team_budget "limit_usd") (ne $pCfg.team_budget.limit_usd nil) (ne (printf "%v" $pCfg.team_budget.limit_usd | trim) "") }}
+{{- $tCleanUsd := printf "%v" $pCfg.team_budget.limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.team_quota_mode=usd
-persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_budget.limit_usd }}
-persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_budget.limit_usd 1000000) }}
-{{- else if $pCfg.team_budget.limit }}
+persona.{{ $pName }}.team_quota_limit_usd={{ $tCleanUsd }}
+persona.{{ $pName }}.team_quota_limit={{ include "usd_to_micro" $pCfg.team_budget.limit_usd }}
+{{- else if and (hasKey $pCfg.team_budget "limit") (ne $pCfg.team_budget.limit nil) (ne (printf "%v" $pCfg.team_budget.limit | trim) "") }}
 {{- if $pCfg.team_budget.mode }}
 persona.{{ $pName }}.team_quota_mode={{ $pCfg.team_budget.mode }}
 {{- end }}
@@ -546,11 +574,12 @@ persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_budget.interval }}
 persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_budget.unit | default $pCfg.team_budget.time_unit }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.team_quota_limit_usd }}
+{{- if and (hasKey $pCfg "team_quota_limit_usd") (ne $pCfg.team_quota_limit_usd nil) (ne (printf "%v" $pCfg.team_quota_limit_usd | trim) "") }}
+{{- $tFlatCleanUsd := printf "%v" $pCfg.team_quota_limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.team_quota_mode=usd
-persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_quota_limit_usd }}
-persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_quota_limit_usd 1000000) }}
-{{- else if $pCfg.team_quota_limit }}
+persona.{{ $pName }}.team_quota_limit_usd={{ $tFlatCleanUsd }}
+persona.{{ $pName }}.team_quota_limit={{ include "usd_to_micro" $pCfg.team_quota_limit_usd }}
+{{- else if and (hasKey $pCfg "team_quota_limit") (ne $pCfg.team_quota_limit nil) (ne (printf "%v" $pCfg.team_quota_limit | trim) "") }}
 persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_quota_limit }}
 {{- end }}
 {{- if $pCfg.team_quota_interval }}
@@ -648,11 +677,12 @@ model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_templa
 model_armor_identity_rules_count={{ len $allRules }}
 {{- range $idx, $rule := $allRules }}
 model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
-{{- if $rule.quota_limit_usd }}
+{{- if and (hasKey $rule "quota_limit_usd") (ne $rule.quota_limit_usd nil) (ne (printf "%v" $rule.quota_limit_usd | trim) "") }}
+{{- $rCleanUsd := printf "%v" $rule.quota_limit_usd | trim | trimPrefix "$" }}
 model_armor.rule.{{ $idx }}.quota_mode=usd
-model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rule.quota_limit_usd }}
-model_armor.rule.{{ $idx }}.quota_limit={{ printf "%.0f" (mulf $rule.quota_limit_usd 1000000) }}
-{{- else if $rule.quota_limit }}
+model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rCleanUsd }}
+model_armor.rule.{{ $idx }}.quota_limit={{ include "usd_to_micro" $rule.quota_limit_usd }}
+{{- else if and (hasKey $rule "quota_limit") (ne $rule.quota_limit nil) (ne (printf "%v" $rule.quota_limit | trim) "") }}
 model_armor.rule.{{ $idx }}.quota_limit={{ $rule.quota_limit }}
 {{- end }}
 {{- if $rule.expires_at }}
@@ -661,14 +691,22 @@ model_armor.rule.{{ $idx }}.expires_at={{ $rule.expires_at }}
 {{- if $rule.bypass_team_budget }}
 model_armor.rule.{{ $idx }}.bypass_team_budget={{ $rule.bypass_team_budget }}
 {{- end }}
-{{- if or $rule.team_budget_limit_usd $rule.team_quota_limit_usd }}
-{{- $tbUsd := $rule.team_budget_limit_usd | default $rule.team_quota_limit_usd }}
+{{- if and (hasKey $rule "team_budget_limit_usd") (ne $rule.team_budget_limit_usd nil) (ne (printf "%v" $rule.team_budget_limit_usd | trim) "") }}
+{{- $tbCleanUsd := printf "%v" $rule.team_budget_limit_usd | trim | trimPrefix "$" }}
 model_armor.rule.{{ $idx }}.team_budget_mode=usd
 model_armor.rule.{{ $idx }}.team_quota_mode=usd
-model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbUsd }}
-model_armor.rule.{{ $idx }}.team_budget_limit={{ printf "%.0f" (mulf $tbUsd 1000000) }}
-{{- else if or $rule.team_budget_limit $rule.team_quota_limit }}
-model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit | default $rule.team_quota_limit }}
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbCleanUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ include "usd_to_micro" $rule.team_budget_limit_usd }}
+{{- else if and (hasKey $rule "team_quota_limit_usd") (ne $rule.team_quota_limit_usd nil) (ne (printf "%v" $rule.team_quota_limit_usd | trim) "") }}
+{{- $tbCleanUsd := printf "%v" $rule.team_quota_limit_usd | trim | trimPrefix "$" }}
+model_armor.rule.{{ $idx }}.team_budget_mode=usd
+model_armor.rule.{{ $idx }}.team_quota_mode=usd
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbCleanUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ include "usd_to_micro" $rule.team_quota_limit_usd }}
+{{- else if and (hasKey $rule "team_budget_limit") (ne $rule.team_budget_limit nil) (ne (printf "%v" $rule.team_budget_limit | trim) "") }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit }}
+{{- else if and (hasKey $rule "team_quota_limit") (ne $rule.team_quota_limit nil) (ne (printf "%v" $rule.team_quota_limit | trim) "") }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_quota_limit }}
 {{- end }}
 {{- if or $rule.models $rule.allowed_models }}
 model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $rule.models }}{{ $rule.models | join "," }}{{ else }}{{ $rule.models }}{{ end }}{{ else if kindIs "slice" $rule.allowed_models }}{{ $rule.allowed_models | join "," }}{{ else }}{{ $rule.allowed_models }}{{ end }}
@@ -821,10 +859,10 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
 {{- end }}
 {{- if $quotasEnabled }}
 - Step:
-    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null)'
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null) and (zero_primary_quota != "true")'
     Name: LTQ-EnforceOnly
 - Step:
-    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null) and ((zero_primary_quota = "true") or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
     Name: JS-resolve-model-location
 {{- end }}
 {{- end -}}
@@ -1020,6 +1058,16 @@ DefaultFaultRule:
   {{- end -}}
 {{- end -}}
 {{- if and (ne $aud "") (not (contains "," $aud)) (not (contains "*" $aud)) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{- define "usd_to_micro" -}}
+{{- $clean := (printf "%v" . | trim | trimPrefix "$") -}}
+{{- printf "%.0f" (mulf ($clean | float64) 1000000) -}}
+{{- end -}}
+
+{{- define "positive_allow_count" -}}
+{{- $n := (printf "%v" . | trim | int64) -}}
+{{- if gt $n 0 -}}{{ $n }}{{- else -}}1{{- end -}}
 {{- end -}}
 
 {{- define "blank" -}}{{- end -}}

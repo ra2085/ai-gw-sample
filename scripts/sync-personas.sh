@@ -472,7 +472,7 @@ per_model_map = {}
 if per_model_quotas:
     for item in per_model_quotas.split(","):
         if ":" in item:
-            mk, mv = item.split(":", 1)
+            mk, mv = item.rsplit(":", 1)
             mk = mk.strip()
             mv = mv.strip()
             if mk and mv:
@@ -516,14 +516,20 @@ for pm_key in per_model_map:
 if not counter_models:
     counter_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
 
-eff_default_limit = str(q_limit) if q_limit else "1000000"
+eff_default_limit = str(q_limit) if q_limit != "" else "1000000"
 eff_interval = str(q_interval) if q_interval else "1"
 eff_unit = str(q_unit) if q_unit else "hour"
 
 llm_op_configs = []
 for m_id in counter_models:
     target_m = aliases_map.get(m_id, m_id)
-    m_limit = str(per_model_map.get(m_id) or per_model_map.get(target_m) or eff_default_limit)
+    if m_id in per_model_map:
+        raw_m_limit = str(per_model_map[m_id])
+    elif target_m in per_model_map:
+        raw_m_limit = str(per_model_map[target_m])
+    else:
+        raw_m_limit = eff_default_limit
+    api_m_limit = "1" if raw_m_limit.strip() in ("0", "0.0", "0.00") else raw_m_limit
     llm_op_configs.append({
         "apiSource": proxy_name,
         "llmOperations": [
@@ -533,7 +539,7 @@ for m_id in counter_models:
             }
         ],
         "llmTokenQuota": {
-            "limit": m_limit,
+            "limit": api_m_limit,
             "interval": eff_interval,
             "timeUnit": eff_unit
         }

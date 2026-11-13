@@ -93,15 +93,15 @@ ProxyEndpoints:
               {{- end }}
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true")'
                   Name: LTQ-EnforceOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true") and (zero_secondary_quota != "true")'
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
               - Step:
-                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Condition: '(apiproduct.name != null) and ((zero_primary_quota = "true"){{ if $secondaryQuotaEnabled }} or (zero_secondary_quota = "true"){{ end }} or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
                   Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
@@ -281,15 +281,15 @@ ProxyEndpoints:
               {{- end }}
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true")'
                   Name: LTQ-EnforceOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true") and (zero_secondary_quota != "true")'
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
               - Step:
-                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Condition: '(apiproduct.name != null) and ((zero_primary_quota = "true"){{ if $secondaryQuotaEnabled }} or (zero_secondary_quota = "true"){{ end }} or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
                   Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
@@ -470,15 +470,15 @@ ProxyEndpoints:
               {{- end }}
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true")'
                   Name: LTQ-EnforceOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true") and (zero_secondary_quota != "true")'
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
               - Step:
-                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Condition: '(apiproduct.name != null) and ((zero_primary_quota = "true"){{ if $secondaryQuotaEnabled }} or (zero_secondary_quota = "true"){{ end }} or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
                   Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
@@ -653,15 +653,15 @@ ProxyEndpoints:
               {{- end }}
               {{- if $quotasEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true")'
                   Name: LTQ-EnforceOnly
               {{- if $secondaryQuotaEnabled }}
               - Step:
-                  Condition: apiproduct.name != null
+                  Condition: '(apiproduct.name != null) and (zero_primary_quota != "true") and (zero_secondary_quota != "true")'
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
               - Step:
-                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Condition: '(apiproduct.name != null) and ((zero_primary_quota = "true"){{ if $secondaryQuotaEnabled }} or (zero_secondary_quota = "true"){{ end }} or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
                   Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
