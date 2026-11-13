@@ -207,9 +207,23 @@ echo -e "  Personas     : ${GREEN}${PERSONAS_CSV}${NC}"
 echo -e "  Mode         : $(if $DRY_RUN; then echo -e "${YELLOW}DRY-RUN (no changes will be applied)${NC}"; else echo -e "${GREEN}LIVE UPSERT (additive create-or-update)${NC}"; fi)"
 echo -e "${BLUE}======================================================================${NC}"
 
+TOKEN_FROM_GCLOUD=false
+TOKEN_FETCHED_AT=0
+APIGEE_TOKEN_REFRESH_SEC="${APIGEE_TOKEN_REFRESH_SEC:-2400}"
+
+fetch_gcloud_token() {
+    if [[ -n "${GCLOUD_TOKEN_CMD:-}" ]]; then
+        eval "$GCLOUD_TOKEN_CMD" 2>/dev/null || true
+    else
+        CLOUDSDK_METRICS_ENVIRONMENT="${CLOUDSDK_METRICS_ENVIRONMENT:+$CLOUDSDK_METRICS_ENVIRONMENT }datacloud.antigravity" gcloud auth print-access-token 2>/dev/null || true
+    fi
+}
+
 if ! $DRY_RUN; then
     if [[ -z "$TOKEN" ]]; then
-        TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+        TOKEN=$(fetch_gcloud_token)
+        TOKEN_FROM_GCLOUD=true
+        TOKEN_FETCHED_AT=$SECONDS
     fi
     if [[ -z "$TOKEN" ]]; then
         echo -e "${RED}✗ Error: Unable to obtain OAuth access token. Pass --token <token>, run 'gcloud auth login', or use --dry-run.${NC}" >&2
@@ -229,18 +243,39 @@ redact_json_secrets() {
     fi
 }
 
-# Retry-aware HTTP wrapper: retries transient 000/429/500/502/503/504 up to APIGEE_MAX_RETRIES times.
+# Retry-aware HTTP wrapper: retries transient 000/429/500/502/503/504 up to APIGEE_MAX_RETRIES times,
+# and refreshes gcloud-minted tokens once on HTTP 401 if --token was not hardcoded by caller.
 apigee_curl() {
     local out_file="$1"
     shift
+    local clean_args=()
+    while [[ $# -gt 0 ]]; do
+        if [[ "$1" == "-H" && "${2:-}" == Authorization:\ Bearer\ * ]]; then
+            shift 2
+        else
+            clean_args+=("$1")
+            shift
+        fi
+    done
+
     local attempt=0
+    local refreshed_401=false
     local http_code="000"
     while true; do
         : > "$out_file"
         local raw_code=""
-        raw_code=$(curl -s -o "$out_file" -w "%{http_code}" "$@") || true
+        raw_code=$(curl -s -o "$out_file" -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" "${clean_args[@]}") || true
         http_code=$(printf '%s' "$raw_code" | tr -d '[:space:]')
         [[ -z "$http_code" ]] && http_code="000"
+        if [[ "$http_code" == "401" && "$TOKEN_FROM_GCLOUD" == "true" && "$refreshed_401" == "false" ]]; then
+            local fresh_tok
+            fresh_tok=$(fetch_gcloud_token)
+            if [[ -n "$fresh_tok" ]]; then
+                TOKEN="$fresh_tok"
+                refreshed_401=true
+                continue
+            fi
+        fi
         if [[ "$http_code" != "000" && "$http_code" != "429" && "$http_code" != "500" && "$http_code" != "502" && "$http_code" != "503" && "$http_code" != "504" ]]; then
             echo "$http_code"
             return 0
@@ -373,6 +408,14 @@ FIRST_CLIENT_ID=""
 for raw_p in "${PERSONAS_ARRAY[@]}"; do
     p=$(echo "$raw_p" | tr -d '[:space:]')
     [[ -z "$p" ]] && continue
+
+    if ! $DRY_RUN && [[ "$TOKEN_FROM_GCLOUD" == "true" ]] && (( SECONDS - TOKEN_FETCHED_AT >= APIGEE_TOKEN_REFRESH_SEC )); then
+        FRESH_LOOP_TOKEN=$(fetch_gcloud_token)
+        if [[ -n "$FRESH_LOOP_TOKEN" ]]; then
+            TOKEN="$FRESH_LOOP_TOKEN"
+            TOKEN_FETCHED_AT=$SECONDS
+        fi
+    fi
 
     PRODUCT_NAME="${PROXY_NAME}-${p}"
     APP_NAME="${PROXY_NAME}-${p}-app"
@@ -521,7 +564,7 @@ for rm in rbac_allowed:
     add_counter_model(rm)
 for ak in aliases_map:
     add_counter_model(ak)
-for special in ("auto", "gateway/auto", "auto:judge", "gateway/judge"):
+for special in ("auto", "gateway/auto", "auto:judge", "gateway/judge", "shared_wallet"):
     add_counter_model(special)
 for pm_key in per_model_map:
     add_counter_model(pm_key)
@@ -625,9 +668,12 @@ if ma_resp:
 
 if existing_product:
     product = copy.deepcopy(existing_product)
-    # Strip read-only Apigee server timestamps
+    # Strip read-only Apigee server timestamps and legacy proxy/resource arrays
+    # (Apigee X rejects PUT payloads combining legacy proxies/apiResources with operationGroup/llmOperationGroup)
     product.pop("createdAt", None)
     product.pop("lastModifiedAt", None)
+    product.pop("proxies", None)
+    product.pop("apiResources", None)
 
     product["name"] = product_name
     if has_explicit_display == "true" or not product.get("displayName"):
@@ -673,14 +719,11 @@ if existing_product:
     access_attr = existing_access if existing_access is not None else {"name": "access", "value": "public"}
     product["attributes"] = [access_attr] + unmanaged_attrs + managed_attrs
 
-    if q_limit:
-        product["quota"] = str(q_limit)
+    if q_limit != "":
+        product["quota"] = "1" if str(q_limit).strip() in ("0", "0.0", "0.00") else str(q_limit)
         product["quotaInterval"] = eff_interval
         product["quotaTimeUnit"] = eff_unit
         product["quotaCounterScope"] = "PROXY"
-    else:
-        for q_field in ("quota", "quotaInterval", "quotaTimeUnit", "quotaCounterScope"):
-            product.pop(q_field, None)
 else:
     attrs = [{"name": "access", "value": "public"}] + managed_attrs
     product = {
@@ -693,8 +736,8 @@ else:
         },
         "attributes": attrs
     }
-    if q_limit:
-        product["quota"] = str(q_limit)
+    if q_limit != "":
+        product["quota"] = "1" if str(q_limit).strip() in ("0", "0.0", "0.00") else str(q_limit)
         product["quotaInterval"] = eff_interval
         product["quotaTimeUnit"] = eff_unit
         product["quotaCounterScope"] = "PROXY"
