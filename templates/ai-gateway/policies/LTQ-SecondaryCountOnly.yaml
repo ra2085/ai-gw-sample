@@ -18,6 +18,6 @@ LLMTokenQuota:
     .ref: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit_ref | default "secondary_quota_unit" }}{{ else }}secondary_quota_unit{{ end }}
     -Data: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}{{ $.Values.features.quotas.secondary_window.time_unit | default "day" }}{{ else }}day{{ end }}
   Distributed: true
-  Synchronous: true
+  Synchronous: {{ if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (hasKey $.Values.features.quotas.secondary_window "synchronous") (ne $.Values.features.quotas.secondary_window.synchronous nil) }}{{ $.Values.features.quotas.secondary_window.synchronous }}{{ else }}true{{ end }}
   LLMTokenUsageSource: '{secondary_quota_usage}'
   LLMModelSource: '{secondary_quota_scope}'

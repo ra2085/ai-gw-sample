@@ -4,18 +4,34 @@ AssignMessage:
   .name: AM-CustomError
   DisplayName: AM-CustomError
   Properties: {}
+  Remove:
+    Headers:
+      - Header:
+          .name: Server
+      - Header:
+          .name: X-Powered-By
+      - Header:
+          .name: X-AspNet-Version
+      - Header:
+          .name: X-Application-Context
   Set:
     Headers:
       - Header:
           .name: Content-Type
           -Data: application/json
       - Header:
+          .name: Cache-Control
+          -Data: no-store
+      - Header:
           .name: X-Content-Type-Options
           -Data: nosniff
     Payload:
       .contentType: application/json
       -Data: '{auth_error_payload}'
-    StatusCode: '{auth_error_status}'
+    StatusCode: "{firstnonnull(auth_error_status, '500')}"
+  AssignVariable:
+    Name: sanitized_error_applied
+    Value: true
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

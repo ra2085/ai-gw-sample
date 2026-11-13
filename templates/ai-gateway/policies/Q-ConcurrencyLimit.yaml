@@ -12,4 +12,4 @@ Quota:
   Interval: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.ttl_minutes }}{{ $.Values.features.rate_limits.concurrency.ttl_minutes }}{{ else }}1{{ end }}
   TimeUnit: minute
   Distributed: true
-  Synchronous: true
+  Synchronous: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency (hasKey $.Values.features.rate_limits.concurrency "synchronous") (ne $.Values.features.rate_limits.concurrency.synchronous nil) }}{{ $.Values.features.rate_limits.concurrency.synchronous }}{{ else }}true{{ end }}

@@ -11,6 +11,9 @@ RaiseFault:
             .name: Content-Type
             -Data: application/json
         - Header:
+            .name: Cache-Control
+            -Data: no-store
+        - Header:
             .name: X-Content-Type-Options
             -Data: nosniff
       Payload:

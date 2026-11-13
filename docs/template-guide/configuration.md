@@ -56,9 +56,12 @@ features:
   # 4. Rolling-Window Quotas & Team Budgets (Tokens or Virtual USD Spend Wallets)
   quotas:
     enabled: true                                     # Enforces AI Product rolling token or micro-USD quotas and per-model limits
+    synchronous: true                                 # Default true for cross-pod accuracy; set false on individual quotas for async L1 batching
+    preflight_prompt_guard: false                     # Opt-in: rejects prompts in PreFlow (429) when lower-bound usage exceeds available quota
     stream_prompt_checkpoint: false                   # Opt-in: checkpoints initial prompt tokens/spend at SSE stream start to protect against early disconnects
     secondary_window:
       enabled: false                                  # Opt-in: 2nd rolling window (7-day cap OR shared Team Budget)
+      synchronous: true                               # Keep true on shared team pools so multi-pod bursts cannot overdraft shared budgets
       shared_name: "llm-token-counter-secondary"      # Isolated counter namespace for secondary/team budgets
       identifier_ref: "secondary_quota_identifier"    # Resolves to "team:<identity_team>" (team scope) or rate_limit_client_id
       allow_count: 1000000                            # Default fallback token limit (or use allow_usd: 100.00 for USD fallback)
@@ -68,18 +71,24 @@ features:
       time_unit: "day"                                # Default fallback unit (hour | day | week | month)
       time_unit_ref: "secondary_quota_unit"           # Dynamically resolves team/secondary time unit
 
-  # 5. Burst & Concurrency Rate Limits (Opt-In)
+  # 5. Burst, Prompt-Token Velocity & Concurrency Rate Limits (Opt-In)
   rate_limits:
     burst:
       enabled: false                                  # Opt-in: smooths sudden request arrival spikes per user/agent
       rate: "600pm"                                   # Default fallback rate ("<N>ps" or "<N>pm")
       identifier_ref: "rate_limit_client_id"          # Per-client/user/agent spike smoothing
       use_effective_count: true                       # Synchronizes counters across runtime pods
+    prompt_tokens:
+      enabled: false                                  # Opt-in: throttles incoming prompt-token velocity via Apigee <PromptTokenLimit>
+      rate: "100000pm"                                # Default fallback token rate ("<N>ps" or "<N>pm")
+      identifier_ref: "rate_limit_client_id"
+      use_effective_count: false                      # Default false for lock-free local pod throttling
     concurrency:
       enabled: false                                  # Opt-in: caps simultaneous in-flight requests/streams per client
       limit: 20                                       # Max simultaneous in-flight requests/streams per client
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1                                  # Auto-expiry for disconnected SSE streams
+      synchronous: true                               # Keep true for cross-pod slot semaphore accuracy
 
   # 6. Rolling-Window Circuit Breaker & Automatic Fallback Chains
   circuit_breaker:
@@ -88,6 +97,7 @@ features:
     error_threshold: 3                                # Upstream errors within window before circuit trips OPEN
     window_interval: 1                                # Rolling error budget window duration
     window_unit: "minute"                             # Rolling window unit (minute | hour | day)
+    synchronous: true                                 # Default true for immediate cross-pod 3-strike detection
 
   # 7. Authentication & AI Product Persona Mapping
   auth:

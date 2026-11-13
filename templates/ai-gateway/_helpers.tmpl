@@ -349,11 +349,15 @@ model_armor_response_template={{ if and $.Values.features $.Values.features.mode
 model_armor_allow_claim_bypass={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "allow_claim_bypass") }}{{ $.Values.features.model_armor.allow_claim_bypass }}{{ else }}true{{ end }}
 model_armor_strict_stream_sync={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "strict_stream_sync") }}{{ $.Values.features.model_armor.strict_stream_sync }}{{ else }}false{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
+default_prompt_token_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens $.Values.features.rate_limits.prompt_tokens.rate }}{{ $.Values.features.rate_limits.prompt_tokens.rate }}{{ else }}100000pm{{ end }}
+prompt_token_limit_enabled={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens (hasKey $.Values.features.rate_limits.prompt_tokens "enabled") }}{{ $.Values.features.rate_limits.prompt_tokens.enabled }}{{ else }}false{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
 cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
 cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
+preflight_prompt_guard={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "preflight_prompt_guard") }}{{ $.Values.features.quotas.preflight_prompt_guard }}{{ else }}false{{ end }}
 stream_prompt_checkpoint={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "stream_prompt_checkpoint") }}{{ $.Values.features.quotas.stream_prompt_checkpoint }}{{ else }}false{{ end }}
+sanitize_upstream_errors={{ if and $.Values.features $.Values.features.security (hasKey $.Values.features.security "sanitize_upstream_errors") }}{{ $.Values.features.security.sanitize_upstream_errors }}{{ else if and $.Values.features $.Values.features.circuit_breaker (hasKey $.Values.features.circuit_breaker "sanitize_upstream_errors") }}{{ $.Values.features.circuit_breaker.sanitize_upstream_errors }}{{ else if and $.Values.gateway (hasKey $.Values.gateway "sanitize_upstream_errors") }}{{ $.Values.gateway.sanitize_upstream_errors }}{{ else }}false{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
 openai_base_url={{ $.Values.gateway.openai_base_url }}
 {{- end }}
@@ -559,12 +563,18 @@ persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_quota_unit }}
 {{- if or $pCfg.rate_limits.burst_rate $pCfg.rate_limits.burst }}
 persona.{{ $pName }}.burst_rate={{ $pCfg.rate_limits.burst_rate | default $pCfg.rate_limits.burst }}
 {{- end }}
+{{- if or $pCfg.rate_limits.prompt_token_rate $pCfg.rate_limits.prompt_tokens }}
+persona.{{ $pName }}.prompt_token_rate={{ $pCfg.rate_limits.prompt_token_rate | default $pCfg.rate_limits.prompt_tokens }}
+{{- end }}
 {{- if or $pCfg.rate_limits.concurrency_limit $pCfg.rate_limits.concurrency }}
 persona.{{ $pName }}.concurrency_limit={{ $pCfg.rate_limits.concurrency_limit | default $pCfg.rate_limits.concurrency }}
 {{- end }}
 {{- end }}
 {{- if $pCfg.burst_rate }}
 persona.{{ $pName }}.burst_rate={{ $pCfg.burst_rate }}
+{{- end }}
+{{- if $pCfg.prompt_token_rate }}
+persona.{{ $pName }}.prompt_token_rate={{ $pCfg.prompt_token_rate }}
 {{- end }}
 {{- if $pCfg.concurrency_limit }}
 persona.{{ $pName }}.concurrency_limit={{ $pCfg.concurrency_limit }}
@@ -665,6 +675,9 @@ model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $ru
 {{- end }}
 {{- if $rule.burst_rate }}
 model_armor.rule.{{ $idx }}.burst_rate={{ $rule.burst_rate }}
+{{- end }}
+{{- if $rule.prompt_token_rate }}
+model_armor.rule.{{ $idx }}.prompt_token_rate={{ $rule.prompt_token_rate }}
 {{- end }}
 {{- if $rule.concurrency_limit }}
 model_armor.rule.{{ $idx }}.concurrency_limit={{ $rule.concurrency_limit }}
@@ -810,6 +823,9 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
 - Step:
     Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null)'
     Name: LTQ-EnforceOnly
+- Step:
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+    Name: JS-resolve-model-location
 {{- end }}
 {{- end -}}
 
@@ -931,16 +947,17 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
 - DefaultFaultRule:
     .name: default-fault-cleanup
     -Data:
+      - AlwaysEnforce: true
       {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
       - Step:
           Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
           Name: RQ-ReleaseConcurrencySlot
       {{- end }}
       - Step:
-          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+          Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
           Name: JS-inject-deidentified-finding
       - Step:
-          Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+          Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
           Name: AM-CustomError
 {{- end -}}
 
@@ -948,16 +965,17 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
 DefaultFaultRule:
   .name: default-fault-cleanup
   -Data:
+    - AlwaysEnforce: true
     {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
     - Step:
         Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
         Name: RQ-ReleaseConcurrencySlot
     {{- end }}
     - Step:
-        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+        Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
         Name: JS-inject-deidentified-finding
     - Step:
-        Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+        Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
         Name: AM-CustomError
 {{- end -}}
 

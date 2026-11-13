@@ -315,3 +315,18 @@ When you first set up the gateway (Day 1), add a brand-new persona to `features.
 > 3. **Scoped Naming (`<proxy>-<persona>`):** Only manages resources prefixed with your `gateway.name` (e.g., `ai-gateway-developer`), leaving all other API Products in your Apigee organization untouched.
 > 4. **Optional Single-App Fallback (`default_client_id`):** If you prefer not to create a separate Apigee Developer App per persona, set `features.auth.default_client_id` to a single shared Consumer Key—the gateway will still enforce each persona's exact `models`, `quota`, `per_model`, `team_budget`, and `model_armor` rules in-memory from `config.properties`.
 
+---
+
+## 4. Zero-Leak Gateway Fault Hardening & Opt-In Upstream Error Scrubbing
+
+All `ProxyEndpoint` and `TargetEndpoint` `<DefaultFaultRule>` blocks enforce `<AlwaysEnforce>true</AlwaysEnforce>` (guarded by `sanitized_error_applied` so explicit `429` rate-limit, `403` Model Armor, `400`/`405`/`415` validation, and `200` fallback-recovery responses are preserved), strip backend fingerprint headers (`Server`, `X-Powered-By`, `X-AspNet-Version`, `X-Application-Context`), and attach OWASP `Cache-Control: no-store` and `X-Content-Type-Options: nosniff` headers.
+
+By default (`features.security.sanitize_upstream_errors: false`), unrecovered upstream `4xx`/`5xx` provider error payloads pass through unchanged for byte-for-byte SDK compatibility. To scrub internal GCP project IDs/numbers, service account emails, quota IDs, private IPs, and backend URLs from unrecovered `4xx`/`5xx` errors—and convert raw HTML `502`/`503` pages or cross-protocol errors into clean caller-native JSON while preserving SDK error fields (`type`, `code`, `param`, `status`)—enable:
+
+```yaml
+features:
+  security:
+    sanitize_upstream_errors: true
+```
+
+

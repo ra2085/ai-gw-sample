@@ -11,15 +11,19 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.auth.enabled`** | `true` | Authenticates callers (API Keys, Corporate SSO, GCP Agents, OAuth) and maps them to **AI Products**. | [AI Products & Auth](../architecture/security.md) |
 | **`features.auth.apigee_oauth.enabled`** | `true` | Enables native Apigee OAuth 2.0 bearer token verification (`OA-VerifyAccessToken`). | [AI Products & Auth](../architecture/security.md) |
 | **`features.quotas.enabled`** | `true` | Enforces rolling token or Virtual USD Spend Wallet allowances defined on your **AI Products**. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.quotas.synchronous`** | `true` | Controls cross-pod CPS sync on primary individual quotas (`true` for immediate cross-pod accuracy; `false` for async L1 batching via `QuotaAsyncBatchUpdater`). | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.quotas.preflight_prompt_guard`** | `false` | Opt-in: rejects requests in `PreFlow` (`429`) when conservative lower-bound prompt usage exceeds remaining quota (`available.count`). | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.quotas.stream_prompt_checkpoint`** | `false` | Opt-in: immediately checkpoints exact initial prompt tokens and spend when an SSE stream starts, ensuring early client disconnects still account for prompt usage. | [Quotas & Budgets](../architecture/monetization.md) |
-| **`features.quotas.secondary_window.enabled`** | `false` | Adds a second rolling window for **Shared Team Budgets** or 7-day weekly caps. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.quotas.secondary_window.enabled`** | `false` | Adds a second rolling window for **Shared Team Budgets** or 7-day weekly caps (`secondary_window.synchronous` defaults to `true` for shared pools). | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.burst.enabled`** | `false` | Smooths sudden request-per-second/minute spikes per user or agent. | [Quotas & Budgets](../architecture/monetization.md) |
+| **`features.rate_limits.prompt_tokens.enabled`** | `false` | Opt-in: throttles incoming prompt-token velocity (`<N>ps` or `<N>pm`) via Apigee `<PromptTokenLimit>` (`PTL-PromptTokenLimit`). | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and cost telemetry headers. | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.monetization.enforce_apigee_wallet`** | `false` | Opt-in: enforces native Apigee Monetization Add-on developer billing wallets (`MLC-EnforceMonetizationLimits`). | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based and task-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.streaming.dedicated_sse_targets`** | `false` | Opt-in (Apigee Known Issue `#449012244`): renders dedicated `*-sse` `TargetEndpoint`s (`stream = true` `RouteRule`s) separated from non-SSE `PostFlow` targets. | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.security.sanitize_upstream_errors`** | `false` | Opt-in: scrubs GCP project IDs/numbers, SA emails, quota IDs, and internal URLs from unrecovered upstream `4xx`/`5xx` error strings and normalizes non-JSON/cross-protocol errors while preserving SDK error schemas. | [AI Products & Auth](../architecture/security.md) |
 | **`features.model_armor.enabled`** | `false` | Opt-in: screens prompts and responses for PII, secrets, and prompt injection via regional GCP Model Armor templates. | [Smart Routing & Safety](../architecture/routing.md) |
 
 ---
@@ -77,9 +81,12 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       quotas:
         enabled: true
+        synchronous: true
+        preflight_prompt_guard: true
         stream_prompt_checkpoint: true
         secondary_window:
           enabled: true
+          synchronous: true
           shared_name: "llm-token-counter-secondary"
           identifier_ref: "secondary_quota_identifier"
           allow_count: 1000000
@@ -90,6 +97,9 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
         burst:
           enabled: true
           rate: "600pm"
+        prompt_tokens:
+          enabled: true
+          rate: "100000pm"
         concurrency:
           enabled: true
           limit: 20

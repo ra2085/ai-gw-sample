@@ -18,5 +18,5 @@ LLMTokenQuota:
     .ref: propertyset.config.cb_window_unit
     -Data: {{ if and $.Values.features $.Values.features.circuit_breaker }}{{ $.Values.features.circuit_breaker.window_unit | default "minute" }}{{ else }}minute{{ end }}
   Distributed: true
-  Synchronous: true
+  Synchronous: {{ if and $.Values.features $.Values.features.circuit_breaker (hasKey $.Values.features.circuit_breaker "synchronous") (ne $.Values.features.circuit_breaker.synchronous nil) }}{{ $.Values.features.circuit_breaker.synchronous }}{{ else }}true{{ end }}
   LLMModelSource: '{circuit_breaker_checked}'

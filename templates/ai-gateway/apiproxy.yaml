@@ -4,6 +4,7 @@
 {{- $enforceApigeeWallet := and $monetizationEnabled $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "enforce_apigee_wallet") (eq (printf "%v" $.Values.features.monetization.enforce_apigee_wallet) "true") -}}
 {{- $llmJudgeEnabled := or (not $.Values.features) (not $.Values.features.llm_judge) (not (hasKey $.Values.features.llm_judge "enabled")) (ne (printf "%v" $.Values.features.llm_judge.enabled) "false") -}}
 {{- $modelArmorEnabled := and $.Values.features $.Values.features.model_armor (eq (printf "%v" $.Values.features.model_armor.enabled) "true") -}}
+{{- $promptTokenLimitEnabled := and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens (eq (printf "%v" $.Values.features.rate_limits.prompt_tokens.enabled) "true") -}}
 {{- $dedicatedSseTargets := and $.Values.features $.Values.features.streaming (eq (printf "%v" $.Values.features.streaming.dedicated_sse_targets) "true") -}}
 {{- $targetVariants := list false -}}
 {{- if $dedicatedSseTargets -}}
@@ -52,7 +53,7 @@ ProxyEndpoints:
                       Name: JS-format-rate-limit-error
                   - Step:
                       Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (fault.name = "PromptTokenLimitViolation") OR (preflight_quota_exceeded = "true") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- include "callout_abort_faultrule" . | nindent 12 }}
         {{- include "default_fault_rule" . | nindent 8 }}
 
@@ -85,6 +86,11 @@ ProxyEndpoints:
               - Step:
                   Name: SA-BurstRateLimit
               {{- end }}
+              {{- if $promptTokenLimitEnabled }}
+              - Step:
+                  Condition: (extracted_prompt != null) and (extracted_prompt != "")
+                  Name: PTL-PromptTokenLimit
+              {{- end }}
               {{- if $quotasEnabled }}
               - Step:
                   Condition: apiproduct.name != null
@@ -94,6 +100,9 @@ ProxyEndpoints:
                   Condition: apiproduct.name != null
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
+              - Step:
+                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
@@ -120,6 +129,9 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
+              - Step:
+                  Condition: '(response.status.code >= 400) and (propertyset.config.sanitize_upstream_errors = "true") and !(response.header.Content-Type =| "text/event-stream")'
+                  Name: JS-inject-deidentified-finding
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreaming
@@ -232,7 +244,7 @@ ProxyEndpoints:
                       Name: JS-format-rate-limit-error
                   - Step:
                       Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (fault.name = "PromptTokenLimitViolation") OR (preflight_quota_exceeded = "true") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- include "callout_abort_faultrule" . | nindent 12 }}
         {{- include "default_fault_rule" . | nindent 8 }}
 
@@ -262,6 +274,11 @@ ProxyEndpoints:
               - Step:
                   Name: SA-BurstRateLimit
               {{- end }}
+              {{- if $promptTokenLimitEnabled }}
+              - Step:
+                  Condition: (extracted_prompt != null) and (extracted_prompt != "")
+                  Name: PTL-PromptTokenLimit
+              {{- end }}
               {{- if $quotasEnabled }}
               - Step:
                   Condition: apiproduct.name != null
@@ -271,6 +288,9 @@ ProxyEndpoints:
                   Condition: apiproduct.name != null
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
+              - Step:
+                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
@@ -300,6 +320,9 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
+              - Step:
+                  Condition: '(response.status.code >= 400) and (propertyset.config.sanitize_upstream_errors = "true") and !(response.header.Content-Type =| "text/event-stream")'
+                  Name: JS-inject-deidentified-finding
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400) and (request_format = "gemini") and (gemini_json_array_stream != "true") and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingGemini
@@ -407,7 +430,7 @@ ProxyEndpoints:
                       Name: JS-format-rate-limit-error
                   - Step:
                       Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (fault.name = "PromptTokenLimitViolation") OR (preflight_quota_exceeded = "true") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- include "callout_abort_faultrule" . | nindent 12 }}
         {{- include "default_fault_rule" . | nindent 8 }}
 
@@ -440,6 +463,11 @@ ProxyEndpoints:
               - Step:
                   Name: SA-BurstRateLimit
               {{- end }}
+              {{- if $promptTokenLimitEnabled }}
+              - Step:
+                  Condition: (extracted_prompt != null) and (extracted_prompt != "")
+                  Name: PTL-PromptTokenLimit
+              {{- end }}
               {{- if $quotasEnabled }}
               - Step:
                   Condition: apiproduct.name != null
@@ -449,6 +477,9 @@ ProxyEndpoints:
                   Condition: apiproduct.name != null
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
+              - Step:
+                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
@@ -475,6 +506,9 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
+              - Step:
+                  Condition: '(response.status.code >= 400) and (propertyset.config.sanitize_upstream_errors = "true") and !(response.header.Content-Type =| "text/event-stream")'
+                  Name: JS-inject-deidentified-finding
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingOpenAI
@@ -579,7 +613,7 @@ ProxyEndpoints:
                       Name: JS-format-rate-limit-error
                   - Step:
                       Name: AM-RateLimitError
-                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
+                  - Condition: (fault.name = "QuotaViolation") OR (fault.name = "SpikeArrestViolation") OR (fault.name = "PromptTokenLimitViolation") OR (preflight_quota_exceeded = "true") OR (ratelimit.SA-BurstRateLimit.failed = true) OR (ratelimit.Q-ConcurrencyLimit.failed = true) OR (ratelimit.LTQ-EnforceOnly.failed = true) OR (ratelimit.LTQ-SecondaryEnforceOnly.failed = true)
             {{- include "callout_abort_faultrule" . | nindent 12 }}
         {{- include "default_fault_rule" . | nindent 8 }}
 
@@ -612,6 +646,11 @@ ProxyEndpoints:
               - Step:
                   Name: SA-BurstRateLimit
               {{- end }}
+              {{- if $promptTokenLimitEnabled }}
+              - Step:
+                  Condition: (extracted_prompt != null) and (extracted_prompt != "")
+                  Name: PTL-PromptTokenLimit
+              {{- end }}
               {{- if $quotasEnabled }}
               - Step:
                   Condition: apiproduct.name != null
@@ -621,6 +660,9 @@ ProxyEndpoints:
                   Condition: apiproduct.name != null
                   Name: LTQ-SecondaryEnforceOnly
               {{- end }}
+              - Step:
+                  Condition: '(propertyset.config.preflight_prompt_guard = "true") and (apiproduct.name != null) and (prompt_char_len != null) and (prompt_char_len != "0")'
+                  Name: JS-resolve-model-location
               {{- end }}
               {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
               - Step:
@@ -644,6 +686,9 @@ ProxyEndpoints:
               {{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
               {{- include "fallback_postflow_steps" . | nindent 14 }}
               {{- end }}
+              - Step:
+                  Condition: '(response.status.code >= 400) and (propertyset.config.sanitize_upstream_errors = "true") and !(response.header.Content-Type =| "text/event-stream")'
+                  Name: JS-inject-deidentified-finding
               - Step:
                   Condition: '!(stream = true) and (response.status.code < 400) and (response_tokens_extracted != "true") and (vertex_predict_embeddings != "true")'
                   Name: EV-ExtractMetadataNonStreamingOpenAI
@@ -699,20 +744,7 @@ ProxyEndpoints:
       Description: Anthropic & OpenAI Models API Catalog Proxy Endpoint
       FaultRules:
         {{- include "callout_abort_faultrule" . | nindent 8 }}
-      DefaultFaultRule:
-        .name: default-fault-cleanup
-        -Data:
-          {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
-          - Step:
-              Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
-              Name: RQ-ReleaseConcurrencySlot
-          {{- end }}
-          - Step:
-              Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
-              Name: JS-inject-deidentified-finding
-          - Step:
-              Condition: (fault.name != "RaiseFault") and (fault.name != "raisefault")
-              Name: AM-CustomError
+      {{- include "default_fault_rule_map" . | nindent 6 }}
       PreFlow:
         .name: PreFlow
         Request:

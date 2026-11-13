@@ -3,11 +3,27 @@ AssignMessage:
   .enabled: true
   .name: AM-RateLimitError
   DisplayName: AM-RateLimitError
+  Remove:
+    Headers:
+      - Header:
+          .name: Server
+      - Header:
+          .name: X-Powered-By
+      - Header:
+          .name: X-AspNet-Version
+      - Header:
+          .name: X-Application-Context
   Set:
     Headers:
       - Header:
           .name: Content-Type
           -Data: application/json
+      - Header:
+          .name: Cache-Control
+          -Data: no-store
+      - Header:
+          .name: X-Content-Type-Options
+          -Data: nosniff
       - Header:
           .name: Retry-After
           -Data: '{ratelimit_retry_after}'
@@ -34,6 +50,9 @@ AssignMessage:
       -Data: '{ratelimit_error_payload}'
     StatusCode: 429
     ReasonPhrase: Too Many Requests
+  AssignVariable:
+    Name: sanitized_error_applied
+    Value: true
   IgnoreUnresolvedVariables: true
   AssignTo:
     .createNew: false

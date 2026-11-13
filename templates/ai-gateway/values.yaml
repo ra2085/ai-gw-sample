@@ -57,10 +57,15 @@ features:
     error_threshold: 3                   # Trip circuit OPEN after N upstream 429/5xx errors on a primary model
     window_interval: 1                   # Rolling recovery window duration
     window_unit: "minute"                # Rolling recovery window unit (minute, hour, day)
+    synchronous: true                    # Default true for immediate cross-pod 3-strike detection; set false for async L1 batching
   streaming:
     dedicated_sse_targets: false         # Opt-in (Apigee Known Issue #449012244): split TargetEndpoints into non-SSE + *-sse targets
+  security:
+    sanitize_upstream_errors: false      # Opt-in: set true to scrub GCP project IDs/SA emails/URLs from unrecovered upstream 4xx/5xx errors and normalize non-JSON/cross-protocol errors
   quotas:
     enabled: true
+    synchronous: true                      # Default true for immediate cross-pod accuracy; set false on individual quotas to use async L1 batching (QuotaAsyncBatchUpdater)
+    preflight_prompt_guard: false          # Opt-in: rejects requests in PreFlow (429) when conservative lower-bound prompt usage exceeds remaining quota
     stream_prompt_checkpoint: false        # Opt-in: checkpoints exact initial prompt tokens/spend at SSE stream start so early disconnects still account for prompt usage
     # Primary window uses auth-agnostic dynamic quota variables (primary_quota_limit / primary_quota_interval / primary_quota_unit)
     # isolated by SharedName: "llm-token-counter", Identifier: "rate_limit_client_id", and LLMModelSource: "{model}".
@@ -68,6 +73,7 @@ features:
     # Enable secondary_window only when a dual rolling window or shared Team Budget (e.g., 4h per-user + 7d team pool) is required.
     secondary_window:
       enabled: false
+      synchronous: true                  # Keep true for shared team budgets so multi-pod bursts cannot overdraft shared pools during async sync windows
       shared_name: "llm-token-counter-secondary"
       identifier_ref: "secondary_quota_identifier"
       allow_count: 1000000
@@ -78,19 +84,25 @@ features:
       time_unit: "day"
       time_unit_ref: "secondary_quota_unit"
   rate_limits:
-    # Opt-in per-application burst and concurrency rate limits (both disabled by default).
+    # Opt-in per-application burst, prompt-token velocity, and concurrency rate limits (disabled by default).
     # When enabled, limits can be overridden at runtime with zero proxy redeployment via
-    # API Product, Developer, or Developer App custom attributes (burst_rate / concurrency_limit).
+    # API Product, Developer, or Developer App custom attributes (burst_rate / prompt_token_rate / concurrency_limit).
     burst:
       enabled: false
       rate: "600pm"                        # Fallback default (<N>ps or <N>pm) when no custom attribute is set
       identifier_ref: "rate_limit_client_id"
       use_effective_count: true
+    prompt_tokens:
+      enabled: false
+      rate: "100000pm"                     # Fallback max incoming prompt tokens (<N>ps or <N>pm) when no custom attribute is set
+      identifier_ref: "rate_limit_client_id"
+      use_effective_count: false           # Default false for lock-free local pod throttling; set true for cross-pod sync
     concurrency:
       enabled: false
       limit: 20                            # Fallback max simultaneous in-flight requests per application
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1                       # Dead-man switch window (minutes) to auto-expire leaked slots on client disconnect
+      synchronous: true                    # Keep true for cross-pod acquire/release slot accuracy
   auth:
     enabled: true
     allow_bearer_api_key: true             # Option 1: Allow passing Apigee API Key inside Authorization: Bearer <api-key>

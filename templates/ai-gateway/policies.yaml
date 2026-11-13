@@ -77,6 +77,9 @@
 {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.enabled) $.Values.features.rate_limits.enabled) }}
 - {{ include "./policies/SA-BurstRateLimit.yaml" . | indent 2 | trim }}
 {{- end }}
+{{- if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens (eq (printf "%v" $.Values.features.rate_limits.prompt_tokens.enabled) "true") }}
+- {{ include "./policies/PTL-PromptTokenLimit.yaml" . | indent 2 | trim }}
+{{- end }}
 {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
 - {{ include "./policies/Q-ConcurrencyLimit.yaml" . | indent 2 | trim }}
 - {{ include "./policies/RQ-ReleaseConcurrencySlot.yaml" . | indent 2 | trim }}
