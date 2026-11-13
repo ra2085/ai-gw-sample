@@ -234,8 +234,20 @@ function updateArmorBuffer(scanDelta, forceFlush) {
     if (getVar("model_armor_response_enabled") === "false") {
         return;
     }
-    var prevBuf = getVar("tmp_buffer_pre") || "";
     var hasDelta = Boolean(scanDelta && scanDelta.length > 0);
+    if (getVar("buff_ready") === "true") {
+        if (hasDelta) {
+            var updatedPartial = appendBoundedScan(getVar("response_partial") || "", scanDelta);
+            setVar("response_partial", updatedPartial);
+            var postOverlap = (!forceFlush && updatedPartial.length > 200) ? updatedPartial.substring(updatedPartial.length - 200) : "";
+            setVar("tmp_buffer_pre", postOverlap);
+        } else if (forceFlush) {
+            setVar("tmp_buffer_pre", "");
+        }
+        setVar("tmp_buffer_has_new", "false");
+        return;
+    }
+    var prevBuf = getVar("tmp_buffer_pre") || "";
     if (hasDelta) {
         setVar("tmp_buffer_has_new", "true");
     }
@@ -268,48 +280,100 @@ function isSafetyStopHint(hint) {
            hint === "MODEL_ARMOR" || hint === "content_filter" || hint === "refusal";
 }
 
-function buildDeferredClaudeStopChunks(stopReasonHint, uncachedIn, cacheRead, outTokens) {
-    var chunks = [];
-    var hadOpenToolIdx = Boolean(getVar("open_tool_block_idx"));
-    if (getVar("anthropic_thinking_requested") === "true") {
-        var openThinkIdx = getVar("open_thinking_block_idx");
-        if (openThinkIdx !== null) {
-            var stopThinkIdx = parseInt(openThinkIdx, 10);
-            if (getVar("sent_thinking_sig") !== "true") {
-                chunks.push("event: content_block_delta\ndata: " + JSON.stringify({
-                    "type": "content_block_delta",
-                    "index": stopThinkIdx,
-                    "delta": { "type": "signature_delta", "signature": "gem_ts:none" }
+function buildOpenAiStreamUsageObj(uncachedIn, cacheRead, cacheWrite, compTokens, thinkingTokens) {
+    var totalPrompt = uncachedIn + cacheRead + cacheWrite;
+    var usageObj = {
+        prompt_tokens: totalPrompt,
+        completion_tokens: compTokens,
+        total_tokens: totalPrompt + compTokens
+    };
+    if (cacheRead > 0) {
+        usageObj.prompt_tokens_details = { cached_tokens: cacheRead };
+    }
+    if (thinkingTokens > 0) {
+        usageObj.completion_tokens_details = { reasoning_tokens: thinkingTokens };
+    }
+    return usageObj;
+}
+
+function getOpenToolState() {
+    var mapObj = {};
+    var orderArr = [];
+    var rawMap = getVar("open_tool_blocks_map");
+    var rawOrder = getVar("open_tool_order");
+    if (rawMap) {
+        try {
+            var parsed = JSON.parse(rawMap);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                mapObj = parsed;
+            }
+        } catch (ignoreErr) {}
+    }
+    if (rawOrder) {
+        var parts = rawOrder.split(",");
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) {
+                orderArr.push(parts[i]);
+            }
+        }
+    }
+    return { map: mapObj, order: orderArr };
+}
+
+function saveOpenToolState(toolState) {
+    if (toolState.order.length === 0) {
+        remVar("open_tool_blocks_map");
+        remVar("open_tool_order");
+        remVar("open_tool_block_idx");
+    } else {
+        setVar("open_tool_blocks_map", JSON.stringify(toolState.map));
+        setVar("open_tool_order", toolState.order.join(","));
+        var lastKey = toolState.order[toolState.order.length - 1];
+        setVar("open_tool_block_idx", String(toolState.map[lastKey]));
+    }
+}
+
+function closeAllOpenClaudeToolBlocks(chunks) {
+    var toolState = getOpenToolState();
+    if (toolState.order.length > 0) {
+        for (var i = 0; i < toolState.order.length; i++) {
+            var k = toolState.order[i];
+            if (Object.prototype.hasOwnProperty.call(toolState.map, k)) {
+                chunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+                    "type": "content_block_stop",
+                    "index": parseInt(toolState.map[k], 10)
                 }));
             }
-            remVar("sent_thinking_sig");
-            chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": stopThinkIdx }));
-            remVar("open_thinking_block_idx");
         }
-        var openToolIdxThink = getVar("open_tool_block_idx");
-        if (openToolIdxThink) {
-            chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openToolIdxThink, 10) }));
-            remVar("open_tool_block_idx");
-        }
-        var openTxtIdx = getVar("open_text_block_idx");
-        if (openTxtIdx !== null) {
-            chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openTxtIdx, 10) }));
-            remVar("open_text_block_idx");
-        } else if (getVar("next_claude_block_idx") === null) {
-            chunks.push("event: content_block_start\ndata: " + JSON.stringify({
-                "type": "content_block_start",
-                "index": 0,
-                "content_block": { "type": "text", "text": "" }
-            }));
-            chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 0 }));
-            setVar("next_claude_block_idx", "1");
-        }
-    } else {
-        var openToolIdx = getVar("open_tool_block_idx");
-        if (openToolIdx) {
-            chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openToolIdx, 10) }));
-        }
+        remVar("open_tool_blocks_map");
+        remVar("open_tool_order");
+        remVar("open_tool_block_idx");
+        return true;
+    }
+    var legacyToolIdx = getVar("open_tool_block_idx");
+    if (legacyToolIdx) {
+        chunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+            "type": "content_block_stop",
+            "index": parseInt(legacyToolIdx, 10)
+        }));
+        remVar("open_tool_block_idx");
+        return true;
+    }
+    return false;
+}
+
+function buildDeferredClaudeStopChunks(stopReasonHint, uncachedIn, cacheRead, outTokens) {
+    var chunks = [];
+    closeOpenClaudeThinkingAndTextBlocks(chunks);
+    var hadOpenToolIdx = closeAllOpenClaudeToolBlocks(chunks);
+    if (getVar("next_claude_block_idx") === null && !hadOpenToolIdx) {
+        chunks.push("event: content_block_start\ndata: " + JSON.stringify({
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": { "type": "text", "text": "" }
+        }));
         chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 0 }));
+        setVar("next_claude_block_idx", "1");
     }
 
     var prevStreamToolCount = parseInt(getVar("stream_tool_count") || "0", 10);
@@ -357,6 +421,7 @@ function handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
     }
 
     var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+    var isTrailingUsageOnly = Boolean(candidate === null && parsedEvent.usageMetadata);
     var nativeParts = (candidate && candidate.content && Array.isArray(candidate.content.parts))
                       ? candidate.content.parts
                       : null;
@@ -382,13 +447,13 @@ function handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
     }
     recordStreamOutChars(eventText.length + toolScanText.length);
     var finishReason = candidate ? candidate.finishReason : null;
-    if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
+    if (finishReason || isTrailingUsageOnly) {
         isFinished = true;
     }
 
     updateArmorBuffer(eventText + toolScanText, isFinished);
 
-    if (isFinished && !tokensAlreadyCounted) {
+    if (isFinished && (!tokensAlreadyCounted || isTrailingUsageOnly)) {
         var promptTokens = parseInt(getVar("saved_stream_prompt_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.promptTokenCount : 0) || 0, 10);
         var geminiCachedTokens = parseInt(getVar("saved_stream_cached_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.cachedContentTokenCount : 0) || 0, 10);
         var geminiUncachedPrompt = Math.max(0, promptTokens - geminiCachedTokens);
@@ -508,6 +573,17 @@ function handleAnthropicToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCount
         }));
     }
 
+    var aUncached = 0;
+    var aCached = 0;
+    var aCacheW = 0;
+    var aOut = 0;
+    if (isFinished) {
+        aUncached = parseInt(getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
+        aCached = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        aCacheW = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+        aOut = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    }
+
     if (!getVar("oai_sent_final") && (parsedEvent.type === "message_delta" || parsedEvent.type === "message_stop")) {
         setVar("oai_sent_final", "true");
         var finalFinishReason = finishReason || (oaiToolIdxRaw !== null ? "tool_calls" : "stop");
@@ -521,6 +597,16 @@ function handleAnthropicToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCount
             model: modelName,
             choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }]
         }));
+        if (getVar("client_requested_include_usage") === "true") {
+            outputChunks.push("data: " + JSON.stringify({
+                id: msgId,
+                object: "chat.completion.chunk",
+                created: nowSec,
+                model: modelName,
+                choices: [],
+                usage: buildOpenAiStreamUsageObj(aUncached, aCached, aCacheW, aOut, 0)
+            }));
+        }
         outputChunks.push("data: [DONE]");
     }
 
@@ -530,14 +616,11 @@ function handleAnthropicToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCount
             frameState.multiFrameOut.push(outputChunks[ocIdx]);
         }
     } else {
+        frameState.modifiedSingleFrame = true;
         setVar("response.event.current.content", outputChunks.length > 0 ? (outputChunks.join("\n\n") + "\n\n") : "");
     }
 
     if (isFinished && !tokensAlreadyCounted) {
-        var aUncached = parseInt(getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
-        var aCached = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
-        var aCacheW = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
-        var aOut = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
         emitStreamTokenVariables(aUncached, aCached, aCacheW, aOut, 0);
     }
 
@@ -564,6 +647,7 @@ function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted,
         }
     }
     var gCand = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+    var isTrailingGemUsage = Boolean(gCand === null && parsedEvent.usageMetadata);
     var gParts = (gCand && gCand.content && Array.isArray(gCand.content.parts)) ? gCand.content.parts : [];
     var gTxtParts = [];
     var gFuncCalls = [];
@@ -581,7 +665,7 @@ function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted,
     }
     eventText = gTxtParts.join("");
     var finishReason = gCand ? gCand.finishReason : null;
-    if (finishReason || (gCand === null && parsedEvent.usageMetadata)) {
+    if (finishReason || isTrailingGemUsage) {
         isFinished = true;
     }
 
@@ -631,8 +715,24 @@ function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted,
         }));
     }
     recordStreamOutChars(eventText.length + toolScanText.length);
-    if (isFinished && !getVar("oai_sent_final")) {
-        setVar("oai_sent_final", "true");
+
+    var goCacheRead = 0;
+    var goUncached = 0;
+    var goThinking = 0;
+    var goComp = 0;
+    if (isFinished) {
+        goCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        var goUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+        goUncached = goUncachedStr !== null
+            ? parseInt(goUncachedStr, 10)
+            : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - goCacheRead);
+        goThinking = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
+        goComp = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    }
+
+    var wantOaiIncUsage = (getVar("client_requested_include_usage") === "true");
+    if (finishReason && !getVar("oai_sent_finish_delta")) {
+        setVar("oai_sent_finish_delta", "true");
         var gFinish = gToolCount > 0 ? "tool_calls" : (finishReason === "MAX_TOKENS" ? "length" : (isSafetyStopHint(finishReason) ? "content_filter" : "stop"));
         gOutChunks.push("data: " + JSON.stringify({
             id: gMsgId,
@@ -641,7 +741,34 @@ function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted,
             model: modelName,
             choices: [{ index: 0, delta: {}, finish_reason: gFinish }]
         }));
-        gOutChunks.push("data: [DONE]");
+    }
+    if (isFinished && !getVar("oai_sent_final")) {
+        if (!wantOaiIncUsage || Boolean(parsedEvent.usageMetadata) || isTrailingGemUsage) {
+            setVar("oai_sent_final", "true");
+            if (!getVar("oai_sent_finish_delta")) {
+                setVar("oai_sent_finish_delta", "true");
+                gOutChunks.push("data: " + JSON.stringify({
+                    id: gMsgId,
+                    object: "chat.completion.chunk",
+                    created: gNowSec,
+                    model: modelName,
+                    choices: [{ index: 0, delta: {}, finish_reason: gToolCount > 0 ? "tool_calls" : "stop" }]
+                }));
+            }
+            if (wantOaiIncUsage) {
+                gOutChunks.push("data: " + JSON.stringify({
+                    id: gMsgId,
+                    object: "chat.completion.chunk",
+                    created: gNowSec,
+                    model: modelName,
+                    choices: [],
+                    usage: buildOpenAiStreamUsageObj(goUncached, goCacheRead, 0, goComp, goThinking)
+                }));
+            }
+            gOutChunks.push("data: [DONE]");
+        } else {
+            setVar("oai_awaiting_usage", "true");
+        }
     }
     if (frameState.hasSecondData) {
         frameState.modifiedMultiFrame = true;
@@ -649,17 +776,11 @@ function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted,
             frameState.multiFrameOut.push(gOutChunks[gcIdx]);
         }
     } else {
+        frameState.modifiedSingleFrame = true;
         setVar("response.event.current.content", gOutChunks.length > 0 ? (gOutChunks.join("\n\n") + "\n\n") : "");
     }
 
-    if (isFinished && !tokensAlreadyCounted) {
-        var goCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
-        var goUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
-        var goUncached = goUncachedStr !== null
-            ? parseInt(goUncachedStr, 10)
-            : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - goCacheRead);
-        var goThinking = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
-        var goComp = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    if (isFinished && (!tokensAlreadyCounted || isTrailingGemUsage)) {
         emitStreamTokenVariables(goUncached, goCacheRead, 0, goComp, goThinking);
     }
 
@@ -736,6 +857,7 @@ function handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
         if (frameState.hasSecondData) {
             frameState.modifiedMultiFrame = true;
         } else {
+            frameState.modifiedSingleFrame = true;
             setVar("response.event.current.content", "");
         }
     } else if (frameState.hasSecondData) {
@@ -746,7 +868,7 @@ function handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
     return isFinished;
 }
 
-function handleNativeClaudeFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState) {
+function handleNativeClaudeFrame(parsedEvent, eventStr, eventType, tokensAlreadyCounted, frameState) {
     var eventText = "";
     var toolScanText = "";
     var isFinished = false;
@@ -790,7 +912,8 @@ function handleNativeClaudeFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
         emitStreamTokenVariables(claudeUncachedIn, claudeCacheRead, claudeCacheWrite, completionTokens, 0);
     }
     if (frameState.hasSecondData) {
-        frameState.multiFrameOut.push("data: " + eventStr);
+        var resolvedEvt = eventType || parsedEvent.type || "";
+        frameState.multiFrameOut.push((resolvedEvt ? ("event: " + resolvedEvt + "\n") : "") + "data: " + eventStr);
     }
 
     updateArmorBuffer(eventText + toolScanText, isFinished);
@@ -798,83 +921,76 @@ function handleNativeClaudeFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
 }
 
 function appendClaudeThinkingAndTextChunks(outputChunks, wantThinkingStream, streamThoughts, eventText) {
-    if (wantThinkingStream) {
-        if (streamThoughts.length > 0) {
-            var openTxtBeforeThink = getVar("open_text_block_idx");
-            if (openTxtBeforeThink !== null) {
-                outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openTxtBeforeThink, 10) }));
-                remVar("open_text_block_idx");
-            }
-            var thinkIdxStr = getVar("open_thinking_block_idx");
-            if (thinkIdxStr === null) {
-                var allocThinkIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
-                setVar("next_claude_block_idx", String(allocThinkIdx + 1));
-                thinkIdxStr = String(allocThinkIdx);
-                setVar("open_thinking_block_idx", thinkIdxStr);
-                outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
-                    "type": "content_block_start",
-                    "index": allocThinkIdx,
-                    "content_block": { "type": "thinking", "thinking": "" }
-                }));
-            }
-            var activeThinkIdx = parseInt(thinkIdxStr, 10);
-            for (var stIdx = 0; stIdx < streamThoughts.length; stIdx++) {
-                var stItem = streamThoughts[stIdx];
-                if (stItem.text) {
-                    outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
-                        "type": "content_block_delta",
-                        "index": activeThinkIdx,
-                        "delta": { "type": "thinking_delta", "thinking": stItem.text }
-                    }));
-                }
-                if (stItem.sig) {
-                    var taggedStreamSig = stItem.sig.indexOf("gem_ts:") === 0 ? stItem.sig : ("gem_ts:" + stItem.sig);
-                    setVar("sent_thinking_sig", "true");
-                    outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
-                        "type": "content_block_delta",
-                        "index": activeThinkIdx,
-                        "delta": { "type": "signature_delta", "signature": taggedStreamSig }
-                    }));
-                }
-            }
+    if (wantThinkingStream && streamThoughts.length > 0) {
+        var openTxtBeforeThink = getVar("open_text_block_idx");
+        if (openTxtBeforeThink !== null) {
+            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openTxtBeforeThink, 10) }));
+            remVar("open_text_block_idx");
         }
-        if (eventText) {
-            var openThinkBeforeTxt = getVar("open_thinking_block_idx");
-            if (openThinkBeforeTxt !== null) {
-                var closeThinkIdx = parseInt(openThinkBeforeTxt, 10);
-                if (getVar("sent_thinking_sig") !== "true") {
-                    outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
-                        "type": "content_block_delta",
-                        "index": closeThinkIdx,
-                        "delta": { "type": "signature_delta", "signature": "gem_ts:none" }
-                    }));
-                }
-                remVar("sent_thinking_sig");
-                outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": closeThinkIdx }));
-                remVar("open_thinking_block_idx");
-            }
-            var txtIdxStr = getVar("open_text_block_idx");
-            if (txtIdxStr === null) {
-                var allocTxtIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
-                setVar("next_claude_block_idx", String(allocTxtIdx + 1));
-                txtIdxStr = String(allocTxtIdx);
-                setVar("open_text_block_idx", txtIdxStr);
-                outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
-                    "type": "content_block_start",
-                    "index": allocTxtIdx,
-                    "content_block": { "type": "text", "text": "" }
-                }));
-            }
-            outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
-                "type": "content_block_delta",
-                "index": parseInt(txtIdxStr, 10),
-                "delta": { "type": "text_delta", "text": eventText }
+        var thinkIdxStr = getVar("open_thinking_block_idx");
+        if (thinkIdxStr === null) {
+            var allocThinkIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
+            setVar("next_claude_block_idx", String(allocThinkIdx + 1));
+            thinkIdxStr = String(allocThinkIdx);
+            setVar("open_thinking_block_idx", thinkIdxStr);
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": allocThinkIdx,
+                "content_block": { "type": "thinking", "thinking": "" }
             }));
         }
-    } else if (eventText) {
+        var activeThinkIdx = parseInt(thinkIdxStr, 10);
+        for (var stIdx = 0; stIdx < streamThoughts.length; stIdx++) {
+            var stItem = streamThoughts[stIdx];
+            if (stItem.text) {
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": activeThinkIdx,
+                    "delta": { "type": "thinking_delta", "thinking": stItem.text }
+                }));
+            }
+            if (stItem.sig) {
+                var taggedStreamSig = stItem.sig.indexOf("gem_ts:") === 0 ? stItem.sig : ("gem_ts:" + stItem.sig);
+                setVar("sent_thinking_sig", "true");
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": activeThinkIdx,
+                    "delta": { "type": "signature_delta", "signature": taggedStreamSig }
+                }));
+            }
+        }
+    }
+    if (eventText) {
+        var openThinkBeforeTxt = getVar("open_thinking_block_idx");
+        if (openThinkBeforeTxt !== null) {
+            var closeThinkIdx = parseInt(openThinkBeforeTxt, 10);
+            if (getVar("sent_thinking_sig") !== "true") {
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": closeThinkIdx,
+                    "delta": { "type": "signature_delta", "signature": "gem_ts:none" }
+                }));
+            }
+            remVar("sent_thinking_sig");
+            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": closeThinkIdx }));
+            remVar("open_thinking_block_idx");
+        }
+        closeAllOpenClaudeToolBlocks(outputChunks);
+        var txtIdxStr = getVar("open_text_block_idx");
+        if (txtIdxStr === null) {
+            var allocTxtIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
+            setVar("next_claude_block_idx", String(allocTxtIdx + 1));
+            txtIdxStr = String(allocTxtIdx);
+            setVar("open_text_block_idx", txtIdxStr);
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": allocTxtIdx,
+                "content_block": { "type": "text", "text": "" }
+            }));
+        }
         outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
             "type": "content_block_delta",
-            "index": 0,
+            "index": parseInt(txtIdxStr, 10),
             "delta": { "type": "text_delta", "text": eventText }
         }));
     }
@@ -909,6 +1025,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
     var isOpenAiBackend = false;
     var hasInlineOaiUsage = false;
     var isTrailingUsageChunk = Boolean(parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage);
+    var isTrailingGemUsageOnly = false;
     var isFinished = false;
     var finishReason = null;
     var eventText = "";
@@ -917,6 +1034,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
 
     if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini" || routeFormat === "gemini")) {
         var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+        isTrailingGemUsageOnly = Boolean(candidate === null && parsedEvent.usageMetadata);
         var parts = (candidate && candidate.content && Array.isArray(candidate.content.parts)) ? candidate.content.parts : null;
         if (parts) {
             var gemVisibleTexts = [];
@@ -960,7 +1078,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
                 setVar("saved_stream_thinking_tokens", String(thoughtsT));
             }
         }
-        if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
+        if (finishReason || isTrailingGemUsageOnly) {
             isFinished = true;
         }
     } else {
@@ -996,7 +1114,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
     var transUncachedIn = 0;
     var transThinking = 0;
     var completionTokens = 0;
-    if (!sentStart || isFinished || isTrailingUsageChunk) {
+    if (!sentStart || isFinished || isTrailingUsageChunk || isTrailingGemUsageOnly) {
         transCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
         var transUncachedInStr = getVar("saved_stream_uncached_prompt_tokens");
         transUncachedIn = transUncachedInStr !== null
@@ -1030,6 +1148,8 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
             }
         }));
         if (!wantThinkingStream) {
+            setVar("open_text_block_idx", "0");
+            setVar("next_claude_block_idx", "1");
             outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
                 "type": "content_block_start",
                 "index": 0,
@@ -1040,23 +1160,19 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
 
     appendClaudeThinkingAndTextChunks(outputChunks, wantThinkingStream, streamThoughts, eventText);
 
-    var prevStreamToolCount = (streamFuncCalls.length > 0 || isFinished) ? parseInt(getVar("stream_tool_count") || "0", 10) : 0;
     var openAiToolCalls = (choice && choice.delta && Array.isArray(choice.delta.tool_calls)) ? choice.delta.tool_calls : null;
+    var prevStreamToolCount = (streamFuncCalls.length > 0 || (openAiToolCalls && openAiToolCalls.length > 0) || isFinished)
+        ? parseInt(getVar("stream_tool_count") || "0", 10)
+        : 0;
     if (streamFuncCalls.length > 0) {
-        if (wantThinkingStream) {
-            closeOpenClaudeThinkingAndTextBlocks(outputChunks);
-        }
+        closeOpenClaudeThinkingAndTextBlocks(outputChunks);
+        closeAllOpenClaudeToolBlocks(outputChunks);
         for (var sfcIdx = 0; sfcIdx < streamFuncCalls.length; sfcIdx++) {
             var sfcWrap = streamFuncCalls[sfcIdx];
             var streamFuncCall = sfcWrap.fc;
             prevStreamToolCount++;
-            var gemBlockIdx;
-            if (wantThinkingStream) {
-                gemBlockIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
-                setVar("next_claude_block_idx", String(gemBlockIdx + 1));
-            } else {
-                gemBlockIdx = prevStreamToolCount;
-            }
+            var gemBlockIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+            setVar("next_claude_block_idx", String(gemBlockIdx + 1));
             var toolCallId = streamFuncCall.id || ("toolu_" + Math.random().toString(36).substring(2, 12));
             var gemToolBlock = { "type": "tool_use", "id": toolCallId, "name": streamFuncCall.name, "input": {} };
             if (sfcWrap.sig) {
@@ -1077,21 +1193,34 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
         setVar("stream_tool_count", String(prevStreamToolCount));
         finishReason = "tool_use";
     } else if (openAiToolCalls && openAiToolCalls.length > 0) {
-        if (wantThinkingStream) {
-            closeOpenClaudeThinkingAndTextBlocks(outputChunks);
-            if (getVar("next_claude_block_idx") === null) {
-                setVar("next_claude_block_idx", "1");
-            }
-        }
+        closeOpenClaudeThinkingAndTextBlocks(outputChunks);
+        var toolState = getOpenToolState();
         var oaiToClaudeScans = [];
         for (var tcIdx = 0; tcIdx < openAiToolCalls.length; tcIdx++) {
             var oaiTc = openAiToolCalls[tcIdx];
-            var blockIndex = (oaiTc.index !== undefined ? oaiTc.index : tcIdx) + 1;
+            if (!oaiTc) {
+                continue;
+            }
+            var rawOaiIdx = (oaiTc.index !== undefined && oaiTc.index !== null) ? parseInt(oaiTc.index, 10) : tcIdx;
+            if (isNaN(rawOaiIdx) || rawOaiIdx < 0) {
+                rawOaiIdx = tcIdx;
+            }
+            var mapKey = "k_" + rawOaiIdx;
+            var hasExistingKey = Object.prototype.hasOwnProperty.call(toolState.map, mapKey);
             if (oaiTc.function && oaiTc.function.name) {
-                var prevOpenIdx = getVar("open_tool_block_idx");
-                if (prevOpenIdx && parseInt(prevOpenIdx, 10) !== blockIndex) {
-                    outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(prevOpenIdx, 10) }));
+                if (hasExistingKey) {
+                    outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+                        "type": "content_block_stop",
+                        "index": parseInt(toolState.map[mapKey], 10)
+                    }));
+                } else {
+                    toolState.order.push(mapKey);
                 }
+                var allocTcBlockIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+                setVar("next_claude_block_idx", String(allocTcBlockIdx + 1));
+                toolState.map[mapKey] = allocTcBlockIdx;
+                hasExistingKey = true;
+                prevStreamToolCount++;
                 oaiToClaudeScans.push(" " + oaiTc.function.name + ": ");
                 var oaiToolStartBlock = {
                     "type": "tool_use",
@@ -1104,20 +1233,30 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
                 }
                 outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
                     "type": "content_block_start",
-                    "index": blockIndex,
+                    "index": allocTcBlockIdx,
                     "content_block": oaiToolStartBlock
                 }));
-                setVar("open_tool_block_idx", String(blockIndex));
             }
             if (oaiTc.function && oaiTc.function.arguments) {
+                var targetClaudeIdx;
+                if (hasExistingKey) {
+                    targetClaudeIdx = parseInt(toolState.map[mapKey], 10);
+                } else {
+                    targetClaudeIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+                    setVar("next_claude_block_idx", String(targetClaudeIdx + 1));
+                    toolState.map[mapKey] = targetClaudeIdx;
+                    toolState.order.push(mapKey);
+                }
                 oaiToClaudeScans.push(oaiTc.function.arguments);
                 outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
                     "type": "content_block_delta",
-                    "index": blockIndex,
+                    "index": targetClaudeIdx,
                     "delta": { "type": "input_json_delta", "partial_json": oaiTc.function.arguments }
                 }));
             }
         }
+        saveOpenToolState(toolState);
+        setVar("stream_tool_count", String(prevStreamToolCount));
         toolScanText = oaiToClaudeScans.join("");
     }
     recordStreamOutChars(eventText.length + toolScanText.length);
@@ -1139,7 +1278,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
         }
     }
 
-    if (readyForClaudeStop && !tokensAlreadyCounted) {
+    if ((readyForClaudeStop && !tokensAlreadyCounted) || isTrailingGemUsageOnly) {
         emitStreamTokenVariables(transUncachedIn, transCacheRead, 0, completionTokens, transThinking);
     }
 
@@ -1149,6 +1288,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
             frameState.multiFrameOut.push(outputChunks[ccIdx]);
         }
     } else {
+        frameState.modifiedSingleFrame = true;
         setVar("response.event.current.content", outputChunks.length > 0 ? (outputChunks.join("\n\n") + "\n\n") : "");
     }
 
@@ -1186,7 +1326,34 @@ function handleDoneSentinelFrame(frameState) {
         }
     }
 
-    if (reqFmt !== "openai" && targetName !== "claude" && routeFormat !== "anthropic") {
+    if (reqFmt === "openai" && !getVar("oai_sent_final") && getVar("oai_awaiting_usage") === "true" && (targetName === "gemini" || routeFormat === "gemini")) {
+        setVar("oai_sent_final", "true");
+        var doneOaiChunks = [];
+        if (getVar("client_requested_include_usage") === "true") {
+            var dUncached = parseInt(getVar("uncached_prompt_tokens") || getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
+            var dCached = parseInt(getVar("cache_read_tokens") || getVar("saved_stream_cached_tokens") || "0", 10);
+            var dComp = parseInt(getVar("completion_tokens") || getVar("saved_stream_completion_tokens") || "0", 10);
+            var dThink = parseInt(getVar("thinking_tokens") || getVar("saved_stream_thinking_tokens") || "0", 10);
+            doneOaiChunks.push("data: " + JSON.stringify({
+                id: "chatcmpl-gem",
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: getVar("model") || "gemini",
+                choices: [],
+                usage: buildOpenAiStreamUsageObj(dUncached, dCached, 0, dComp, dThink)
+            }));
+        }
+        doneOaiChunks.push("data: [DONE]");
+        if (frameState.hasSecondData) {
+            frameState.modifiedMultiFrame = true;
+            for (var doIdx = 0; doIdx < doneOaiChunks.length; doIdx++) {
+                frameState.multiFrameOut.push(doneOaiChunks[doIdx]);
+            }
+        } else {
+            frameState.modifiedSingleFrame = true;
+            setVar("response.event.current.content", doneOaiChunks.join("\n\n") + "\n\n");
+        }
+    } else if (reqFmt !== "openai" && targetName !== "claude" && routeFormat !== "anthropic") {
         if (reqFmt === "claude" && pendingFinish && getVar("sent_message_stop") !== "true") {
             setVar("sent_message_stop", "true");
             var doneUncached = parseInt(getVar("uncached_prompt_tokens") || getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
@@ -1199,11 +1366,13 @@ function handleDoneSentinelFrame(frameState) {
                     frameState.multiFrameOut.push(doneStopChunks[dsIdx]);
                 }
             } else {
+                frameState.modifiedSingleFrame = true;
                 setVar("response.event.current.content", doneStopChunks.join("\n\n") + "\n\n");
             }
         } else if (frameState.hasSecondData) {
             frameState.modifiedMultiFrame = true;
         } else {
+            frameState.modifiedSingleFrame = true;
             setVar("response.event.current.content", "");
         }
     } else if (frameState.hasSecondData) {
@@ -1211,70 +1380,219 @@ function handleDoneSentinelFrame(frameState) {
     }
 }
 
-var dataIdx = rawContent ? rawContent.indexOf("data:") : -1;
-if (rawContent && dataIdx !== -1) {
-    var hasSecondData = rawContent.indexOf("\ndata:", dataIdx + 5) !== -1 || rawContent.indexOf("\r\ndata:", dataIdx + 5) !== -1;
-    var dataPayloads = [];
-    if (!hasSecondData) {
-        dataPayloads.push(rawContent.substring(dataIdx + 5).trim());
-    } else {
-        var rawBlocks = rawContent.split(/\r?\n\r?\n/);
-        for (var bIdx = 0; bIdx < rawBlocks.length; bIdx++) {
-            var blk = rawBlocks[bIdx];
-            var dPos = blk.indexOf("data:");
-            if (dPos !== -1) {
-                dataPayloads.push(blk.substring(dPos + 5).trim());
+function endsWithBlankSseSeparator(s) {
+    if (!s || s.length < 2) {
+        return false;
+    }
+    var n = s.length;
+    if (s.charAt(n - 1) === "\n" && s.charAt(n - 2) === "\n") {
+        return true;
+    }
+    if (n >= 4 && s.substring(n - 4) === "\r\n\r\n") {
+        return true;
+    }
+    if (n >= 3 && s.substring(n - 3) === "\n\r\n") {
+        return true;
+    }
+    return false;
+}
+
+function isStandaloneSseJsonLine(payload) {
+    if (!payload) {
+        return false;
+    }
+    if (payload === "[DONE]") {
+        return true;
+    }
+    var first = payload.charAt(0);
+    var last = payload.charAt(payload.length - 1);
+    return (first === "{" && last === "}") || (first === "[" && last === "]");
+}
+
+function parseCoalescedSseEvents(text) {
+    var events = [];
+    var curEvt = "";
+    var curData = [];
+    var lines = text.split("\n");
+    for (var i = 0; i < lines.length; i++) {
+        var ln = lines[i];
+        if (ln.length > 0 && ln.charAt(ln.length - 1) === "\r") {
+            ln = ln.substring(0, ln.length - 1);
+        }
+        if (ln.length === 0) {
+            if (curData.length > 0) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
             }
+            curEvt = "";
+        } else if (ln.indexOf("event:") === 0) {
+            if (curData.length > 0) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
+            }
+            curEvt = ln.substring(6).trim();
+        } else if (ln.indexOf("data:") === 0) {
+            if (curData.length > 0 && isStandaloneSseJsonLine(curData[curData.length - 1])) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
+                curEvt = "";
+            }
+            curData.push(ln.substring(5).trim());
+        }
+    }
+    if (curData.length > 0) {
+        events.push({
+            evt: curEvt,
+            data: curData.join("\n").trim(),
+            completeBlock: endsWithBlankSseSeparator(text)
+        });
+    }
+    return events;
+}
+
+function dispatchParsedSseEvent(parsedEvent, eventStr, eventType, frameState) {
+    if (!parsedEvent || typeof parsedEvent !== "object" || Array.isArray(parsedEvent)) {
+        return;
+    }
+    var requestFormat = getVar("request_format") || "claude";
+    var tokensAlreadyCounted = getVar("stream_tokens_already_counted") === "true";
+    var rawModel = getVar("model");
+    var isFinished = false;
+
+    if (requestFormat === "gemini") {
+        isFinished = handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
+    } else if (requestFormat === "openai") {
+        var oaiModelName = rawModel || "claude";
+        if (!parsedEvent.choices && !parsedEvent.candidates && (targetName === "claude" || routeFormat === "anthropic" || parsedEvent.type)) {
+            isFinished = handleAnthropicToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
+        } else if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini")) {
+            isFinished = handleGeminiToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
+        } else {
+            isFinished = handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
+        }
+    } else {
+        var claudeModelName = rawModel || "unknown";
+        if (targetName === "claude" || routeFormat === "anthropic") {
+            isFinished = handleNativeClaudeFrame(parsedEvent, eventStr, eventType, tokensAlreadyCounted, frameState);
+        } else {
+            isFinished = handleTranscodedToClaudeFrame(parsedEvent, claudeModelName, tokensAlreadyCounted, frameState);
         }
     }
 
+    if (isFinished && getVar("concurrency_slot_released") !== "true") {
+        setVar("release_concurrency_slot", "true");
+        setVar("concurrency_slot_released", "true");
+    }
+}
+
+function isStrictStreamArmorActive() {
+    if (getVar("propertyset.config.model_armor_strict_stream_sync") !== "true") {
+        return false;
+    }
+    if (getVar("model_armor_response_enabled") === "false") {
+        return false;
+    }
+    var tpl = getVar("model_armor_response_template") ||
+              getVar("propertyset.config.model_armor_response_template") ||
+              getVar("propertyset.config.model_armor_template") || "";
+    return Boolean(tpl && tpl.toLowerCase() !== "none");
+}
+
+function applyStrictStreamArmorHold(originalRaw, frameState) {
+    if (!isStrictStreamArmorActive()) {
+        return;
+    }
+    var currentWire = (frameState.modifiedSingleFrame || (frameState.hasSecondData && frameState.modifiedMultiFrame))
+        ? (getVar("response.event.current.content") || "")
+        : (originalRaw || "");
+    var prevHeld = getVar("held_sse_frames") || "";
+    var combinedWire = prevHeld + currentWire;
+
+    if (combinedWire.length >= 49152 && getVar("tmp_buffer_has_new") === "true" && getVar("buff_ready") !== "true") {
+        updateArmorBuffer("", true);
+    }
+
+    if (getVar("buff_ready") === "true" || getVar("tmp_buffer_has_new") !== "true") {
+        if (prevHeld.length > 0) {
+            setVar("response.event.current.content", combinedWire);
+            remVar("held_sse_frames");
+        }
+    } else {
+        setVar("held_sse_frames", combinedWire);
+        setVar("response.event.current.content", "");
+    }
+}
+
+var prevPartialCarry = getVar("sse_partial_carry");
+var effectiveRaw = prevPartialCarry ? (prevPartialCarry + (rawContent || "")) : rawContent;
+if (prevPartialCarry) {
+    remVar("sse_partial_carry");
+}
+
+var dataIdx = effectiveRaw ? effectiveRaw.indexOf("data:") : -1;
+if (effectiveRaw && dataIdx !== -1) {
+    var hasSecondData = Boolean(prevPartialCarry) ||
+                        effectiveRaw.indexOf("\ndata:", dataIdx + 5) !== -1 ||
+                        effectiveRaw.indexOf("\r\ndata:", dataIdx + 5) !== -1;
     var frameState = {
         hasSecondData: hasSecondData,
         multiFrameOut: [],
-        modifiedMultiFrame: false
+        modifiedMultiFrame: Boolean(prevPartialCarry),
+        modifiedSingleFrame: false
     };
 
-    for (var fIdx = 0; fIdx < dataPayloads.length; fIdx++) {
-        var eventStr = dataPayloads[fIdx];
-        if (!eventStr) {
-            continue;
+    if (!hasSecondData) {
+        var singleStr = effectiveRaw.substring(dataIdx + 5).trim();
+        var singleEvtType = "";
+        if (dataIdx > 0) {
+            var hdrSlice = effectiveRaw.substring(0, dataIdx);
+            var evtPos = hdrSlice.indexOf("event:");
+            if (evtPos !== -1) {
+                var evtEnd = hdrSlice.indexOf("\n", evtPos);
+                singleEvtType = (evtEnd !== -1 ? hdrSlice.substring(evtPos + 6, evtEnd) : hdrSlice.substring(evtPos + 6)).trim();
+            }
         }
-        if (eventStr === "[DONE]") {
+        if (singleStr === "[DONE]") {
             handleDoneSentinelFrame(frameState);
-        } else {
+        } else if (singleStr) {
             try {
-                var parsedEvent = JSON.parse(eventStr);
-                var requestFormat = getVar("request_format") || "claude";
-                var tokensAlreadyCounted = getVar("stream_tokens_already_counted") === "true";
-                var rawModel = getVar("model");
-                var isFinished = false;
-
-                if (requestFormat === "gemini") {
-                    isFinished = handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
-                } else if (requestFormat === "openai") {
-                    var oaiModelName = rawModel || "claude";
-                    if (!parsedEvent.choices && !parsedEvent.candidates && (targetName === "claude" || routeFormat === "anthropic" || parsedEvent.type)) {
-                        isFinished = handleAnthropicToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
-                    } else if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini")) {
-                        isFinished = handleGeminiToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
-                    } else {
-                        isFinished = handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
-                    }
-                } else {
-                    var claudeModelName = rawModel || "unknown";
-                    if (targetName === "claude" || routeFormat === "anthropic") {
-                        isFinished = handleNativeClaudeFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
-                    } else {
-                        isFinished = handleTranscodedToClaudeFrame(parsedEvent, claudeModelName, tokensAlreadyCounted, frameState);
-                    }
+                var singleParsed = JSON.parse(singleStr);
+                dispatchParsedSseEvent(singleParsed, singleStr, singleEvtType, frameState);
+            } catch (singleErr) {
+                if (!endsWithBlankSseSeparator(effectiveRaw) && effectiveRaw.length <= 65536) {
+                    setVar("sse_partial_carry", effectiveRaw);
+                    setVar("response.event.current.content", "");
+                    return;
                 }
-
-                if (isFinished && getVar("concurrency_slot_released") !== "true") {
-                    setVar("release_concurrency_slot", "true");
-                    setVar("concurrency_slot_released", "true");
+                print("JSON Error: " + singleErr);
+            }
+        }
+    } else {
+        var sseEvents = parseCoalescedSseEvents(effectiveRaw);
+        for (var fIdx = 0; fIdx < sseEvents.length; fIdx++) {
+            var evObj = sseEvents[fIdx];
+            var eventStr = evObj.data;
+            if (!eventStr) {
+                continue;
+            }
+            if (eventStr === "[DONE]") {
+                handleDoneSentinelFrame(frameState);
+            } else {
+                try {
+                    var parsedEvent = JSON.parse(eventStr);
+                    dispatchParsedSseEvent(parsedEvent, eventStr, evObj.evt, frameState);
+                } catch (multiErr) {
+                    var isLastEv = (fIdx === sseEvents.length - 1);
+                    if (isLastEv && !evObj.completeBlock) {
+                        var carryRaw = (evObj.evt ? ("event: " + evObj.evt + "\n") : "") + "data: " + eventStr;
+                        if (carryRaw.length <= 65536) {
+                            setVar("sse_partial_carry", carryRaw);
+                            frameState.modifiedMultiFrame = true;
+                            break;
+                        }
+                    }
+                    print("JSON Error: " + multiErr);
                 }
-            } catch (e) {
-                print("JSON Error: " + e);
             }
         }
     }
@@ -1298,6 +1616,11 @@ if (rawContent && dataIdx !== -1) {
     if (frameState.hasSecondData && frameState.modifiedMultiFrame) {
         setVar("response.event.current.content", frameState.multiFrameOut.length > 0 ? (frameState.multiFrameOut.join("\n\n") + "\n\n") : "");
     }
+
+    applyStrictStreamArmorHold(rawContent, frameState);
+} else if (prevPartialCarry && effectiveRaw && effectiveRaw.length <= 65536 && !endsWithBlankSseSeparator(effectiveRaw)) {
+    setVar("sse_partial_carry", effectiveRaw);
+    setVar("response.event.current.content", "");
 }
 
 })();

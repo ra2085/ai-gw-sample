@@ -28,6 +28,12 @@ ServiceCallout:
         - Header:
             .name: OpenAI-Project
             -Data: '{fallback_openai_project}'
+        - Header:
+            .name: anthropic-version
+            -Data: '{fallback_anthropic_version}'
+        - Header:
+            .name: anthropic-beta
+            -Data: '{fallback_anthropic_beta}'
       Verb: POST
       Payload:
         .contentType: application/json

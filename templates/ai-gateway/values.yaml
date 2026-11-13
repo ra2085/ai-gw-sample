@@ -25,6 +25,8 @@ features:
     request_template: "ai-gw-template"     # Default user prompt sanitization template (or "none" to skip request scanning)
     response_template: "ai-gw-template"    # Default model response sanitization template (or "none" to skip response scanning)
     allow_claim_bypass: true               # Set false to block token claims from disabling Model Armor ("none") or overriding admin identity_rules
+    strict_stream_sync: false              # Opt-in: set true to hold SSE batches until SMR-SanitizeModelResponse passes before socket flush
+    # stream_buffer_size: 50               # Optional SSE chunk batch interval for response-phase Model Armor scanning (default: 50)
     # Optional context-aware template enforcement by Persona or Identity/Team glob pattern:
     # personas:
     #   knowledge-worker:

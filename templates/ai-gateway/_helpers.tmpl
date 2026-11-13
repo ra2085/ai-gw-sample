@@ -347,6 +347,7 @@ model_armor_template={{ if and $.Values.features $.Values.features.model_armor }
 model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 model_armor_allow_claim_bypass={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "allow_claim_bypass") }}{{ $.Values.features.model_armor.allow_claim_bypass }}{{ else }}true{{ end }}
+model_armor_strict_stream_sync={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "strict_stream_sync") }}{{ $.Values.features.model_armor.strict_stream_sync }}{{ else }}false{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
@@ -698,7 +699,7 @@ model_armor.rule.{{ $idx }}.response_template={{ $rule.response_template }}
 */}}
 {{- define "generate_extract_expressions_properties" -}}
 prompt_exp=$.messages[?(@.role=='user')].content
-buffer_size=50
+buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.stream_buffer_size }}{{ $.Values.features.model_armor.stream_buffer_size }}{{ else }}50{{ end }}
 {{- end -}}
 
 {{/*
@@ -867,7 +868,7 @@ buffer_size=50
           Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
           Name: LTQ-CircuitBreakerCount
       - Step:
-          Condition: '!(stream = true) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Condition: '(!(stream = true) or (response.status.code = null)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
           Name: JS-prepare-fallback-request
       - Step:
           Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
