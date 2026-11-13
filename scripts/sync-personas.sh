@@ -36,6 +36,8 @@ DEV_EMAIL=""
 TOKEN="${APIGEE_TOKEN:-}"
 EXISTING_PRODUCTS_DIR=""
 DRY_RUN=false
+SHOW_KEYS=false
+WRITE_SNIPPET_FILE=""
 
 usage() {
     cat <<EOF
@@ -53,6 +55,8 @@ Options:
   --developer <email>             Developer email owning Persona Apps (default: ai-gateway-personas@<org>.iam.gserviceaccount.com)
   --token <bearer_token>          OAuth access token override (or set APIGEE_TOKEN)
   --existing-products-dir <path>  Optional directory of existing <product>.json snapshots for offline merge preview
+  --show-keys                     Print unmasked client_id values even when CI=true
+  --write-snippet <path>          Write unmasked values.yaml snippet to file with 0600 permissions
   --dry-run                       Preview all API Product & App upserts without calling Apigee APIs
   -h, --help                      Show this help message
 EOF
@@ -92,6 +96,14 @@ while [[ $# -gt 0 ]]; do
             EXISTING_PRODUCTS_DIR="$2"
             shift 2
             ;;
+        --show-keys)
+            SHOW_KEYS=true
+            shift
+            ;;
+        --write-snippet)
+            WRITE_SNIPPET_FILE="$2"
+            shift 2
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -108,7 +120,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+umask 077
 TMP_WORK_DIR="$(mktemp -d /tmp/ai-gw-persona-sync.XXXXXX)"
+chmod 700 "$TMP_WORK_DIR"
 cleanup() {
     if [[ -n "$TMP_WORK_DIR" && -d "$TMP_WORK_DIR" ]]; then
         rm -rf "$TMP_WORK_DIR"
@@ -831,16 +845,47 @@ PYEOF
     SUMMARY_LINES+=("      ${p}:|${PRODUCT_NAME}|${APP_NAME}|${CLIENT_ID}")
 done
 
+mask_if_ci() {
+    local raw_key="$1"
+    if [[ "${CI:-}" == "true" && "$SHOW_KEYS" != "true" && "$DRY_RUN" != "true" ]]; then
+        if [[ ${#raw_key} -gt 8 ]]; then
+            printf '%s...<masked-in-ci>' "${raw_key:0:8}"
+        else
+            printf '<masked-in-ci>'
+        fi
+    else
+        printf '%s' "$raw_key"
+    fi
+}
+
+if [[ -n "$WRITE_SNIPPET_FILE" ]]; then
+    {
+        echo "features:"
+        echo "  auth:"
+        echo "    default_client_id: \"${FIRST_CLIENT_ID}\""
+        echo "    personas:"
+        for entry in "${SUMMARY_LINES[@]}"; do
+            IFS='|' read -r p_label prod_name app_name cid <<< "$entry"
+            echo "${p_label} # Product: ${prod_name} | App: ${app_name}"
+            echo "        client_id: \"${cid}\""
+        done
+    } > "$WRITE_SNIPPET_FILE"
+    chmod 600 "$WRITE_SNIPPET_FILE"
+fi
+
 echo -e "\n${BLUE}======================================================================${NC}"
 echo -e "${GREEN}✅ Persona Sync Complete — values.yaml Snippet:${NC}"
+if [[ "${CI:-}" == "true" && "$SHOW_KEYS" != "true" && "$DRY_RUN" != "true" ]]; then
+    echo -e "${YELLOW}ℹ CI=true detected: masking client_id in stdout (pass --show-keys or --write-snippet <path> for full values).${NC}"
+fi
 echo -e "${BLUE}======================================================================${NC}"
 echo "features:"
 echo "  auth:"
-echo "    default_client_id: \"${FIRST_CLIENT_ID}\""
+echo "    default_client_id: \"$(mask_if_ci "$FIRST_CLIENT_ID")\""
 echo "    personas:"
 for entry in "${SUMMARY_LINES[@]}"; do
     IFS='|' read -r p_label prod_name app_name cid <<< "$entry"
     echo "${p_label} # Product: ${prod_name} | App: ${app_name}"
-    echo "        client_id: \"${cid}\""
+    echo "        client_id: \"$(mask_if_ci "$cid")\""
 done
 echo -e "${BLUE}======================================================================${NC}"

@@ -877,6 +877,9 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
     Name: LTQ-CircuitBreakerCount
 - Step:
     Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: AM-model
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
     Name: JS-prepare-fallback-request
 - Step:
     Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
@@ -921,6 +924,9 @@ buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.f
       - Step:
           Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
           Name: LTQ-CircuitBreakerCount
+      - Step:
+          Condition: '(!(stream = true) or (response.status.code = null)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: AM-model
       - Step:
           Condition: '(!(stream = true) or (response.status.code = null)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
           Name: JS-prepare-fallback-request
