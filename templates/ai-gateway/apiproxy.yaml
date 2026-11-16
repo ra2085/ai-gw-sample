@@ -895,7 +895,7 @@ TargetEndpoints:
           GoogleAccessToken:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
-        URL: https://{endpoint_host}/v1/projects/{gcp_project_id}/locations/{model_location}/publishers/anthropic/models/{model}:streamRawPredict
+        URL: https://{endpoint_host}/v1/projects/{vertex_project_id}/locations/{model_location}/publishers/anthropic/models/{model}:streamRawPredict
   {{- end }}
 
   {{- range $isSse := $targetVariants }}
@@ -1090,7 +1090,7 @@ TargetEndpoints:
           GoogleAccessToken:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
-        URL: https://{endpoint_host}/v1/projects/{gcp_project_id}/locations/{model_location}/endpoints/openapi/chat/completions
+        URL: https://{endpoint_host}/v1/projects/{vertex_project_id}/locations/{model_location}/endpoints/openapi/chat/completions
   {{- end }}
 
   {{- range $isSse := $targetVariants }}
@@ -1299,7 +1299,7 @@ TargetEndpoints:
           GoogleAccessToken:
             Scopes:
               Scope: https://www.googleapis.com/auth/cloud-platform
-        URL: https://aiplatform.googleapis.com/v1/projects/{gcp_project_id}/locations/global/publishers/google/models/{model}:generateContent
+        URL: https://aiplatform.googleapis.com/v1/projects/{vertex_project_id}/locations/global/publishers/google/models/{model}:generateContent
   {{- end }}
 
 Resources:

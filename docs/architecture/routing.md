@@ -88,6 +88,43 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
        - Subsequent requests immediately promote the fallback model **before** routing upstream—delivering **0ms extra hop latency** and **full native SSE streaming** (`X-Gateway-Fallback-Triggered: true`, `X-Gateway-Circuit-Breaker: OPEN`, `X-Gateway-Routed-Model: <fallback_model>`).
     3. **Self-Healing Recovery:** When the rolling window expires, the error counter resets automatically and traffic resumes routing to the primary model.
 
+=== "Multi-Project Vertex AI Routing (Hub-and-Spoke)"
+    **Best for:** Enterprises running a centralized Apigee AI Gateway ("hub") that routes Vertex AI traffic into dedicated GCP "spoke" projects per **business unit / persona** (for native GCP Cloud Billing chargeback and isolated Vertex AI QPM/TPM quota pools) or per **model** (such as partner-enabled Claude projects or project-pinned fine-tuned/PT models).
+
+    Configure `project_id` declaratively in `values.yaml` (never via client headers or Developer App UI attributes):
+    ```yaml
+    gateway:
+      project_id: "apigee-hub-prod"               # Default gateway project (also used for SC-LLMJudge & Model Armor)
+
+    features:
+      auth:
+        personas:
+          marketing-ai:
+            client_id: "CONSUMER_KEY_FOR_MARKETING"
+            project_id: "mktg-vertex-prod"        # All Vertex calls from marketing-ai bill & draw quota in mktg-vertex-prod
+
+    models:
+      - name: "claude-sonnet-4-6"
+        publisher: "anthropic"
+        region: "us-east5"
+        project_id: "vertex-anthropic-hub"        # Default project when caller's persona has no project_id
+      - name: "medlm-tuned-v1"
+        publisher: "google"
+        region: "us-central1"
+        project_id: "clinical-ml-prod"
+        pin_project: true                         # Pinned: always routes to clinical-ml-prod regardless of caller persona
+    ```
+
+    **Deterministic Project Precedence (Across `/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, `/ai-gateway`, and Fallback Chains):**
+    1. `models[].project_id` when `models[].pin_project: true`
+    2. `exceptions[].project_id` (active, non-expired identity/team exception rule)
+    3. `personas.<persona>.project_id` (**Persona wins over unpinned Model** for clean department billing)
+    4. `models[].project_id`
+    5. `gateway.project_id`
+
+    !!! note "Cross-Project IAM Requirement"
+        Grant the Apigee proxy deployment Service Account `roles/aiplatform.user` on each target Vertex AI spoke project (`gcloud projects add-iam-policy-binding <SPOKE_PROJECT_ID> --member="serviceAccount:<APIGEE_RUNTIME_SA>" --role="roles/aiplatform.user"`). Circuit-breaker counters (`cb_identifier`) are automatically isolated per target project (`<model>:proj:<project_id>`), and cross-persona project spoofing on `/ai-gateway` is blocked with `HTTP 403`.
+
 ---
 
 ## 2. Context-Aware Content Safety (Google Cloud Model Armor)

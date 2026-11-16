@@ -155,6 +155,7 @@ features:
       developer:
         match_claims: ["developer", "engineering", "swe-*", "*-data-science"]
         client_id: "CONSUMER_KEY_FOR_DEVELOPER_AI_PRODUCT"
+        # project_id: "eng-vertex-prod"               # Optional: Route this persona's Vertex AI calls to a dedicated spoke GCP project
         models: ["*"]                                 # Expands to all concrete catalog models in llmOperationGroup
         quota:
           limit: 500000                               # 500k tokens / 4 hours per engineer (or use limit_usd: 25.00 + per_model_usd)
@@ -199,10 +200,11 @@ features:
           request_template: "agent-prompt-guard"
           response_template: "none"
 
-    # 9. Unified Identity & Team Exceptions (Quotas, Team Budgets, Model Access, Rate Limits & Model Armor)
+    # 9. Unified Identity & Team Exceptions (Quotas, Team Budgets, Model Access, Vertex Project Routing, Rate Limits & Model Armor)
     exceptions:
       - match: ["alice@corp.example.com"]             # Individual temporary token or USD boost + frontier model unlock
         quota_limit: 5000000                          # Overrides personal quota (or quota_limit_usd: 50.00; still draws from shared team pool by default)
+        # project_id: "alice-sandbox-proj"            # Optional: Route this identity's Vertex AI calls to a dedicated GCP project
         # bypass_team_budget: true                    # Optional emergency bypass: isolates user from an exhausted shared team pool
         expires_at: "2026-12-31T23:59:59Z"            # Optional ISO-8601 UTC auto-expiration timestamp
         models: ["*"]                                 # Optional: unlocks specific models for this user/agent
@@ -262,6 +264,8 @@ models:
     target: "gemini"                                  # gemini | claude | gemini-openai-compat | openai-custom
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
     region: "global"                                  # Vertex AI region: global | us-east5 | us-central1 | europe-west1
+    # project_id: "frontier-models-prod"              # Optional: Route this model to a specific GCP project (overridden by persona project_id unless pin_project: true)
+    # pin_project: false                              # Optional: Set true for fine-tuned/provisioned models bound to a single GCP project
     is_default: false                                 # Used when top-level `defaults.model` is omitted
     created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override

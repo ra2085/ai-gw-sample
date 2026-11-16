@@ -223,6 +223,12 @@ alias.{{ (printf "%v" $alias) | replace ":" "\\:" }}={{ $targetStr }}
 {{- if .upstream_model }}
 {{ $mKey }}.upstream_model={{ .upstream_model }}
 {{- end }}
+{{- if .project_id }}
+{{ $mKey }}.project_id={{ .project_id }}
+{{- end }}
+{{- if .pin_project }}
+{{ $mKey }}.pin_project={{ .pin_project }}
+{{- end }}
 {{- if .openai_org_id }}
 {{ $mKey }}.openai_org_id={{ .openai_org_id }}
 {{- end }}
@@ -491,6 +497,9 @@ auth_persona_default={{ $auth.default_persona | default $.Values.default_persona
 {{- if kindIs "map" $pCfg }}
 persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
 persona.{{ $pName }}.client_id={{ $pCfg.client_id | default $defaultClientId }}
+{{- if $pCfg.project_id }}
+persona.{{ $pName }}.project_id={{ $pCfg.project_id }}
+{{- end }}
 {{- if or $pCfg.display_name $pCfg.displayName }}
 persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayName }}
 {{- end }}
@@ -711,6 +720,9 @@ model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_quota_limit }}
 {{- if or $rule.models $rule.allowed_models }}
 model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $rule.models }}{{ $rule.models | join "," }}{{ else }}{{ $rule.models }}{{ end }}{{ else if kindIs "slice" $rule.allowed_models }}{{ $rule.allowed_models | join "," }}{{ else }}{{ $rule.allowed_models }}{{ end }}
 {{- end }}
+{{- if $rule.project_id }}
+model_armor.rule.{{ $idx }}.project_id={{ $rule.project_id }}
+{{- end }}
 {{- if $rule.burst_rate }}
 model_armor.rule.{{ $idx }}.burst_rate={{ $rule.burst_rate }}
 {{- end }}
@@ -742,6 +754,17 @@ model_armor.rule.{{ $idx }}.response_template={{ $rule.response_template }}
 {{- end }}
 {{- end }}
 {{- end }}
+{{- $hasProjOverrides := false -}}
+{{- range $.Values.models -}}
+  {{- if and (kindIs "map" .) .project_id -}}{{- $hasProjOverrides = true -}}{{- end -}}
+{{- end -}}
+{{- range $_, $pCfg := $personas -}}
+  {{- if and (kindIs "map" $pCfg) $pCfg.project_id -}}{{- $hasProjOverrides = true -}}{{- end -}}
+{{- end -}}
+{{- range $allRules -}}
+  {{- if and (kindIs "map" .) .project_id -}}{{- $hasProjOverrides = true -}}{{- end -}}
+{{- end }}
+has_project_overrides={{ $hasProjOverrides }}
 {{- end -}}
 
 
