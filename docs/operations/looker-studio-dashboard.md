@@ -197,7 +197,7 @@ Select a tab below to build each page in your Looker Studio report (click **Page
     | **Model Armor / Forbidden Blocks (403)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `403` |
     | **Unauthorized Attempts (401)** | `Insert > Scorecard` | — | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `401` |
     | **Enforcement Trend Over Time** | `Insert > Stacked column chart` | `Time` *(or `Date`)* | `Traffic` | **Breakdown Dimension:** `Enforcement Status` |
-    | **Users & Teams Hitting Quotas (429)** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `dc_identity_persona`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `429`. Identifies who may need a temporary `quota_override_tokens` or `quota_override_spend_micro_usd` exception |
+    | **Users & Teams Hitting Quotas (429)** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `dc_identity_persona`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `429`. Identifies who may need a temporary `quota_limit` or `quota_limit_usd` exception |
     | **Model Armor Blocks by User & Endpoint (403)** | `Insert > Table` | `dc_identity_user_id`, `dc_identity_team`, `proxy_basepath`, `dc_requested_model` | `Traffic` | **Chart Filter:** `Include` &rarr; `response_status_code` &rarr; `Equals (=)` &rarr; `403` |
 
 === "6. Smart Router & LLM Judge ROI"

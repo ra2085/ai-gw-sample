@@ -29,12 +29,6 @@ AssignMessage:
           -Data: '{ratelimit.LTQ-SecondaryCountOnly.available.count}'
       {{- end }}
       - Header:
-          .name: x-quota-ip-used
-          -Data: '{ratelimit.LTQ-CountOnly-IP.used.count}'
-      - Header:
-          .name: x-quota-ip-available
-          -Data: '{ratelimit.LTQ-CountOnly-IP.available.count}'
-      - Header:
           .name: x-ratelimit-burst-rate
           -Data: '{burst_rate_limit}'
       - Header:

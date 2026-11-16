@@ -21,12 +21,12 @@ To configure, generate, and deploy the **Apigee AI Gateway**, install the requir
 === "Automated Install Script (Recommended)"
     ```bash
     # Install latest version into /usr/local/bin
-    curl -s https://apigee.github.io/apigee-go-gen/install | sh
+    curl -s https://apigee.github.io/apigee-go-gen/install | bash
     ```
 
     To install to a custom directory (e.g. `~/.local/bin`):
     ```bash
-    curl -s https://apigee.github.io/apigee-go-gen/install | sh -s latest ~/.local/bin
+    curl -s https://apigee.github.io/apigee-go-gen/install | bash -s latest ~/.local/bin
     ```
 
 === "From Source (with Go)"
