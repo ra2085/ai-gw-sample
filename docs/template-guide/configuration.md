@@ -27,18 +27,19 @@ features:
   # 1. Invoice-Accurate Cost Attribution
   monetization:
     enabled: true                                     # Calculates exact USD cost (cached & reasoning tokens)
-    enforce_apigee_wallet: true                       # Set false when using Virtual USD Spend Wallets (limit_usd) without Apigee Developer wallets
+    enforce_apigee_wallet: false                      # Opt-in: set true ONLY when Apigee Monetization Add-on + funded developer wallets exist
     default_currency: "USD"                           # Default currency code
     default_markup: 1.0                               # Default markup multiplier
 
-  # 2. GCP Model Armor Context-Aware Prompt & Response Sanitization
+  # 2. GCP Model Armor Context-Aware Prompt & Response Sanitization (Opt-In)
   model_armor:
-    enabled: true                                     # Screens prompts and responses via Google Cloud Model Armor
-    project_id: "your-gcp-project-id"                 # Default GCP Project hosting Model Armor templates
-    location: "us-central1"                           # Default GCP Region hosting Model Armor templates
-    template: "standard-safety-template"              # Global fallback template ID
-    request_template: "standard-request-template"     # Optional: global default template for user prompts (or "none")
-    response_template: "standard-response-template"   # Optional: global default template for model responses (or "none")
+    enabled: false                                    # Opt-in: set true once regional Model Armor templates are provisioned
+    project_id: "your-gcp-project-id"                 # Default GCP Project hosting Model Armor templates (falls back to Apigee org name)
+    location: "us-central1"                           # Regional GCP endpoint hosting Model Armor templates (must NOT be "global")
+    template: "ai-gw-template"                        # Global fallback template ID
+    request_template: "ai-gw-template"                # Optional: global default template for user prompts (or "none")
+    response_template: "ai-gw-template"               # Optional: global default template for model responses (or "none")
+    allow_claim_bypass: true                          # Set false to prevent token claims from passing "none" or overriding admin identity_rules
     identity_rules:                                   # Optional: Tier 2 identity/team '*' glob overrides (ranked by specificity)
       - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
         request_template: "strict-pci-dlp-template"
@@ -49,14 +50,18 @@ features:
 
   # 3. Real-Time LLM Judge Classifier (auto:judge)
   llm_judge:
-    enabled: true                                     # Enables automatic prompt complexity classification
+    enabled: true                                     # Enables automatic prompt complexity & task classification
     classifier_model: "gemini-3.1-flash-lite"         # Fast model used for classification
 
   # 4. Rolling-Window Quotas & Team Budgets (Tokens or Virtual USD Spend Wallets)
   quotas:
     enabled: true                                     # Enforces AI Product rolling token or micro-USD quotas and per-model limits
+    synchronous: true                                 # Default true for cross-pod accuracy; set false on individual quotas for async L1 batching
+    preflight_prompt_guard: false                     # Opt-in: rejects prompts in PreFlow (429) when lower-bound usage exceeds available quota
+    stream_prompt_checkpoint: false                   # Opt-in: checkpoints initial prompt tokens/spend at SSE stream start to protect against early disconnects
     secondary_window:
       enabled: false                                  # Opt-in: 2nd rolling window (7-day cap OR shared Team Budget)
+      synchronous: true                               # Keep true on shared team pools so multi-pod bursts cannot overdraft shared budgets
       shared_name: "llm-token-counter-secondary"      # Isolated counter namespace for secondary/team budgets
       identifier_ref: "secondary_quota_identifier"    # Resolves to "team:<identity_team>" (team scope) or rate_limit_client_id
       allow_count: 1000000                            # Default fallback token limit (or use allow_usd: 100.00 for USD fallback)
@@ -66,18 +71,24 @@ features:
       time_unit: "day"                                # Default fallback unit (hour | day | week | month)
       time_unit_ref: "secondary_quota_unit"           # Dynamically resolves team/secondary time unit
 
-  # 5. Burst & Concurrency Rate Limits (Opt-In)
+  # 5. Burst, Prompt-Token Velocity & Concurrency Rate Limits (Opt-In)
   rate_limits:
     burst:
       enabled: false                                  # Opt-in: smooths sudden request arrival spikes per user/agent
       rate: "600pm"                                   # Default fallback rate ("<N>ps" or "<N>pm")
       identifier_ref: "rate_limit_client_id"          # Per-client/user/agent spike smoothing
       use_effective_count: true                       # Synchronizes counters across runtime pods
+    prompt_tokens:
+      enabled: false                                  # Opt-in: throttles incoming prompt-token velocity via Apigee <PromptTokenLimit>
+      rate: "100000pm"                                # Default fallback token rate ("<N>ps" or "<N>pm")
+      identifier_ref: "rate_limit_client_id"
+      use_effective_count: false                      # Default false for lock-free local pod throttling
     concurrency:
       enabled: false                                  # Opt-in: caps simultaneous in-flight requests/streams per client
       limit: 20                                       # Max simultaneous in-flight requests/streams per client
       identifier_ref: "rate_limit_client_id"
       ttl_minutes: 1                                  # Auto-expiry for disconnected SSE streams
+      synchronous: true                               # Keep true for cross-pod slot semaphore accuracy
 
   # 6. Rolling-Window Circuit Breaker & Automatic Fallback Chains
   circuit_breaker:
@@ -86,22 +97,19 @@ features:
     error_threshold: 3                                # Upstream errors within window before circuit trips OPEN
     window_interval: 1                                # Rolling error budget window duration
     window_unit: "minute"                             # Rolling window unit (minute | hour | day)
+    synchronous: true                                 # Default true for immediate cross-pod 3-strike detection
 
-  # 7. CORS Support
-  cors:
-    enabled: true                                     # Emits CORS headers & handles OPTIONS preflight
-
-  # 8. Authentication & AI Product Persona Mapping
+  # 7. Authentication & AI Product Persona Mapping
   auth:
     enabled: true                                     # Enforces zero-passthrough authentication
     allow_bearer_api_key: true                        # Option 1: Allows passing Apigee API Key via x-apikey, x-api-key, or Authorization: Bearer <api-key>
     apigee_oauth:
-      enabled: true                                   # Option 2: Native Apigee OAuth 2.0 tokens (<1ms L1 cache)
+      enabled: true                                   # Option 2: Native Apigee OAuth 2.0 tokens (<1ms L1 cache); set false to skip OA-VerifyAccessToken
     agent_identity:
       enabled: true                                   # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      allowed_trust_domain: ".system.id.goog"         # SPIFFE trust domain (e.g. "agents.global.org-123456789012.system.id.goog")
-      allowed_email_suffix: ".iam.gserviceaccount.com" # Service Account email suffix
+      allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Vertex Agent Engine SPIFFE tokens (comma-separated or glob)
+      allowed_email_suffix: "@my-project.iam.gserviceaccount.com" # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com" (comma-separated or glob)
       persona: "agent"                                # Default persona tier for verified GCP agents
       token_ttl_ms: 3600000
     idp_opaque:
@@ -116,6 +124,8 @@ features:
       enabled: true                                   # Option 4b: Corporate SSO JWTs (JWKS signature verification)
       jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
       issuer: "https://login.corp.example.com"
+      audience: "api://ai-gateway,cli-client-id"      # Required when enabled=true: single value, comma-separated list, or glob
+      algorithm: "RS256"                              # Asymmetric RSA family (RS256/PS256/...) or ECDSA family (ES256/ES384/ES512)
       user_claim: "email"
       persona_claim: "role"
       team_claim: "department"
@@ -241,7 +251,7 @@ endpoints:
 
 ## 4. Models Catalog (`models`)
 
-Each entry in `models` registers a model in `/v1/models`, configures its backend routing target, and defines its token pricing for **Invoice-Accurate Cost Attribution**:
+Each entry in `models` registers a model in `/v1/models`, configures its backend routing target, and defines its token pricing for **Invoice-Accurate Cost Attribution**. Note on default model precedence: if top-level `defaults.model` is set, it takes precedence; when `defaults:` is omitted (such as in `values.quickstart.yaml`), `is_default: true` on a catalog entry selects `default.model`:
 
 ```yaml
 models:
@@ -252,6 +262,7 @@ models:
     target: "gemini"                                  # gemini | claude | gemini-openai-compat | openai-custom
     format: "gemini"                                  # Wire protocol: gemini | anthropic | openai
     region: "global"                                  # Vertex AI region: global | us-east5 | us-central1 | europe-west1
+    is_default: false                                 # Used when top-level `defaults.model` is omitted
     created_at: "2026-05-01T00:00:00Z"                # ISO timestamp for /v1/models
     model_armor:                                      # Optional: Tier 6 per-model Model Armor template override
       request_template: "frontier-request-template"

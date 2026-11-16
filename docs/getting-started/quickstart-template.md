@@ -3,16 +3,21 @@
 Get an enterprise AI Gateway running in 5 minutes using a single **15-line `values.quickstart.yaml` file**.
 
 > [!IMPORTANT]
-> **Prerequisites:** Complete the one-time setup in **[Prerequisites & Setup](installation.md)** before deploying:
+> **Prerequisites:** Complete the one-time environment setup in **[Prerequisites & Setup](installation.md)** (Steps 1–5) before deploying:
 > 1. Install `apigee-go-gen` and `apigeecli`.
 > 2. Authenticate with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
 > 3. Create the deployment Service Account with `roles/aiplatform.user`.
 > 4. Create the 18 telemetry Data Collectors in your Apigee organization.
-> 5. Provision your AI Products and Persona Developer Apps with `bash ./scripts/sync-personas.sh`.
 
 ---
 
-## 1. Define Your Models (`values.quickstart.yaml`)
+## 1. Copy & Update the Quickstart Configuration (`./values.yaml`)
+
+Copy the starter quickstart template to `./values.yaml` and set `gateway.project_id` to your GCP project ID:
+
+```bash
+cp ./templates/ai-gateway/values.quickstart.yaml ./values.yaml
+```
 
 ```yaml
 gateway:
@@ -32,10 +37,19 @@ models:
   - name: "claude-haiku-4-5"
     displayName: "Claude 4.5 Haiku"
     publisher: "anthropic"
+    target: "claude"
     format: "anthropic"
     region: "us-east5"
 
-  # 3. Optional: Self-Hosted or External Model (OpenAI format)
+  # 3. Vertex AI Embeddings (:predict transcoded to OpenAI /v1/embeddings)
+  - name: "text-embedding-005"
+    displayName: "Vertex AI Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "openai"
+    region: "us-central1"
+
+  # 4. Optional: Self-Hosted or External Model (OpenAI format)
   - name: "my-vllm-model"
     displayName: "Llama 3 (Self-Hosted)"
     format: "openai"
@@ -44,18 +58,27 @@ models:
 
 ---
 
-## 2. Render, Deploy & Provision AI Products
+## 2. Provision AI Products, Render & Deploy
 
-Compile your YAML configuration into an Apigee bundle, deploy the proxy, and run `scripts/sync-personas.sh` to automatically create your Apigee API Products (`llmOperationGroup`) and Developer App keys:
+Run `scripts/sync-personas.sh` first to create your Apigee API Products (`llmOperationGroup`) and Developer App keys (`client_id`), then compile and deploy the proxy bundle:
 
 ```bash
-# 1. Render the Apigee bundle from YAML
+# 1. Provision API Products (llmOperationGroup) & Developer Apps (outputs your client_id / $API_KEY)
+#    (If enabling SSO/Agent token import, paste the generated client_id values into ./values.yaml before Step 2;
+#     direct x-api-key / x-apikey calls work immediately with the generated $API_KEY)
+bash ./scripts/sync-personas.sh \
+    --values ./values.yaml \
+    --org "$PROJECT_ID" \
+    --env "$APIGEE_ENV"
+
+# 2. Render the Apigee bundle from YAML
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
-    --values ./templates/ai-gateway/values.quickstart.yaml \
+    --values ./values.yaml \
+    --set "gateway.project_id=$PROJECT_ID" \
     --output ./out/ai-gateway.zip
 
-# 2. Deploy the proxy to Apigee X or Apigee Hybrid
+# 3. Deploy the proxy to Apigee X or Apigee Hybrid
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 
 apigeecli apis create bundle \
@@ -67,15 +90,9 @@ apigeecli apis create bundle \
     --ovr \
     --wait \
     --default-token
-
-# 3. Provision API Products (llmOperationGroup) & Developer Apps (outputs your client_id / $API_KEY)
-bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.quickstart.yaml \
-    --org "$PROJECT_ID" \
-    --env "$APIGEE_ENV"
 ```
 
-* **Default AI Products Provisioned:** Because `values.quickstart.yaml` omits a custom `personas` block, `sync-personas.sh` automatically provisions the **4 built-in AI Products** (`ai-gateway-knowledge-worker`, `ai-gateway-developer`, `ai-gateway-it`, and `ai-gateway-agent`) and their Developer Apps (`*-app`). Each product is pre-configured with `llmOperationGroup` token counters (**1M tokens / hour** default limit) for every model in your `models` list and prints a ready-to-use `$API_KEY` (`client_id`) for testing.
+* **Default AI Products Provisioned:** Because `values.quickstart.yaml` omits a custom `personas` block, `sync-personas.sh` automatically provisions the **4 built-in AI Products** (`ai-gateway-knowledge-worker`, `ai-gateway-developer`, `ai-gateway-it`, and `ai-gateway-agent`) and their Developer Apps (`*-app`). Each product is pre-configured with `llmOperationGroup` token counters (**1M tokens / hour** default limit) for every model in your `models` list—and omitting `features:` automatically enables rolling token/USD quotas, cost attribution, and telemetry headers out-of-the-box.
 
 ---
 

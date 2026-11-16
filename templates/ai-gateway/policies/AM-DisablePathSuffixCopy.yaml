@@ -4,6 +4,27 @@ AssignMessage:
   .name: AM-DisablePathSuffixCopy
   DisplayName: AM-DisablePathSuffixCopy
   Properties: {}
+  Remove:
+    QueryParams:
+      - QueryParam:
+          .name: fields
+      - QueryParam:
+          .name: $fields
+      - QueryParam:
+          .name: prettyPrint
+      - QueryParam:
+          .name: callback
+      - QueryParam:
+          .name: key
+      - QueryParam:
+          .name: apikey
+    Headers:
+      - Header:
+          .name: X-Goog-FieldMask
+      - Header:
+          .name: X-Goog-User-Project
+      - Header:
+          .name: x-goog-api-key
   AssignVariable:
     Name: target.copy.pathsuffix
     Value: false

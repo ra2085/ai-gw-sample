@@ -1,5 +1,8 @@
 config
 .envrc
+.env
+*.env
+!.env.example
 to_delete
 *.code-workspace
 dev
@@ -29,3 +32,4 @@ mock-servers/
 .agents
 callout
 apiproxy/
+/values.yaml

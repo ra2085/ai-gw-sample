@@ -1,679 +1,1624 @@
 (function () {
 'use strict';
 
-var rawContent = context.getVariable("response.event.current.content");
-var targetName = context.getVariable("route.target") || context.getVariable("target.name") || context.getVariable("route_target");
-var bufferSize = context.getVariable("buffer_size");
-if (!bufferSize) {
-    bufferSize = parseInt(context.getVariable("propertyset.extract_expressions.buffer_size")) || 10;
-    context.setVariable("buffer_size", String(bufferSize));
+var varMemo = {};
+function getVar(k) {
+    if (Object.prototype.hasOwnProperty.call(varMemo, k)) {
+        return varMemo[k];
+    }
+    var val = context.getVariable(k);
+    varMemo[k] = val;
+    return val;
+}
+function setVar(k, val) {
+    varMemo[k] = val;
+    context.setVariable(k, val);
+}
+function remVar(k) {
+    varMemo[k] = null;
+    context.removeVariable(k);
+}
+
+var rawContent = getVar("response.event.current.content");
+var targetName = getVar("route.target") || getVar("target.name") || getVar("route_target");
+var routeFormat = getVar("route_format") || "";
+var bufferSize = parseInt(getVar("buffer_size") || "0", 10);
+if (!bufferSize || isNaN(bufferSize)) {
+    bufferSize = parseInt(getVar("propertyset.extract_expressions.buffer_size") || "10", 10) || 10;
+    setVar("buffer_size", String(bufferSize));
+    remVar("raw_client_payload");
 }
 
 // Clear per-chunk export variables only if they were populated on the previous chunk
-if (context.getVariable("usage_total_tokens") !== null) {
-    context.removeVariable("usage_prompt_tokens");
-    context.removeVariable("usage_completion_tokens");
-    context.removeVariable("usage_total_tokens");
-    context.removeVariable("tx_cost_usd");
-    context.removeVariable("tx_cost_micro_usd");
-    context.removeVariable("primary_quota_usage");
-    context.removeVariable("secondary_quota_usage");
-    context.removeVariable("perUnitPriceMultiplier");
+if (getVar("usage_total_tokens") !== null) {
+    remVar("usage_prompt_tokens");
+    remVar("usage_completion_tokens");
+    remVar("usage_total_tokens");
+    remVar("tx_cost_usd");
+    remVar("tx_cost_micro_usd");
+    remVar("primary_quota_usage");
+    remVar("secondary_quota_usage");
+    remVar("perUnitPriceMultiplier");
 }
-if (context.getVariable("buff_ready") === "true") {
-    context.removeVariable("buff_ready");
-    context.removeVariable("response_partial");
+if (getVar("buff_ready") === "true") {
+    remVar("buff_ready");
+    remVar("response_partial");
 }
-if (context.getVariable("release_concurrency_slot") === "true") {
-    context.removeVariable("release_concurrency_slot");
+if (getVar("release_concurrency_slot") === "true") {
+    remVar("release_concurrency_slot");
 }
 
-var dataIdx = rawContent ? rawContent.indexOf("data:") : -1;
-if (rawContent && dataIdx !== -1) {
-    var eventStr = rawContent.substring(dataIdx + 5).trim();
-    
-    if (eventStr.indexOf("[DONE]") === -1) {
-        try {
-            var parsedEvent = JSON.parse(eventStr);
-            var requestFormat = context.getVariable("request_format") || "claude";
-            var tokensAlreadyCounted = context.getVariable("stream_tokens_already_counted") === "true";
-            var rawModel = context.getVariable("model");
-            
-            var promptTokens = 0;
-            var completionTokens = 0;
-            var isFinished = false;
-            var finishReason = null;
-            var eventText = "";
-
-            function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, thinkingTokens) {
-                var totalIn = uncachedIn + cacheRead + cacheWrite;
-                var totalT = totalIn + outTokens;
-                if (totalT > 0) {
-                    var totalInStr = String(totalIn);
-                    var uncachedInStr = String(uncachedIn);
-                    var cacheReadStr = String(cacheRead);
-                    var cacheWriteStr = String(cacheWrite);
-                    var thinkingStr = String(thinkingTokens);
-                    var outTokensStr = String(outTokens);
-                    var totalTStr = totalT.toFixed(0);
-                    context.setVariable("prompt_tokens", totalInStr);
-                    context.setVariable("usage_prompt_tokens", totalInStr);
-                    context.setVariable("uncached_prompt_tokens", uncachedInStr);
-                    context.setVariable("usage_uncached_prompt_tokens", uncachedInStr);
-                    context.setVariable("cache_read_tokens", cacheReadStr);
-                    context.setVariable("usage_cache_read_tokens", cacheReadStr);
-                    context.setVariable("cache_write_tokens", cacheWriteStr);
-                    context.setVariable("usage_cache_write_tokens", cacheWriteStr);
-                    context.setVariable("thinking_tokens", thinkingStr);
-                    context.setVariable("usage_thinking_tokens", thinkingStr);
-                    context.setVariable("completion_tokens", outTokensStr);
-                    context.setVariable("usage_completion_tokens", outTokensStr);
-                    context.setVariable("usage_total_tokens", totalTStr);
-                    context.setVariable("stream_tokens_already_counted", "true");
-
-                    // Inline Monetization & Virtual USD Spend Wallet Calculation (keeps EventFlow <= 5 policies)
-                    var model = rawModel || "default";
-                    var isDefaultModel = (model === "default");
-                    var bareModel = model.indexOf("/") !== -1 ? model.split("/").slice(1).join("/") : model;
-                    var hasBarePrefix = (bareModel !== model && bareModel !== "default");
-
-                    var inputRateStr = context.getVariable("propertyset.monetization_rates." + model + ".input_rate_per_m") ||
-                                       context.getVariable("propertyset.monetization_rates." + model + ".input_rate") ||
-                                       (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate_per_m") ||
-                                                         context.getVariable("propertyset.monetization_rates." + bareModel + ".input_rate")) : null) ||
-                                       (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.input_rate_per_m") ||
-                                                           context.getVariable("propertyset.monetization_rates.default.input_rate")) : null) ||
-                                       "0.10";
-
-                    var outputRateStr = context.getVariable("propertyset.monetization_rates." + model + ".output_rate_per_m") ||
-                                        context.getVariable("propertyset.monetization_rates." + model + ".output_rate") ||
-                                        (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate_per_m") ||
-                                                          context.getVariable("propertyset.monetization_rates." + bareModel + ".output_rate")) : null) ||
-                                        (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.output_rate_per_m") ||
-                                                            context.getVariable("propertyset.monetization_rates.default.output_rate")) : null) ||
-                                        "0.40";
-
-                    var inputRate = parseFloat(inputRateStr);
-                    var outputRate = parseFloat(outputRateStr);
-
-                    var cacheReadRate = inputRate;
-                    if (cacheRead > 0) {
-                        var cacheReadRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate_per_m") ||
-                                               context.getVariable("propertyset.monetization_rates." + model + ".cache_read_rate") ||
-                                               (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate_per_m") ||
-                                                                 context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_read_rate")) : null) ||
-                                               (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
-                                                                   context.getVariable("propertyset.monetization_rates.default.cache_read_rate")) : null);
-                        if (cacheReadRateStr) cacheReadRate = parseFloat(cacheReadRateStr);
-                    }
-
-                    var cacheWriteRate = inputRate;
-                    if (cacheWrite > 0) {
-                        var cacheWriteRateStr = context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate_per_m") ||
-                                                context.getVariable("propertyset.monetization_rates." + model + ".cache_write_rate") ||
-                                                (hasBarePrefix ? (context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate_per_m") ||
-                                                                  context.getVariable("propertyset.monetization_rates." + bareModel + ".cache_write_rate")) : null) ||
-                                                (!isDefaultModel ? (context.getVariable("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
-                                                                    context.getVariable("propertyset.monetization_rates.default.cache_write_rate")) : null);
-                        if (cacheWriteRateStr) cacheWriteRate = parseFloat(cacheWriteRateStr);
-                    }
-
-                    var markupStr = context.getVariable("propertyset.monetization_rates." + model + ".markup") ||
-                                    (hasBarePrefix ? context.getVariable("propertyset.monetization_rates." + bareModel + ".markup") : null) ||
-                                    context.getVariable("propertyset.monetization_rates.platform.markup_multiplier") ||
-                                    (!isDefaultModel ? context.getVariable("propertyset.monetization_rates.default.markup") : null) ||
-                                    "1.0";
-                    var markupMultiplier = parseFloat(markupStr);
-                    if (isNaN(markupMultiplier) || markupMultiplier <= 0) {
-                        markupMultiplier = 1.0;
-                    }
-
-                    var currency = context.getVariable("propertyset.monetization_rates.platform.currency") ||
-                                   context.getVariable("propertyset.monetization_rates.default.currency") ||
-                                   "USD";
-
-                    var uncachedPromptCost = (uncachedIn / 1000000.0) * inputRate * markupMultiplier;
-                    var cacheReadCost = (cacheRead / 1000000.0) * cacheReadRate * markupMultiplier;
-                    var cacheWriteCost = (cacheWrite / 1000000.0) * cacheWriteRate * markupMultiplier;
-                    var promptCost = uncachedPromptCost + cacheReadCost + cacheWriteCost;
-                    var completionCost = (outTokens / 1000000.0) * outputRate * markupMultiplier;
-                    var totalCost = promptCost + completionCost;
-                    var totalCostStr = totalCost.toFixed(6);
-                    var totalCostMicro = totalCost > 0 ? Math.max(1, Math.round(totalCost * 1000000)) : 0;
-                    var totalCostMicroStr = totalCostMicro.toFixed(0);
-
-                    var primaryQuotaMode = context.getVariable("primary_quota_mode") || "tokens";
-                    var secondaryQuotaMode = context.getVariable("secondary_quota_mode") || "tokens";
-
-                    context.setVariable("tx_cost_usd", totalCostStr);
-                    context.setVariable("tx_cost_micro_usd", totalCostMicroStr);
-                    context.setVariable("tx_prompt_cost_usd", promptCost.toFixed(6));
-                    context.setVariable("tx_uncached_prompt_cost_usd", uncachedPromptCost.toFixed(6));
-                    context.setVariable("tx_cache_read_cost_usd", cacheReadCost.toFixed(6));
-                    context.setVariable("tx_cache_write_cost_usd", cacheWriteCost.toFixed(6));
-                    context.setVariable("tx_completion_cost_usd", completionCost.toFixed(6));
-                    context.setVariable("tx_currency", currency);
-                    context.setVariable("primary_quota_usage", primaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
-                    context.setVariable("secondary_quota_usage", secondaryQuotaMode === "usd" ? totalCostMicroStr : totalTStr);
-
-                    context.setVariable("perUnitPriceMultiplier", totalCostStr);
-                    context.setVariable("currency", currency);
-                    context.setVariable("transactionSuccess", "true");
-                    context.setVariable("mint.tx_cost", totalCostStr);
-                    context.setVariable("mint.tx_volume", totalTStr);
-                    context.setVariable("mint.tx_currency", currency);
-                }
-            }
-
-            if (requestFormat === "gemini") {
-                // -------------------------------------------------------------
-                // Branch 1: Native Gemini Request Format (/ai-gateway)
-                // -------------------------------------------------------------
-                if (parsedEvent.usageMetadata) {
-                    var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
-                    var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
-                    var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
-                    var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
-                    if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
-                        context.setVariable("saved_stream_prompt_tokens", String(inT));
-                        context.setVariable("saved_stream_cached_tokens", String(cachedT));
-                        context.setVariable("saved_stream_completion_tokens", String(outT));
-                        context.setVariable("saved_stream_thinking_tokens", String(thoughtsT));
-                    }
-                }
-
-                var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
-                eventText = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) ? (candidate.content.parts[0].text || "") : "";
-                finishReason = candidate ? candidate.finishReason : null;
-                if (finishReason || (candidate === null && parsedEvent.usageMetadata)) {
-                    isFinished = true;
-                }
-
-                // Buffer management for Model Armor sanitization
-                var idx = context.getVariable("response.event.current.count");
-                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
-                var newBuffer = previousBufferVal + (eventText || "");
-                
-                if ((idx % bufferSize === 0 || isFinished) && newBuffer.length > 0) {
-                    context.setVariable("response_partial", newBuffer);
-                    context.setVariable("buff_ready", "true");
-                    context.setVariable("tmp_buffer_pre", "");
-                } else {
-                    context.setVariable("buff_ready", "false");
-                    context.setVariable("tmp_buffer_pre", newBuffer);
-                }
-
-                // Emit tokens ONCE upon stream completion
-                if (isFinished && !tokensAlreadyCounted) {
-                    promptTokens = parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.promptTokenCount : 0) || 0, 10);
-                    var geminiCachedTokens = parseInt(context.getVariable("saved_stream_cached_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.cachedContentTokenCount : 0) || 0, 10);
-                    var geminiUncachedPrompt = Math.max(0, promptTokens - geminiCachedTokens);
-                    var geminiCandidateTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.candidatesTokenCount : 0) || 0, 10);
-                    var geminiThinkingTokens = parseInt(context.getVariable("saved_stream_thinking_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.thoughtsTokenCount : 0) || 0, 10);
-                    completionTokens = geminiCandidateTokens + geminiThinkingTokens;
-                    emitStreamTokenVariables(geminiUncachedPrompt, geminiCachedTokens, 0, completionTokens, geminiThinkingTokens);
-                }
-
-            } else if (requestFormat === "openai") {
-                // -------------------------------------------------------------
-                // Branch 2: OpenAI Request Format (/v1/chat/completions)
-                // -------------------------------------------------------------
-                var modelName = rawModel || "claude";
-
-                if (targetName === "claude" || parsedEvent.type) {
-                    // Target is Anthropic Claude -> Translate Anthropic SSE chunk to OpenAI SSE!
-                    if (parsedEvent.type === "message_start") {
-                        var msgStartUsage = (parsedEvent.message && parsedEvent.message.usage) ? parsedEvent.message.usage : {};
-                        if (msgStartUsage.input_tokens !== undefined) {
-                            context.setVariable("saved_stream_uncached_prompt_tokens", String(msgStartUsage.input_tokens));
-                        }
-                        if (msgStartUsage.cache_read_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cached_tokens", String(msgStartUsage.cache_read_input_tokens));
-                        }
-                        if (msgStartUsage.cache_creation_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cache_write_tokens", String(msgStartUsage.cache_creation_input_tokens));
-                        }
-                        if (parsedEvent.message && parsedEvent.message.id) {
-                            context.setVariable("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
-                        }
-                    } else if (parsedEvent.type === "content_block_delta") {
-                        eventText = (parsedEvent.delta && parsedEvent.delta.text) ? parsedEvent.delta.text : "";
-                    } else if (parsedEvent.type === "message_delta") {
-                        if (parsedEvent.usage) {
-                            if (parsedEvent.usage.input_tokens !== undefined) {
-                                context.setVariable("saved_stream_uncached_prompt_tokens", String(parsedEvent.usage.input_tokens));
-                            }
-                            if (parsedEvent.usage.cache_read_input_tokens !== undefined) {
-                                context.setVariable("saved_stream_cached_tokens", String(parsedEvent.usage.cache_read_input_tokens));
-                            }
-                            if (parsedEvent.usage.cache_creation_input_tokens !== undefined) {
-                                context.setVariable("saved_stream_cache_write_tokens", String(parsedEvent.usage.cache_creation_input_tokens));
-                            }
-                            if (parsedEvent.usage.output_tokens !== undefined) {
-                                context.setVariable("saved_stream_completion_tokens", String(parsedEvent.usage.output_tokens));
-                            }
-                        }
-                        finishReason = "stop";
-                        isFinished = true;
-                    } else if (parsedEvent.type === "message_stop") {
-                        isFinished = true;
-                    }
-
-                    var msgId = context.getVariable("stream_msg_id") || ("chatcmpl-" + Math.random().toString(36).substring(2, 12));
-                    var outputChunks = [];
-
-                    if (eventText) {
-                        var openAiChunk = {
-                            id: msgId,
-                            object: "chat.completion.chunk",
-                            created: Math.floor(Date.now() / 1000),
-                            model: modelName,
-                            choices: [
-                                {
-                                    index: 0,
-                                    delta: {
-                                        content: eventText
-                                    },
-                                    finish_reason: null
-                                }
-                            ]
-                        };
-                        outputChunks.push("data: " + JSON.stringify(openAiChunk));
-                    }
-
-                    if (isFinished) {
-                        var finalChunk = {
-                            id: msgId,
-                            object: "chat.completion.chunk",
-                            created: Math.floor(Date.now() / 1000),
-                            model: modelName,
-                            choices: [
-                                {
-                                    index: 0,
-                                    delta: {},
-                                    finish_reason: "stop"
-                                }
-                            ]
-                        };
-                        outputChunks.push("data: " + JSON.stringify(finalChunk));
-                        outputChunks.push("data: [DONE]");
-                    }
-
-                    if (outputChunks.length > 0) {
-                        context.setVariable("response.event.current.content", outputChunks.join("\n\n") + "\n\n");
-                    } else {
-                        context.setVariable("response.event.current.content", "");
-                    }
-
-                } else {
-                    if (parsedEvent.usage) {
-                        var inT = parsedEvent.usage.prompt_tokens || 0;
-                        var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
-                        var outT = parsedEvent.usage.completion_tokens || 0;
-                        var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
-                        if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
-                            context.setVariable("saved_stream_prompt_tokens", String(inT));
-                            context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
-                            context.setVariable("saved_stream_cached_tokens", String(cachedT));
-                            context.setVariable("saved_stream_completion_tokens", String(outT));
-                            context.setVariable("saved_stream_thinking_tokens", String(reasoningT));
-                        }
-                    }
-
-                    var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
-                    eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
-                    finishReason = choice ? choice.finish_reason : null;
-                    if (finishReason || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) {
-                        isFinished = true;
-                    }
-                }
-
-                // Buffer management for Model Armor sanitization
-                var idx = context.getVariable("response.event.current.count");
-                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
-                var newBuffer = previousBufferVal + (eventText || "");
-                
-                if ((idx % bufferSize === 0 || isFinished) && newBuffer.length > 0) {
-                    context.setVariable("response_partial", newBuffer);
-                    context.setVariable("buff_ready", "true");
-                    context.setVariable("tmp_buffer_pre", "");
-                } else {
-                    context.setVariable("buff_ready", "false");
-                    context.setVariable("tmp_buffer_pre", newBuffer);
-                }
-
-                // Emit tokens ONCE upon stream completion
-                if (isFinished && !tokensAlreadyCounted) {
-                    var oaiCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || 0, 10);
-                    var oaiCacheWrite = parseInt(context.getVariable("saved_stream_cache_write_tokens") || 0, 10);
-                    var savedUncachedStr = context.getVariable("saved_stream_uncached_prompt_tokens");
-                    var oaiUncachedIn = savedUncachedStr !== null
-                        ? parseInt(savedUncachedStr, 10)
-                        : Math.max(0, parseInt(context.getVariable("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.prompt_tokens : 0) || 0, 10) - oaiCacheRead - oaiCacheWrite);
-                    var oaiThinking = parseInt(context.getVariable("saved_stream_thinking_tokens") || 0, 10);
-                    completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.completion_tokens : 0) || 0, 10);
-                    emitStreamTokenVariables(oaiUncachedIn, oaiCacheRead, oaiCacheWrite, completionTokens, oaiThinking);
-                }
-
-
-            } else {
-                // -------------------------------------------------------------
-                // Branch 3: Anthropic Claude Request Format (/v1/messages)
-                // -------------------------------------------------------------
-                var modelName = rawModel || "unknown";
-
-                if (targetName === "claude") {
-                    // Target is Native Claude:
-                    if (parsedEvent.delta && parsedEvent.delta.text !== undefined) {
-                        eventText = parsedEvent.delta.text;
-                    } else if (parsedEvent.type === "message_delta") {
-                        if (parsedEvent.delta && parsedEvent.delta.stop_reason) {
-                            finishReason = "stop";
-                        }
-                    }
-
-                    var claudeUsage = parsedEvent.usage || (parsedEvent.message && parsedEvent.message.usage);
-                    if (claudeUsage) {
-                        if (claudeUsage.input_tokens !== undefined) {
-                            context.setVariable("saved_stream_uncached_prompt_tokens", String(claudeUsage.input_tokens));
-                        }
-                        if (claudeUsage.cache_read_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cached_tokens", String(claudeUsage.cache_read_input_tokens));
-                        }
-                        if (claudeUsage.cache_creation_input_tokens !== undefined) {
-                            context.setVariable("saved_stream_cache_write_tokens", String(claudeUsage.cache_creation_input_tokens));
-                        }
-                        if (claudeUsage.output_tokens !== undefined) {
-                            context.setVariable("saved_stream_completion_tokens", String(claudeUsage.output_tokens));
-                        }
-                    }
-
-                    if (parsedEvent.type === "message_delta" || parsedEvent.type === "message_stop") {
-                        isFinished = true;
-                    }
-
-                    if (isFinished && !tokensAlreadyCounted) {
-                        var claudeUncachedIn = parseInt(context.getVariable("saved_stream_uncached_prompt_tokens") || (claudeUsage ? claudeUsage.input_tokens : 0) || 0, 10);
-                        var claudeCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || (claudeUsage ? claudeUsage.cache_read_input_tokens : 0) || 0, 10);
-                        var claudeCacheWrite = parseInt(context.getVariable("saved_stream_cache_write_tokens") || (claudeUsage ? claudeUsage.cache_creation_input_tokens : 0) || 0, 10);
-                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || (claudeUsage ? claudeUsage.output_tokens : 0) || 0, 10);
-                        emitStreamTokenVariables(claudeUncachedIn, claudeCacheRead, claudeCacheWrite, completionTokens, 0);
-                    }
-
-                } else {
-                    // Non-Claude target (Gemini or OpenAI): Translate chunks to Claude SSE!
-                    if (targetName === "gemini") {
-                        var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
-                        var parts = (candidate && candidate.content) ? candidate.content.parts : null;
-                        eventText = (parts && parts[0]) ? (parts[0].text || "") : "";
-                        finishReason = candidate ? candidate.finishReason : null;
-
-                        if (parsedEvent.usageMetadata) {
-                            var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
-                            var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
-                            var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
-                            var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
-                            if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
-                                context.setVariable("saved_stream_prompt_tokens", String(inT));
-                                context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
-                                context.setVariable("saved_stream_cached_tokens", String(cachedT));
-                                context.setVariable("saved_stream_completion_tokens", String(outT + thoughtsT));
-                                context.setVariable("saved_stream_thinking_tokens", String(thoughtsT));
-                            }
-                        }
-                        if (finishReason) {
-                            isFinished = true;
-                        }
-                    } else {
-                        // OpenAI target
-                        var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
-                        eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
-                        finishReason = choice ? choice.finish_reason : null;
-
-                        if (parsedEvent.usage) {
-                            var inT = parsedEvent.usage.prompt_tokens || 0;
-                            var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
-                            var outT = parsedEvent.usage.completion_tokens || 0;
-                            var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
-                            if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
-                                context.setVariable("saved_stream_prompt_tokens", String(inT));
-                                context.setVariable("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
-                                context.setVariable("saved_stream_cached_tokens", String(cachedT));
-                                context.setVariable("saved_stream_completion_tokens", String(outT));
-                                context.setVariable("saved_stream_thinking_tokens", String(reasoningT));
-                            }
-                        }
-                        if (finishReason) {
-                            isFinished = true;
-                        }
-                        modelName = parsedEvent.model || modelName;
-                    }
-
-                    // Retrieve latest token counts only on start/finish/usage chunks to avoid per-delta Rhino bridge overhead
-                    var sentStart = context.getVariable("sent_message_start");
-                    var isTrailingUsageChunk = Boolean(parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage);
-                    var transCacheRead = 0;
-                    var transUncachedIn = 0;
-                    var transThinking = 0;
-                    if (!sentStart || isFinished || isTrailingUsageChunk) {
-                        transCacheRead = parseInt(context.getVariable("saved_stream_cached_tokens") || 0, 10);
-                        var transUncachedInStr = context.getVariable("saved_stream_uncached_prompt_tokens");
-                        transUncachedIn = transUncachedInStr !== null
-                            ? parseInt(transUncachedInStr, 10)
-                            : Math.max(0, parseInt(context.getVariable("saved_stream_prompt_tokens") || 0, 10) - transCacheRead);
-                        transThinking = parseInt(context.getVariable("saved_stream_thinking_tokens") || 0, 10);
-                        promptTokens = transUncachedIn + transCacheRead;
-                        completionTokens = parseInt(context.getVariable("saved_stream_completion_tokens") || 0, 10);
-                    }
-
-                    // Translate chunk to Claude SSE format
-                    var outputChunks = [];
-                    var msgId = parsedEvent.id ? parsedEvent.id.replace("chatcmpl-", "msg_") : "msg_stream";
-                    
-                    if (!sentStart) {
-                        context.setVariable("sent_message_start", "true");
-                        
-                        // 1. message_start
-                        var msgStart = {
-                            "type": "message_start",
-                            "message": {
-                                "id": msgId,
-                                "type": "message",
-                                "role": "assistant",
-                                "content": [],
-                                "model": modelName,
-                                "stop_reason": null,
-                                "stop_sequence": null,
-                                "usage": {
-                                    "input_tokens": transUncachedIn,
-                                    "cache_read_input_tokens": transCacheRead,
-                                    "cache_creation_input_tokens": 0,
-                                    "output_tokens": 0
-                                }
-                            }
-                        };
-                        outputChunks.push("event: message_start\ndata: " + JSON.stringify(msgStart));
-                        
-                        // 2. content_block_start for initial text block
-                        var blockStart = {
-                            "type": "content_block_start",
-                            "index": 0,
-                            "content_block": {
-                                "type": "text",
-                                "text": ""
-                            }
-                        };
-                        outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(blockStart));
-                    }
-                    
-                    // 3. content_block_delta for text
-                    if (eventText) {
-                        var blockDelta = {
-                            "type": "content_block_delta",
-                            "index": 0,
-                            "delta": {
-                                "type": "text_delta",
-                                "text": eventText
-                            }
-                        };
-                        outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(blockDelta));
-                    }
-
-                    // 4. Handle streaming functionCall from Gemini or tool_calls from OpenAI
-                    var streamFuncCall = (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) 
-                                         ? candidate.content.parts[0].functionCall 
-                                         : null;
-                    var openAiToolCalls = (typeof choice !== "undefined" && choice && choice.delta && Array.isArray(choice.delta.tool_calls))
-                                          ? choice.delta.tool_calls
-                                          : null;
-                    if (streamFuncCall) {
-                        var toolCallId = "call_" + Math.random().toString(36).substring(2, 12);
-                        var toolBlockStart = {
-                            "type": "content_block_start",
-                            "index": 1,
-                            "content_block": {
-                                "type": "tool_use",
-                                "id": toolCallId,
-                                "name": streamFuncCall.name,
-                                "input": {}
-                            }
-                        };
-                        outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(toolBlockStart));
-
-                        var toolBlockDelta = {
-                            "type": "content_block_delta",
-                            "index": 1,
-                            "delta": {
-                                "type": "input_json_delta",
-                                "partial_json": JSON.stringify(streamFuncCall.args || {})
-                            }
-                        };
-                        outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(toolBlockDelta));
-
-                        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 1 }));
-                        finishReason = "tool_use";
-                    } else if (openAiToolCalls && openAiToolCalls.length > 0) {
-                        for (var tcIdx = 0; tcIdx < openAiToolCalls.length; tcIdx++) {
-                            var oaiTc = openAiToolCalls[tcIdx];
-                            var blockIndex = (oaiTc.index !== undefined ? oaiTc.index : tcIdx) + 1;
-                            if (oaiTc.function && oaiTc.function.name) {
-                                var oaiToolStart = {
-                                    "type": "content_block_start",
-                                    "index": blockIndex,
-                                    "content_block": {
-                                        "type": "tool_use",
-                                        "id": oaiTc.id || ("toolu_" + Math.random().toString(36).substring(2, 12)),
-                                        "name": oaiTc.function.name,
-                                        "input": {}
-                                    }
-                                };
-                                outputChunks.push("event: content_block_start\ndata: " + JSON.stringify(oaiToolStart));
-                                context.setVariable("open_tool_block_idx", String(blockIndex));
-                            }
-                            if (oaiTc.function && oaiTc.function.arguments) {
-                                var oaiToolDelta = {
-                                    "type": "content_block_delta",
-                                    "index": blockIndex,
-                                    "delta": {
-                                        "type": "input_json_delta",
-                                        "partial_json": oaiTc.function.arguments
-                                    }
-                                };
-                                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify(oaiToolDelta));
-                            }
-                        }
-                    }
-                    
-                    // 5. content_block_stop & message_delta & message_stop (if finished)
-                    var sentStop = context.getVariable("sent_message_stop") === "true";
-                    if (isFinished && !sentStop) {
-                        context.setVariable("sent_message_stop", "true");
-                        var openToolIdx = context.getVariable("open_tool_block_idx");
-                        if (openToolIdx) {
-                            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openToolIdx, 10) }));
-                        }
-                        var blockStop = {
-                            "type": "content_block_stop",
-                            "index": 0
-                        };
-                        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify(blockStop));
-                        
-                        var stopReasonMapped = "end_turn";
-                        if (finishReason === "tool_use" || finishReason === "tool_calls" || streamFuncCall || openToolIdx) {
-                            stopReasonMapped = "tool_use";
-                        } else if (finishReason === "MAX_TOKENS" || finishReason === "length") {
-                            stopReasonMapped = "max_tokens";
-                        } else if (finishReason === "STOP" || finishReason === "stop") {
-                            stopReasonMapped = "end_turn";
-                        }
-                        
-                        var msgDelta = {
-                            "type": "message_delta",
-                            "delta": {
-                                "stop_reason": stopReasonMapped,
-                                "stop_sequence": null
-                            },
-                            "usage": {
-                                "input_tokens": transUncachedIn,
-                                "cache_read_input_tokens": transCacheRead,
-                                "cache_creation_input_tokens": 0,
-                                "output_tokens": completionTokens
-                            }
-                        };
-                        outputChunks.push("event: message_delta\ndata: " + JSON.stringify(msgDelta));
-                        
-                        var msgStop = {
-                            "type": "message_stop"
-                        };
-                        outputChunks.push("event: message_stop\ndata: " + JSON.stringify(msgStop));
-                    }
-
-                    // Emit tokens ONCE upon stream completion or trailing usage chunk
-                    if ((isFinished || (parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage)) && !tokensAlreadyCounted) {
-                        emitStreamTokenVariables(transUncachedIn, transCacheRead, 0, completionTokens, transThinking);
-                    }
-                    
-                    if (outputChunks.length > 0) {
-                        context.setVariable("response.event.current.content", outputChunks.join("\n\n") + "\n\n");
-                    } else {
-                        context.setVariable("response.event.current.content", "");
-                    }
-                }
-                
-                // Buffer management for Model Armor sanitization (shared)
-                var idx = context.getVariable("response.event.current.count");
-                var previousBufferVal = context.getVariable("tmp_buffer_pre") || "";
-                var newBuffer = previousBufferVal + (eventText || "");
-                
-                if ((idx % bufferSize === 0 || finishReason === "stop" || finishReason === "STOP" || isFinished) && newBuffer.length > 0) {
-                    context.setVariable("response_partial", newBuffer);
-                    context.setVariable("buff_ready", "true");
-                    context.setVariable("tmp_buffer_pre", "");
-                } else {
-                    context.setVariable("buff_ready", "false");
-                    context.setVariable("tmp_buffer_pre", newBuffer);
-                }
-            }
-
-            if (isFinished && context.getVariable("concurrency_slot_released") !== "true") {
-                context.setVariable("release_concurrency_slot", "true");
-                context.setVariable("concurrency_slot_released", "true");
-            }
-            
-        } catch (e) {
-            print("JSON Error: " + e);
+function emitStreamTokenVariables(uncachedIn, cacheRead, cacheWrite, outTokens, thinkingTokens, isCheckpointOnly) {
+    var totalIn = uncachedIn + cacheRead + cacheWrite;
+    var totalT = totalIn + outTokens;
+    if (totalT > 0) {
+        var rawModel = getVar("model");
+        var totalInStr = String(totalIn);
+        var uncachedInStr = String(uncachedIn);
+        var cacheReadStr = String(cacheRead);
+        var cacheWriteStr = String(cacheWrite);
+        var thinkingStr = String(thinkingTokens);
+        var outTokensStr = String(outTokens);
+        var totalTStr = totalT.toFixed(0);
+        setVar("prompt_tokens", totalInStr);
+        setVar("usage_prompt_tokens", totalInStr);
+        setVar("uncached_prompt_tokens", uncachedInStr);
+        setVar("usage_uncached_prompt_tokens", uncachedInStr);
+        setVar("cache_read_tokens", cacheReadStr);
+        setVar("usage_cache_read_tokens", cacheReadStr);
+        setVar("cache_write_tokens", cacheWriteStr);
+        setVar("usage_cache_write_tokens", cacheWriteStr);
+        setVar("thinking_tokens", thinkingStr);
+        setVar("usage_thinking_tokens", thinkingStr);
+        setVar("completion_tokens", outTokensStr);
+        setVar("usage_completion_tokens", outTokensStr);
+        setVar("usage_total_tokens", totalTStr);
+        if (isCheckpointOnly) {
+            setVar("stream_prompt_checkpointed", "true");
+        } else {
+            setVar("stream_tokens_already_counted", "true");
         }
+
+        // Inline Monetization & Virtual USD Spend Wallet Calculation (keeps EventFlow <= 5 policies)
+        var model = rawModel || "default";
+        var isDefaultModel = (model === "default");
+        var bareModel = model.indexOf("/") !== -1 ? model.split("/").slice(1).join("/") : model;
+        var hasBarePrefix = (bareModel !== model && bareModel !== "default");
+
+        var inputRateStr = getVar("propertyset.monetization_rates." + model + ".input_rate_per_m") ||
+                           getVar("propertyset.monetization_rates." + model + ".input_rate") ||
+                           (hasBarePrefix ? (getVar("propertyset.monetization_rates." + bareModel + ".input_rate_per_m") ||
+                                             getVar("propertyset.monetization_rates." + bareModel + ".input_rate")) : null) ||
+                           (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.input_rate_per_m") ||
+                                               getVar("propertyset.monetization_rates.default.input_rate")) : null) ||
+                           "0.10";
+
+        var outputRateStr = getVar("propertyset.monetization_rates." + model + ".output_rate_per_m") ||
+                            getVar("propertyset.monetization_rates." + model + ".output_rate") ||
+                            (hasBarePrefix ? (getVar("propertyset.monetization_rates." + bareModel + ".output_rate_per_m") ||
+                                              getVar("propertyset.monetization_rates." + bareModel + ".output_rate")) : null) ||
+                            (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.output_rate_per_m") ||
+                                                getVar("propertyset.monetization_rates.default.output_rate")) : null) ||
+                            "0.40";
+
+        var inputRate = parseCleanRate(inputRateStr, 0.10, false);
+        var outputRate = parseCleanRate(outputRateStr, 0.40, false);
+
+        var cacheReadRate = inputRate;
+        if (cacheRead > 0) {
+            var cacheReadRateStr = getVar("propertyset.monetization_rates." + model + ".cache_read_rate_per_m") ||
+                                   getVar("propertyset.monetization_rates." + model + ".cache_read_rate") ||
+                                   (hasBarePrefix ? (getVar("propertyset.monetization_rates." + bareModel + ".cache_read_rate_per_m") ||
+                                                     getVar("propertyset.monetization_rates." + bareModel + ".cache_read_rate")) : null) ||
+                                   (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.cache_read_rate_per_m") ||
+                                                       getVar("propertyset.monetization_rates.default.cache_read_rate")) : null);
+            if (cacheReadRateStr !== null && cacheReadRateStr !== undefined && cacheReadRateStr !== "") {
+                cacheReadRate = parseCleanRate(cacheReadRateStr, inputRate, false);
+            }
+        }
+
+        var cacheWriteRate = inputRate;
+        if (cacheWrite > 0) {
+            var cacheWriteRateStr = getVar("propertyset.monetization_rates." + model + ".cache_write_rate_per_m") ||
+                                    getVar("propertyset.monetization_rates." + model + ".cache_write_rate") ||
+                                    (hasBarePrefix ? (getVar("propertyset.monetization_rates." + bareModel + ".cache_write_rate_per_m") ||
+                                                      getVar("propertyset.monetization_rates." + bareModel + ".cache_write_rate")) : null) ||
+                                    (!isDefaultModel ? (getVar("propertyset.monetization_rates.default.cache_write_rate_per_m") ||
+                                                        getVar("propertyset.monetization_rates.default.cache_write_rate")) : null);
+            if (cacheWriteRateStr !== null && cacheWriteRateStr !== undefined && cacheWriteRateStr !== "") {
+                cacheWriteRate = parseCleanRate(cacheWriteRateStr, inputRate, false);
+            }
+        }
+
+        var markupStr = getVar("propertyset.monetization_rates." + model + ".markup") ||
+                        (hasBarePrefix ? getVar("propertyset.monetization_rates." + bareModel + ".markup") : null) ||
+                        getVar("propertyset.monetization_rates.platform.markup_multiplier") ||
+                        (!isDefaultModel ? getVar("propertyset.monetization_rates.default.markup") : null) ||
+                        "1.0";
+        var markupMultiplier = parseCleanRate(markupStr, 1.0, true);
+
+        var currency = getVar("propertyset.monetization_rates.platform.currency") ||
+                       getVar("propertyset.monetization_rates.default.currency") ||
+                       "USD";
+
+        var uncachedPromptCost = (uncachedIn / 1000000.0) * inputRate * markupMultiplier;
+        var cacheReadCost = (cacheRead / 1000000.0) * cacheReadRate * markupMultiplier;
+        var cacheWriteCost = (cacheWrite / 1000000.0) * cacheWriteRate * markupMultiplier;
+        var promptCost = uncachedPromptCost + cacheReadCost + cacheWriteCost;
+        var completionCost = (outTokens / 1000000.0) * outputRate * markupMultiplier;
+        var judgeTotalT = parseInt(getVar("judge_total_tokens") || "0", 10);
+        if (isNaN(judgeTotalT) || judgeTotalT < 0) judgeTotalT = 0;
+        var judgeCost = judgeTotalT > 0 ? computeJudgeStreamCost(markupMultiplier) : 0.0;
+        var totalCost = promptCost + completionCost + judgeCost;
+        var totalCostStr = totalCost.toFixed(6);
+        var totalCostMicro = totalCost > 0 ? Math.max(1, Math.round(totalCost * 1000000)) : 0;
+        var totalCostMicroStr = totalCostMicro.toFixed(0);
+        var billedTotalT = totalT + judgeTotalT;
+
+        var primaryQuotaMode = getVar("primary_quota_mode") || "tokens";
+        var secondaryQuotaMode = getVar("secondary_quota_mode") || "tokens";
+        var rawPrimaryUsage = primaryQuotaMode === "usd" ? totalCostMicro : billedTotalT;
+        var rawSecondaryUsage = secondaryQuotaMode === "usd" ? totalCostMicro : billedTotalT;
+        var prevPrimary = parseInt(getVar("billed_primary_quota") || "0", 10);
+        var prevSecondary = parseInt(getVar("billed_secondary_quota") || "0", 10);
+        var deltaPrimary = prevPrimary > 0 ? Math.max(0, rawPrimaryUsage - prevPrimary) : rawPrimaryUsage;
+        var deltaSecondary = prevSecondary > 0 ? Math.max(0, rawSecondaryUsage - prevSecondary) : rawSecondaryUsage;
+
+        setVar("tx_cost_usd", totalCostStr);
+        setVar("tx_cost_micro_usd", totalCostMicroStr);
+        setVar("tx_prompt_cost_usd", promptCost.toFixed(6));
+        setVar("tx_uncached_prompt_cost_usd", uncachedPromptCost.toFixed(6));
+        setVar("tx_cache_read_cost_usd", cacheReadCost.toFixed(6));
+        setVar("tx_cache_write_cost_usd", cacheWriteCost.toFixed(6));
+        setVar("tx_completion_cost_usd", completionCost.toFixed(6));
+        setVar("tx_currency", currency);
+        setVar("primary_quota_usage", deltaPrimary.toFixed(0));
+        setVar("secondary_quota_usage", deltaSecondary.toFixed(0));
+        setVar("billed_primary_quota", Math.max(prevPrimary, rawPrimaryUsage).toFixed(0));
+        setVar("billed_secondary_quota", Math.max(prevSecondary, rawSecondaryUsage).toFixed(0));
+
+        setVar("perUnitPriceMultiplier", totalCostStr);
+        setVar("currency", currency);
+        setVar("transactionSuccess", "true");
+        setVar("mint.tx_cost", totalCostStr);
+        setVar("mint.tx_volume", billedTotalT.toFixed(0));
+        setVar("mint.tx_currency", currency);
+    }
+}
+
+function parseCleanRate(rawStr, fallbackVal, minExclusive) {
+    if (rawStr === null || rawStr === undefined) return fallbackVal;
+    var v = parseFloat(String(rawStr).trim().replace(/^\$/, "").trim());
+    if (isNaN(v) || !isFinite(v) || (minExclusive ? v <= 0 : v < 0)) return fallbackVal;
+    return v;
+}
+
+function computeJudgeStreamCost(defaultMarkup) {
+    var jm = getVar("judge_model") || "gemini-2.5-flash-lite";
+    var bareJm = jm.indexOf("/") !== -1 ? jm.split("/").slice(1).join("/") : jm;
+    var hasBare = (bareJm !== jm && bareJm !== "default");
+    var jInStr = getVar("propertyset.monetization_rates." + jm + ".input_rate_per_m") ||
+                 getVar("propertyset.monetization_rates." + jm + ".input_rate") ||
+                 (hasBare ? (getVar("propertyset.monetization_rates." + bareJm + ".input_rate_per_m") ||
+                             getVar("propertyset.monetization_rates." + bareJm + ".input_rate")) : null) ||
+                 getVar("propertyset.monetization_rates.default.input_rate_per_m") ||
+                 getVar("propertyset.monetization_rates.default.input_rate") || "0.10";
+    var jOutStr = getVar("propertyset.monetization_rates." + jm + ".output_rate_per_m") ||
+                  getVar("propertyset.monetization_rates." + jm + ".output_rate") ||
+                  (hasBare ? (getVar("propertyset.monetization_rates." + bareJm + ".output_rate_per_m") ||
+                              getVar("propertyset.monetization_rates." + bareJm + ".output_rate")) : null) ||
+                  getVar("propertyset.monetization_rates.default.output_rate_per_m") ||
+                  getVar("propertyset.monetization_rates.default.output_rate") || "0.40";
+    var jInRate = parseCleanRate(jInStr, 0.10, false);
+    var jOutRate = parseCleanRate(jOutStr, 0.40, false);
+    var jUncached = parseInt(getVar("judge_uncached_prompt_tokens") || getVar("judge_prompt_tokens") || "0", 10) || 0;
+    var jCached = parseInt(getVar("judge_cache_read_tokens") || "0", 10) || 0;
+    var jOut = parseInt(getVar("judge_completion_tokens") || "0", 10) || 0;
+    var jCost = (((jUncached + jCached) / 1000000.0) * jInRate + (jOut / 1000000.0) * jOutRate) * defaultMarkup;
+    setVar("tx_judge_cost_usd", jCost.toFixed(6));
+    return jCost;
+}
+
+function appendBoundedScan(base, extra) {
+    if (!extra) return base;
+    if (base.length >= 32768) return base;
+    var sep = (base.length > 0 && base.charAt(base.length - 1) !== " " && extra.charAt(0) !== " ") ? "" : "";
+    var rem = 32768 - base.length - sep.length;
+    if (rem <= 0) return base;
+    return base + sep + (extra.length <= rem ? extra : extra.substring(0, rem));
+}
+
+function updateArmorBuffer(scanDelta, forceFlush) {
+    if (getVar("model_armor_response_enabled") === "false") {
+        return;
+    }
+    var hasDelta = Boolean(scanDelta && scanDelta.length > 0);
+    if (getVar("buff_ready") === "true") {
+        if (hasDelta) {
+            var updatedPartial = appendBoundedScan(getVar("response_partial") || "", scanDelta);
+            setVar("response_partial", updatedPartial);
+            var postOverlap = (!forceFlush && updatedPartial.length > 200) ? updatedPartial.substring(updatedPartial.length - 200) : "";
+            setVar("tmp_buffer_pre", postOverlap);
+        } else if (forceFlush) {
+            setVar("tmp_buffer_pre", "");
+        }
+        setVar("tmp_buffer_has_new", "false");
+        return;
+    }
+    var prevBuf = getVar("tmp_buffer_pre") || "";
+    if (hasDelta) {
+        setVar("tmp_buffer_has_new", "true");
+    }
+    var hasNew = hasDelta || (getVar("tmp_buffer_has_new") === "true");
+    var newBuf = hasDelta ? appendBoundedScan(prevBuf, scanDelta) : prevBuf;
+    var idx = parseInt(getVar("response.event.current.count") || "0", 10);
+
+    if (((idx > 0 && idx % bufferSize === 0) || newBuf.length >= 8192 || forceFlush) && newBuf.length > 0 && hasNew) {
+        setVar("response_partial", newBuf);
+        setVar("buff_ready", "true");
+        var overlap = (!forceFlush && newBuf.length > 200) ? newBuf.substring(newBuf.length - 200) : "";
+        setVar("tmp_buffer_pre", overlap);
+        setVar("tmp_buffer_has_new", "false");
     } else {
-        if (context.getVariable("concurrency_slot_released") !== "true") {
-            context.setVariable("release_concurrency_slot", "true");
-            context.setVariable("concurrency_slot_released", "true");
-        }
-        // If request format is not OpenAI and target is not Claude, clear [DONE] so it's not sent to Claude/Gemini clients
-        var reqFmt = context.getVariable("request_format") || "claude";
-        if (reqFmt !== "openai" && targetName !== "claude") {
-            context.setVariable("response.event.current.content", "");
+        setVar("buff_ready", "false");
+        setVar("tmp_buffer_pre", newBuf);
+    }
+}
+
+function recordStreamOutChars(charCount) {
+    if (charCount > 0 && getVar("stream_tokens_already_counted") !== "true") {
+        var prev = parseInt(getVar("stream_out_chars") || "0", 10);
+        setVar("stream_out_chars", String(prev + charCount));
+    }
+}
+
+function isSafetyStopHint(hint) {
+    return hint === "SAFETY" || hint === "RECITATION" || hint === "BLOCKLIST" ||
+           hint === "PROHIBITED_CONTENT" || hint === "SPII" || hint === "IMAGE_SAFETY" ||
+           hint === "MODEL_ARMOR" || hint === "content_filter" || hint === "refusal";
+}
+
+function buildOpenAiStreamUsageObj(uncachedIn, cacheRead, cacheWrite, compTokens, thinkingTokens) {
+    var totalPrompt = uncachedIn + cacheRead + cacheWrite;
+    var usageObj = {
+        prompt_tokens: totalPrompt,
+        completion_tokens: compTokens,
+        total_tokens: totalPrompt + compTokens
+    };
+    if (cacheRead > 0) {
+        usageObj.prompt_tokens_details = { cached_tokens: cacheRead };
+    }
+    if (thinkingTokens > 0) {
+        usageObj.completion_tokens_details = { reasoning_tokens: thinkingTokens };
+    }
+    return usageObj;
+}
+
+function getOpenToolState() {
+    var mapObj = {};
+    var orderArr = [];
+    var rawMap = getVar("open_tool_blocks_map");
+    var rawOrder = getVar("open_tool_order");
+    if (rawMap) {
+        try {
+            var parsed = JSON.parse(rawMap);
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                mapObj = parsed;
+            }
+        } catch (ignoreErr) {}
+    }
+    if (rawOrder) {
+        var parts = rawOrder.split(",");
+        for (var i = 0; i < parts.length; i++) {
+            if (parts[i]) {
+                orderArr.push(parts[i]);
+            }
         }
     }
+    return { map: mapObj, order: orderArr };
+}
+
+function saveOpenToolState(toolState) {
+    if (toolState.order.length === 0) {
+        remVar("open_tool_blocks_map");
+        remVar("open_tool_order");
+        remVar("open_tool_block_idx");
+    } else {
+        setVar("open_tool_blocks_map", JSON.stringify(toolState.map));
+        setVar("open_tool_order", toolState.order.join(","));
+        var lastKey = toolState.order[toolState.order.length - 1];
+        setVar("open_tool_block_idx", String(toolState.map[lastKey]));
+    }
+}
+
+function closeAllOpenClaudeToolBlocks(chunks) {
+    var toolState = getOpenToolState();
+    if (toolState.order.length > 0) {
+        for (var i = 0; i < toolState.order.length; i++) {
+            var k = toolState.order[i];
+            if (Object.prototype.hasOwnProperty.call(toolState.map, k)) {
+                chunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+                    "type": "content_block_stop",
+                    "index": parseInt(toolState.map[k], 10)
+                }));
+            }
+        }
+        remVar("open_tool_blocks_map");
+        remVar("open_tool_order");
+        remVar("open_tool_block_idx");
+        return true;
+    }
+    var legacyToolIdx = getVar("open_tool_block_idx");
+    if (legacyToolIdx) {
+        chunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+            "type": "content_block_stop",
+            "index": parseInt(legacyToolIdx, 10)
+        }));
+        remVar("open_tool_block_idx");
+        return true;
+    }
+    return false;
+}
+
+function buildDeferredClaudeStopChunks(stopReasonHint, uncachedIn, cacheRead, outTokens) {
+    var chunks = [];
+    closeOpenClaudeThinkingAndTextBlocks(chunks);
+    var hadOpenToolIdx = closeAllOpenClaudeToolBlocks(chunks);
+    if (getVar("next_claude_block_idx") === null && !hadOpenToolIdx) {
+        chunks.push("event: content_block_start\ndata: " + JSON.stringify({
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": { "type": "text", "text": "" }
+        }));
+        chunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": 0 }));
+        setVar("next_claude_block_idx", "1");
+    }
+
+    var prevStreamToolCount = parseInt(getVar("stream_tool_count") || "0", 10);
+    var stopReasonMapped = "end_turn";
+    if (stopReasonHint === "tool_use" || stopReasonHint === "tool_calls" || prevStreamToolCount > 0 || hadOpenToolIdx) {
+        stopReasonMapped = "tool_use";
+    } else if (stopReasonHint === "MAX_TOKENS" || stopReasonHint === "length") {
+        stopReasonMapped = "max_tokens";
+    } else if (isSafetyStopHint(stopReasonHint)) {
+        stopReasonMapped = "refusal";
+    }
+
+    chunks.push("event: message_delta\ndata: " + JSON.stringify({
+        "type": "message_delta",
+        "delta": {
+            "stop_reason": stopReasonMapped,
+            "stop_sequence": null
+        },
+        "usage": {
+            "input_tokens": uncachedIn,
+            "cache_read_input_tokens": cacheRead,
+            "cache_creation_input_tokens": 0,
+            "output_tokens": outTokens
+        }
+    }));
+    chunks.push("event: message_stop\ndata: " + JSON.stringify({ "type": "message_stop" }));
+    return chunks;
+}
+
+function handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState) {
+    var eventText = "";
+    var toolScanText = "";
+    var isFinished = false;
+    if (parsedEvent.usageMetadata) {
+        var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+        var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
+        var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+        var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+        if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
+            setVar("saved_stream_prompt_tokens", String(inT));
+            setVar("saved_stream_cached_tokens", String(cachedT));
+            setVar("saved_stream_completion_tokens", String(outT));
+            setVar("saved_stream_thinking_tokens", String(thoughtsT));
+        }
+    }
+
+    var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+    var isTrailingUsageOnly = Boolean(candidate === null && parsedEvent.usageMetadata);
+    var nativeParts = (candidate && candidate.content && Array.isArray(candidate.content.parts))
+                      ? candidate.content.parts
+                      : null;
+    if (nativeParts) {
+        var nativeTxtArr = [];
+        var nativeToolArr = [];
+        for (var npIdx = 0; npIdx < nativeParts.length; npIdx++) {
+            var np = nativeParts[npIdx];
+            if (!np || np.thought === true) {
+                continue;
+            }
+            if (np.text) {
+                nativeTxtArr.push(np.text);
+            }
+            if (np.functionCall) {
+                nativeToolArr.push((np.functionCall.name || "tool") + ": " + JSON.stringify(np.functionCall.args || {}));
+            }
+        }
+        eventText = nativeTxtArr.join("");
+        if (nativeToolArr.length > 0) {
+            toolScanText = (eventText ? " " : "") + nativeToolArr.join(" ");
+        }
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+    var finishReason = candidate ? candidate.finishReason : null;
+    if (finishReason || isTrailingUsageOnly) {
+        isFinished = true;
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished);
+
+    if (isFinished && (!tokensAlreadyCounted || isTrailingUsageOnly)) {
+        var promptTokens = parseInt(getVar("saved_stream_prompt_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.promptTokenCount : 0) || 0, 10);
+        var geminiCachedTokens = parseInt(getVar("saved_stream_cached_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.cachedContentTokenCount : 0) || 0, 10);
+        var geminiUncachedPrompt = Math.max(0, promptTokens - geminiCachedTokens);
+        var geminiCandidateTokens = parseInt(getVar("saved_stream_completion_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.candidatesTokenCount : 0) || 0, 10);
+        var geminiThinkingTokens = parseInt(getVar("saved_stream_thinking_tokens") || (parsedEvent.usageMetadata ? parsedEvent.usageMetadata.thoughtsTokenCount : 0) || 0, 10);
+        emitStreamTokenVariables(geminiUncachedPrompt, geminiCachedTokens, 0, geminiCandidateTokens + geminiThinkingTokens, geminiThinkingTokens);
+    }
+    if (frameState.hasSecondData) {
+        frameState.multiFrameOut.push("data: " + eventStr);
+    }
+    return isFinished;
+}
+
+function handleAnthropicToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted, frameState) {
+    var anthToolStart = null;
+    var anthToolJsonDelta = null;
+    var anthStopReason = null;
+    var finishReason = null;
+    var isFinished = false;
+    var eventText = "";
+    var toolScanText = "";
+
+    if (parsedEvent.type === "message_start") {
+        var msgStartUsage = (parsedEvent.message && parsedEvent.message.usage) ? parsedEvent.message.usage : {};
+        if (msgStartUsage.input_tokens !== undefined) {
+            setVar("saved_stream_uncached_prompt_tokens", String(msgStartUsage.input_tokens));
+        }
+        if (msgStartUsage.cache_read_input_tokens !== undefined) {
+            setVar("saved_stream_cached_tokens", String(msgStartUsage.cache_read_input_tokens));
+        }
+        if (msgStartUsage.cache_creation_input_tokens !== undefined) {
+            setVar("saved_stream_cache_write_tokens", String(msgStartUsage.cache_creation_input_tokens));
+        }
+        if (parsedEvent.message && parsedEvent.message.id) {
+            setVar("stream_msg_id", parsedEvent.message.id.replace("msg_", "chatcmpl-"));
+        }
+    } else if (parsedEvent.type === "content_block_start") {
+        if (parsedEvent.content_block && parsedEvent.content_block.type === "tool_use") {
+            anthToolStart = parsedEvent.content_block;
+            toolScanText = " " + (anthToolStart.name || "tool") + ": ";
+        }
+    } else if (parsedEvent.type === "content_block_delta") {
+        if (parsedEvent.delta) {
+            if (parsedEvent.delta.type === "input_json_delta" && parsedEvent.delta.partial_json !== undefined) {
+                anthToolJsonDelta = parsedEvent.delta.partial_json;
+                toolScanText = anthToolJsonDelta;
+            } else if (parsedEvent.delta.type !== "thinking_delta" && parsedEvent.delta.text) {
+                eventText = parsedEvent.delta.text;
+            }
+        }
+    } else if (parsedEvent.type === "message_delta") {
+        if (parsedEvent.usage) {
+            if (parsedEvent.usage.input_tokens !== undefined) {
+                setVar("saved_stream_uncached_prompt_tokens", String(parsedEvent.usage.input_tokens));
+            }
+            if (parsedEvent.usage.cache_read_input_tokens !== undefined) {
+                setVar("saved_stream_cached_tokens", String(parsedEvent.usage.cache_read_input_tokens));
+            }
+            if (parsedEvent.usage.cache_creation_input_tokens !== undefined) {
+                setVar("saved_stream_cache_write_tokens", String(parsedEvent.usage.cache_creation_input_tokens));
+            }
+            if (parsedEvent.usage.output_tokens !== undefined) {
+                setVar("saved_stream_completion_tokens", String(parsedEvent.usage.output_tokens));
+            }
+        }
+        anthStopReason = (parsedEvent.delta && parsedEvent.delta.stop_reason) ? parsedEvent.delta.stop_reason : null;
+        finishReason = anthStopReason === "tool_use" ? "tool_calls" : (anthStopReason === "max_tokens" ? "length" : (isSafetyStopHint(anthStopReason) ? "content_filter" : "stop"));
+        isFinished = true;
+    } else if (parsedEvent.type === "message_stop") {
+        isFinished = true;
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+
+    var msgId = getVar("stream_msg_id") || ("chatcmpl-" + Math.random().toString(36).substring(2, 12));
+    var oaiToolIdxRaw = (anthToolStart || anthToolJsonDelta !== null || isFinished) ? getVar("oai_tool_idx") : null;
+    var outputChunks = [];
+    var nowSec = Math.floor(Date.now() / 1000);
+
+    if (eventText) {
+        outputChunks.push("data: " + JSON.stringify({
+            id: msgId,
+            object: "chat.completion.chunk",
+            created: nowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: { content: eventText }, finish_reason: null }]
+        }));
+    }
+
+    if (anthToolStart) {
+        var nextToolIdx = oaiToolIdxRaw !== null ? (parseInt(oaiToolIdxRaw, 10) + 1) : 0;
+        setVar("oai_tool_idx", String(nextToolIdx));
+        oaiToolIdxRaw = String(nextToolIdx);
+        var oaiStartTc = {
+            index: nextToolIdx,
+            id: anthToolStart.id || ("call_" + Math.random().toString(36).substring(2, 12)),
+            type: "function",
+            function: { name: anthToolStart.name || "tool", arguments: "" }
+        };
+        if (anthToolStart.thought_signature) {
+            oaiStartTc.thought_signature = anthToolStart.thought_signature;
+        }
+        outputChunks.push("data: " + JSON.stringify({
+            id: msgId,
+            object: "chat.completion.chunk",
+            created: nowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: { tool_calls: [oaiStartTc] }, finish_reason: null }]
+        }));
+    } else if (anthToolJsonDelta !== null) {
+        var activeToolIdx = oaiToolIdxRaw !== null ? parseInt(oaiToolIdxRaw, 10) : 0;
+        outputChunks.push("data: " + JSON.stringify({
+            id: msgId,
+            object: "chat.completion.chunk",
+            created: nowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: { tool_calls: [{ index: activeToolIdx, function: { arguments: anthToolJsonDelta } }] }, finish_reason: null }]
+        }));
+    }
+
+    var aUncached = 0;
+    var aCached = 0;
+    var aCacheW = 0;
+    var aOut = 0;
+    if (isFinished) {
+        aUncached = parseInt(getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
+        aCached = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        aCacheW = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+        aOut = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    }
+
+    if (!getVar("oai_sent_final") && (parsedEvent.type === "message_delta" || parsedEvent.type === "message_stop")) {
+        setVar("oai_sent_final", "true");
+        var finalFinishReason = finishReason || (oaiToolIdxRaw !== null ? "tool_calls" : "stop");
+        if (oaiToolIdxRaw !== null && finalFinishReason === "stop") {
+            finalFinishReason = "tool_calls";
+        }
+        outputChunks.push("data: " + JSON.stringify({
+            id: msgId,
+            object: "chat.completion.chunk",
+            created: nowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: {}, finish_reason: finalFinishReason }]
+        }));
+        if (getVar("client_requested_include_usage") === "true") {
+            outputChunks.push("data: " + JSON.stringify({
+                id: msgId,
+                object: "chat.completion.chunk",
+                created: nowSec,
+                model: modelName,
+                choices: [],
+                usage: buildOpenAiStreamUsageObj(aUncached, aCached, aCacheW, aOut, 0)
+            }));
+        }
+        outputChunks.push("data: [DONE]");
+    }
+
+    if (frameState.hasSecondData) {
+        frameState.modifiedMultiFrame = true;
+        for (var ocIdx = 0; ocIdx < outputChunks.length; ocIdx++) {
+            frameState.multiFrameOut.push(outputChunks[ocIdx]);
+        }
+    } else {
+        frameState.modifiedSingleFrame = true;
+        setVar("response.event.current.content", outputChunks.length > 0 ? (outputChunks.join("\n\n") + "\n\n") : "");
+    }
+
+    if (isFinished && !tokensAlreadyCounted) {
+        emitStreamTokenVariables(aUncached, aCached, aCacheW, aOut, 0);
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished);
+    return isFinished;
+}
+
+function handleGeminiToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCounted, frameState) {
+    var eventText = "";
+    var toolScanText = "";
+    var isFinished = false;
+
+    if (parsedEvent.usageMetadata) {
+        var gInT = parsedEvent.usageMetadata.promptTokenCount || 0;
+        var gCachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
+        var gOutT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+        var gThoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+        if (gInT > 0 || gOutT > 0 || gCachedT > 0 || gThoughtsT > 0) {
+            setVar("saved_stream_prompt_tokens", String(gInT));
+            setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, gInT - gCachedT)));
+            setVar("saved_stream_cached_tokens", String(gCachedT));
+            setVar("saved_stream_completion_tokens", String(gOutT + gThoughtsT));
+            setVar("saved_stream_thinking_tokens", String(gThoughtsT));
+        }
+    }
+    var gCand = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+    var isTrailingGemUsage = Boolean(gCand === null && parsedEvent.usageMetadata);
+    var gParts = (gCand && gCand.content && Array.isArray(gCand.content.parts)) ? gCand.content.parts : [];
+    var gTxtParts = [];
+    var gFuncCalls = [];
+    for (var gpIdx = 0; gpIdx < gParts.length; gpIdx++) {
+        var gp = gParts[gpIdx];
+        if (!gp || gp.thought === true) {
+            continue;
+        }
+        if (gp.text) {
+            gTxtParts.push(gp.text);
+        }
+        if (gp.functionCall) {
+            gFuncCalls.push({ fc: gp.functionCall, sig: gp.thoughtSignature || null });
+        }
+    }
+    eventText = gTxtParts.join("");
+    var finishReason = gCand ? gCand.finishReason : null;
+    if (finishReason || isTrailingGemUsage) {
+        isFinished = true;
+    }
+
+    var gOutChunks = [];
+    var gNowSec = Math.floor(Date.now() / 1000);
+    var gMsgId = "chatcmpl-gem";
+    var gPrevTcIdxStr = (gFuncCalls.length > 0 || isFinished) ? getVar("oai_gem_tool_idx") : null;
+    var gToolCount = gPrevTcIdxStr !== null ? parseInt(gPrevTcIdxStr, 10) : 0;
+
+    if (eventText) {
+        gOutChunks.push("data: " + JSON.stringify({
+            id: gMsgId,
+            object: "chat.completion.chunk",
+            created: gNowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: { content: eventText }, finish_reason: null }]
+        }));
+    }
+    if (gFuncCalls.length > 0) {
+        var oaiDeltaTcs = [];
+        var gToolScanParts = [];
+        for (var gfcIdx = 0; gfcIdx < gFuncCalls.length; gfcIdx++) {
+            var gfcWrap = gFuncCalls[gfcIdx];
+            var gfc = gfcWrap.fc;
+            var gfcArgsStr = JSON.stringify(gfc.args || {});
+            gToolScanParts.push((gfc.name || "tool") + ": " + gfcArgsStr);
+            var gTcEntry = {
+                index: gToolCount,
+                id: gfc.id || ("call_" + Math.random().toString(36).substring(2, 12)),
+                type: "function",
+                function: { name: gfc.name || "tool", arguments: gfcArgsStr }
+            };
+            if (gfcWrap.sig) {
+                gTcEntry.thought_signature = gfcWrap.sig;
+            }
+            oaiDeltaTcs.push(gTcEntry);
+            gToolCount++;
+        }
+        toolScanText = (eventText ? " " : "") + gToolScanParts.join(" ");
+        setVar("oai_gem_tool_idx", String(gToolCount));
+        gOutChunks.push("data: " + JSON.stringify({
+            id: gMsgId,
+            object: "chat.completion.chunk",
+            created: gNowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: { tool_calls: oaiDeltaTcs }, finish_reason: null }]
+        }));
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+
+    var goCacheRead = 0;
+    var goUncached = 0;
+    var goThinking = 0;
+    var goComp = 0;
+    if (isFinished) {
+        goCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        var goUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+        goUncached = goUncachedStr !== null
+            ? parseInt(goUncachedStr, 10)
+            : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - goCacheRead);
+        goThinking = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
+        goComp = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    }
+
+    var wantOaiIncUsage = (getVar("client_requested_include_usage") === "true");
+    if (finishReason && !getVar("oai_sent_finish_delta")) {
+        setVar("oai_sent_finish_delta", "true");
+        var gFinish = gToolCount > 0 ? "tool_calls" : (finishReason === "MAX_TOKENS" ? "length" : (isSafetyStopHint(finishReason) ? "content_filter" : "stop"));
+        gOutChunks.push("data: " + JSON.stringify({
+            id: gMsgId,
+            object: "chat.completion.chunk",
+            created: gNowSec,
+            model: modelName,
+            choices: [{ index: 0, delta: {}, finish_reason: gFinish }]
+        }));
+    }
+    if (isFinished && !getVar("oai_sent_final")) {
+        if (!wantOaiIncUsage || Boolean(parsedEvent.usageMetadata) || isTrailingGemUsage) {
+            setVar("oai_sent_final", "true");
+            if (!getVar("oai_sent_finish_delta")) {
+                setVar("oai_sent_finish_delta", "true");
+                gOutChunks.push("data: " + JSON.stringify({
+                    id: gMsgId,
+                    object: "chat.completion.chunk",
+                    created: gNowSec,
+                    model: modelName,
+                    choices: [{ index: 0, delta: {}, finish_reason: gToolCount > 0 ? "tool_calls" : "stop" }]
+                }));
+            }
+            if (wantOaiIncUsage) {
+                gOutChunks.push("data: " + JSON.stringify({
+                    id: gMsgId,
+                    object: "chat.completion.chunk",
+                    created: gNowSec,
+                    model: modelName,
+                    choices: [],
+                    usage: buildOpenAiStreamUsageObj(goUncached, goCacheRead, 0, goComp, goThinking)
+                }));
+            }
+            gOutChunks.push("data: [DONE]");
+        } else {
+            setVar("oai_awaiting_usage", "true");
+        }
+    }
+    if (frameState.hasSecondData) {
+        frameState.modifiedMultiFrame = true;
+        for (var gcIdx = 0; gcIdx < gOutChunks.length; gcIdx++) {
+            frameState.multiFrameOut.push(gOutChunks[gcIdx]);
+        }
+    } else {
+        frameState.modifiedSingleFrame = true;
+        setVar("response.event.current.content", gOutChunks.length > 0 ? (gOutChunks.join("\n\n") + "\n\n") : "");
+    }
+
+    if (isFinished && (!tokensAlreadyCounted || isTrailingGemUsage)) {
+        emitStreamTokenVariables(goUncached, goCacheRead, 0, goComp, goThinking);
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished);
+    return isFinished;
+}
+
+function handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState) {
+    var isTrailingEmptyChoicesUsage = Boolean(parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage);
+    var hasInlineCompleteUsage = false;
+    var suppressOpenAiFrame = false;
+    var isFinished = false;
+    var toolScanText = "";
+
+    if (parsedEvent.usage) {
+        var inT = parsedEvent.usage.prompt_tokens || 0;
+        var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
+        var outT = parsedEvent.usage.completion_tokens || 0;
+        var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+        if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
+            setVar("saved_stream_prompt_tokens", String(inT));
+            setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
+            setVar("saved_stream_cached_tokens", String(cachedT));
+            setVar("saved_stream_completion_tokens", String(outT));
+            setVar("saved_stream_thinking_tokens", String(reasoningT));
+        }
+        if (outT > 0 || (parsedEvent.usage.total_tokens || 0) > 0) {
+            hasInlineCompleteUsage = true;
+        }
+    }
+
+    var choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
+    var eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
+    if (choice && choice.delta && Array.isArray(choice.delta.tool_calls)) {
+        var oaiNatTcScan = [];
+        for (var ntcIdx = 0; ntcIdx < choice.delta.tool_calls.length; ntcIdx++) {
+            var ntc = choice.delta.tool_calls[ntcIdx];
+            if (ntc && ntc.function) {
+                if (ntc.function.name) {
+                    oaiNatTcScan.push(" " + ntc.function.name + ": ");
+                }
+                if (ntc.function.arguments) {
+                    oaiNatTcScan.push(ntc.function.arguments);
+                }
+            }
+        }
+        toolScanText = oaiNatTcScan.join("");
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+    var finishReason = choice ? choice.finish_reason : null;
+    if (finishReason || isTrailingEmptyChoicesUsage) {
+        isFinished = true;
+    }
+
+    var readyToEmitOaiUsage = isTrailingEmptyChoicesUsage || (Boolean(finishReason) && hasInlineCompleteUsage);
+    if (Boolean(finishReason) && !readyToEmitOaiUsage) {
+        setVar("oai_awaiting_usage", "true");
+    }
+
+    if (readyToEmitOaiUsage && !tokensAlreadyCounted) {
+        var oaiCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        var oaiCacheWrite = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+        var savedUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+        var oaiUncachedIn = savedUncachedStr !== null
+            ? parseInt(savedUncachedStr, 10)
+            : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || (parsedEvent.usage ? parsedEvent.usage.prompt_tokens : 0) || "0", 10) - oaiCacheRead - oaiCacheWrite);
+        var oaiThinking = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
+        var completionTokens = parseInt(getVar("saved_stream_completion_tokens") || (parsedEvent.usage ? parsedEvent.usage.completion_tokens : 0) || "0", 10);
+        emitStreamTokenVariables(oaiUncachedIn, oaiCacheRead, oaiCacheWrite, completionTokens, oaiThinking);
+    }
+
+    if (isTrailingEmptyChoicesUsage && getVar("client_requested_include_usage") !== "true") {
+        suppressOpenAiFrame = true;
+        if (frameState.hasSecondData) {
+            frameState.modifiedMultiFrame = true;
+        } else {
+            frameState.modifiedSingleFrame = true;
+            setVar("response.event.current.content", "");
+        }
+    } else if (frameState.hasSecondData) {
+        frameState.multiFrameOut.push("data: " + eventStr);
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished && !suppressOpenAiFrame);
+    return isFinished;
+}
+
+function handleNativeClaudeFrame(parsedEvent, eventStr, eventType, tokensAlreadyCounted, frameState) {
+    var eventText = "";
+    var toolScanText = "";
+    var isFinished = false;
+
+    if (parsedEvent.type === "content_block_start" && parsedEvent.content_block && parsedEvent.content_block.type === "tool_use") {
+        toolScanText = " " + (parsedEvent.content_block.name || "tool") + ": ";
+    } else if (parsedEvent.delta) {
+        if (parsedEvent.delta.type === "input_json_delta" && parsedEvent.delta.partial_json !== undefined) {
+            toolScanText = parsedEvent.delta.partial_json;
+        } else if (parsedEvent.delta.type !== "thinking_delta" && parsedEvent.delta.text !== undefined) {
+            eventText = parsedEvent.delta.text;
+        }
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+
+    var claudeUsage = parsedEvent.usage || (parsedEvent.message && parsedEvent.message.usage);
+    if (claudeUsage) {
+        if (claudeUsage.input_tokens !== undefined) {
+            setVar("saved_stream_uncached_prompt_tokens", String(claudeUsage.input_tokens));
+        }
+        if (claudeUsage.cache_read_input_tokens !== undefined) {
+            setVar("saved_stream_cached_tokens", String(claudeUsage.cache_read_input_tokens));
+        }
+        if (claudeUsage.cache_creation_input_tokens !== undefined) {
+            setVar("saved_stream_cache_write_tokens", String(claudeUsage.cache_creation_input_tokens));
+        }
+        if (claudeUsage.output_tokens !== undefined) {
+            setVar("saved_stream_completion_tokens", String(claudeUsage.output_tokens));
+        }
+    }
+
+    if (parsedEvent.type === "message_delta" || parsedEvent.type === "message_stop") {
+        isFinished = true;
+    }
+
+    if (isFinished && !tokensAlreadyCounted) {
+        var claudeUncachedIn = parseInt(getVar("saved_stream_uncached_prompt_tokens") || (claudeUsage ? claudeUsage.input_tokens : 0) || "0", 10);
+        var claudeCacheRead = parseInt(getVar("saved_stream_cached_tokens") || (claudeUsage ? claudeUsage.cache_read_input_tokens : 0) || "0", 10);
+        var claudeCacheWrite = parseInt(getVar("saved_stream_cache_write_tokens") || (claudeUsage ? claudeUsage.cache_creation_input_tokens : 0) || "0", 10);
+        var completionTokens = parseInt(getVar("saved_stream_completion_tokens") || (claudeUsage ? claudeUsage.output_tokens : 0) || "0", 10);
+        emitStreamTokenVariables(claudeUncachedIn, claudeCacheRead, claudeCacheWrite, completionTokens, 0);
+    }
+    if (frameState.hasSecondData) {
+        var resolvedEvt = eventType || parsedEvent.type || "";
+        frameState.multiFrameOut.push((resolvedEvt ? ("event: " + resolvedEvt + "\n") : "") + "data: " + eventStr);
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished);
+    return isFinished;
+}
+
+function appendClaudeThinkingAndTextChunks(outputChunks, wantThinkingStream, streamThoughts, eventText) {
+    if (wantThinkingStream && streamThoughts.length > 0) {
+        var openTxtBeforeThink = getVar("open_text_block_idx");
+        if (openTxtBeforeThink !== null) {
+            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openTxtBeforeThink, 10) }));
+            remVar("open_text_block_idx");
+        }
+        var thinkIdxStr = getVar("open_thinking_block_idx");
+        if (thinkIdxStr === null) {
+            var allocThinkIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
+            setVar("next_claude_block_idx", String(allocThinkIdx + 1));
+            thinkIdxStr = String(allocThinkIdx);
+            setVar("open_thinking_block_idx", thinkIdxStr);
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": allocThinkIdx,
+                "content_block": { "type": "thinking", "thinking": "" }
+            }));
+        }
+        var activeThinkIdx = parseInt(thinkIdxStr, 10);
+        for (var stIdx = 0; stIdx < streamThoughts.length; stIdx++) {
+            var stItem = streamThoughts[stIdx];
+            if (stItem.text) {
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": activeThinkIdx,
+                    "delta": { "type": "thinking_delta", "thinking": stItem.text }
+                }));
+            }
+            if (stItem.sig) {
+                var taggedStreamSig = stItem.sig.indexOf("gem_ts:") === 0 ? stItem.sig : ("gem_ts:" + stItem.sig);
+                setVar("sent_thinking_sig", "true");
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": activeThinkIdx,
+                    "delta": { "type": "signature_delta", "signature": taggedStreamSig }
+                }));
+            }
+        }
+    }
+    if (eventText) {
+        var openThinkBeforeTxt = getVar("open_thinking_block_idx");
+        if (openThinkBeforeTxt !== null) {
+            var closeThinkIdx = parseInt(openThinkBeforeTxt, 10);
+            if (getVar("sent_thinking_sig") !== "true") {
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": closeThinkIdx,
+                    "delta": { "type": "signature_delta", "signature": "gem_ts:none" }
+                }));
+            }
+            remVar("sent_thinking_sig");
+            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": closeThinkIdx }));
+            remVar("open_thinking_block_idx");
+        }
+        closeAllOpenClaudeToolBlocks(outputChunks);
+        var txtIdxStr = getVar("open_text_block_idx");
+        if (txtIdxStr === null) {
+            var allocTxtIdx = parseInt(getVar("next_claude_block_idx") || "0", 10);
+            setVar("next_claude_block_idx", String(allocTxtIdx + 1));
+            txtIdxStr = String(allocTxtIdx);
+            setVar("open_text_block_idx", txtIdxStr);
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": allocTxtIdx,
+                "content_block": { "type": "text", "text": "" }
+            }));
+        }
+        outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+            "type": "content_block_delta",
+            "index": parseInt(txtIdxStr, 10),
+            "delta": { "type": "text_delta", "text": eventText }
+        }));
+    }
+}
+
+function closeOpenClaudeThinkingAndTextBlocks(outputChunks) {
+    var openThink = getVar("open_thinking_block_idx");
+    if (openThink !== null) {
+        var openThinkNum = parseInt(openThink, 10);
+        if (getVar("sent_thinking_sig") !== "true") {
+            outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                "type": "content_block_delta",
+                "index": openThinkNum,
+                "delta": { "type": "signature_delta", "signature": "gem_ts:none" }
+            }));
+        }
+        remVar("sent_thinking_sig");
+        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": openThinkNum }));
+        remVar("open_thinking_block_idx");
+    }
+    var openTxt = getVar("open_text_block_idx");
+    if (openTxt !== null) {
+        outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": parseInt(openTxt, 10) }));
+        remVar("open_text_block_idx");
+    }
+}
+
+function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCounted, frameState) {
+    var wantThinkingStream = (getVar("anthropic_thinking_requested") === "true");
+    var streamThoughts = [];
+    var streamFuncCalls = [];
+    var isOpenAiBackend = false;
+    var hasInlineOaiUsage = false;
+    var isTrailingUsageChunk = Boolean(parsedEvent.choices && parsedEvent.choices.length === 0 && parsedEvent.usage);
+    var isTrailingGemUsageOnly = false;
+    var isFinished = false;
+    var finishReason = null;
+    var eventText = "";
+    var toolScanText = "";
+    var choice = null;
+
+    if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini" || routeFormat === "gemini")) {
+        var candidate = parsedEvent.candidates ? parsedEvent.candidates[0] : null;
+        isTrailingGemUsageOnly = Boolean(candidate === null && parsedEvent.usageMetadata);
+        var parts = (candidate && candidate.content && Array.isArray(candidate.content.parts)) ? candidate.content.parts : null;
+        if (parts) {
+            var gemVisibleTexts = [];
+            var gemToolScans = [];
+            for (var pIdx = 0; pIdx < parts.length; pIdx++) {
+                var pItem = parts[pIdx];
+                if (!pItem) {
+                    continue;
+                }
+                if (pItem.thought === true) {
+                    if (wantThinkingStream && (pItem.text || pItem.thoughtSignature)) {
+                        streamThoughts.push({ text: pItem.text || "", sig: pItem.thoughtSignature || "" });
+                    }
+                    continue;
+                }
+                if (pItem.text) {
+                    gemVisibleTexts.push(pItem.text);
+                }
+                if (pItem.functionCall) {
+                    streamFuncCalls.push({ fc: pItem.functionCall, sig: pItem.thoughtSignature || null });
+                    gemToolScans.push((pItem.functionCall.name || "tool") + ": " + JSON.stringify(pItem.functionCall.args || {}));
+                }
+            }
+            eventText = gemVisibleTexts.join("");
+            if (gemToolScans.length > 0) {
+                toolScanText = (eventText ? " " : "") + gemToolScans.join(" ");
+            }
+        }
+        finishReason = candidate ? candidate.finishReason : null;
+
+        if (parsedEvent.usageMetadata) {
+            var inT = parsedEvent.usageMetadata.promptTokenCount || 0;
+            var cachedT = parsedEvent.usageMetadata.cachedContentTokenCount || 0;
+            var outT = parsedEvent.usageMetadata.candidatesTokenCount || 0;
+            var thoughtsT = parsedEvent.usageMetadata.thoughtsTokenCount || 0;
+            if (inT > 0 || outT > 0 || cachedT > 0 || thoughtsT > 0) {
+                setVar("saved_stream_prompt_tokens", String(inT));
+                setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
+                setVar("saved_stream_cached_tokens", String(cachedT));
+                setVar("saved_stream_completion_tokens", String(outT + thoughtsT));
+                setVar("saved_stream_thinking_tokens", String(thoughtsT));
+            }
+        }
+        if (finishReason || isTrailingGemUsageOnly) {
+            isFinished = true;
+        }
+    } else {
+        isOpenAiBackend = true;
+        choice = parsedEvent.choices ? parsedEvent.choices[0] : null;
+        eventText = (choice && choice.delta) ? (choice.delta.content || "") : "";
+        finishReason = choice ? choice.finish_reason : null;
+
+        if (parsedEvent.usage) {
+            var oInT = parsedEvent.usage.prompt_tokens || 0;
+            var oCachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
+            var oOutT = parsedEvent.usage.completion_tokens || 0;
+            var oReasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+            if (oInT > 0 || oOutT > 0 || oCachedT > 0 || oReasoningT > 0) {
+                setVar("saved_stream_prompt_tokens", String(oInT));
+                setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, oInT - oCachedT)));
+                setVar("saved_stream_cached_tokens", String(oCachedT));
+                setVar("saved_stream_completion_tokens", String(oOutT));
+                setVar("saved_stream_thinking_tokens", String(oReasoningT));
+            }
+            if (oOutT > 0 || (parsedEvent.usage.total_tokens || 0) > 0) {
+                hasInlineOaiUsage = true;
+            }
+        }
+        if (finishReason || isTrailingUsageChunk) {
+            isFinished = true;
+        }
+        modelName = parsedEvent.model || modelName;
+    }
+
+    var sentStart = getVar("sent_message_start");
+    var transCacheRead = 0;
+    var transUncachedIn = 0;
+    var transThinking = 0;
+    var completionTokens = 0;
+    if (!sentStart || isFinished || isTrailingUsageChunk || isTrailingGemUsageOnly) {
+        transCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+        var transUncachedInStr = getVar("saved_stream_uncached_prompt_tokens");
+        transUncachedIn = transUncachedInStr !== null
+            ? parseInt(transUncachedInStr, 10)
+            : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - transCacheRead);
+        transThinking = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
+        completionTokens = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+    }
+
+    var outputChunks = [];
+    var msgId = parsedEvent.id ? parsedEvent.id.replace("chatcmpl-", "msg_") : "msg_stream";
+
+    if (!sentStart) {
+        setVar("sent_message_start", "true");
+        outputChunks.push("event: message_start\ndata: " + JSON.stringify({
+            "type": "message_start",
+            "message": {
+                "id": msgId,
+                "type": "message",
+                "role": "assistant",
+                "content": [],
+                "model": modelName,
+                "stop_reason": null,
+                "stop_sequence": null,
+                "usage": {
+                    "input_tokens": transUncachedIn,
+                    "cache_read_input_tokens": transCacheRead,
+                    "cache_creation_input_tokens": 0,
+                    "output_tokens": 0
+                }
+            }
+        }));
+        if (!wantThinkingStream) {
+            setVar("open_text_block_idx", "0");
+            setVar("next_claude_block_idx", "1");
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": { "type": "text", "text": "" }
+            }));
+        }
+    }
+
+    appendClaudeThinkingAndTextChunks(outputChunks, wantThinkingStream, streamThoughts, eventText);
+
+    var openAiToolCalls = (choice && choice.delta && Array.isArray(choice.delta.tool_calls)) ? choice.delta.tool_calls : null;
+    var prevStreamToolCount = (streamFuncCalls.length > 0 || (openAiToolCalls && openAiToolCalls.length > 0) || isFinished)
+        ? parseInt(getVar("stream_tool_count") || "0", 10)
+        : 0;
+    if (streamFuncCalls.length > 0) {
+        closeOpenClaudeThinkingAndTextBlocks(outputChunks);
+        closeAllOpenClaudeToolBlocks(outputChunks);
+        for (var sfcIdx = 0; sfcIdx < streamFuncCalls.length; sfcIdx++) {
+            var sfcWrap = streamFuncCalls[sfcIdx];
+            var streamFuncCall = sfcWrap.fc;
+            prevStreamToolCount++;
+            var gemBlockIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+            setVar("next_claude_block_idx", String(gemBlockIdx + 1));
+            var toolCallId = streamFuncCall.id || ("toolu_" + Math.random().toString(36).substring(2, 12));
+            var gemToolBlock = { "type": "tool_use", "id": toolCallId, "name": streamFuncCall.name, "input": {} };
+            if (sfcWrap.sig) {
+                gemToolBlock.thought_signature = sfcWrap.sig;
+            }
+            outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                "type": "content_block_start",
+                "index": gemBlockIdx,
+                "content_block": gemToolBlock
+            }));
+            outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                "type": "content_block_delta",
+                "index": gemBlockIdx,
+                "delta": { "type": "input_json_delta", "partial_json": JSON.stringify(streamFuncCall.args || {}) }
+            }));
+            outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({ "type": "content_block_stop", "index": gemBlockIdx }));
+        }
+        setVar("stream_tool_count", String(prevStreamToolCount));
+        finishReason = "tool_use";
+    } else if (openAiToolCalls && openAiToolCalls.length > 0) {
+        closeOpenClaudeThinkingAndTextBlocks(outputChunks);
+        var toolState = getOpenToolState();
+        var oaiToClaudeScans = [];
+        for (var tcIdx = 0; tcIdx < openAiToolCalls.length; tcIdx++) {
+            var oaiTc = openAiToolCalls[tcIdx];
+            if (!oaiTc) {
+                continue;
+            }
+            var rawOaiIdx = (oaiTc.index !== undefined && oaiTc.index !== null) ? parseInt(oaiTc.index, 10) : tcIdx;
+            if (isNaN(rawOaiIdx) || rawOaiIdx < 0) {
+                rawOaiIdx = tcIdx;
+            }
+            var mapKey = "k_" + rawOaiIdx;
+            var hasExistingKey = Object.prototype.hasOwnProperty.call(toolState.map, mapKey);
+            if (oaiTc.function && oaiTc.function.name) {
+                if (hasExistingKey) {
+                    outputChunks.push("event: content_block_stop\ndata: " + JSON.stringify({
+                        "type": "content_block_stop",
+                        "index": parseInt(toolState.map[mapKey], 10)
+                    }));
+                } else {
+                    toolState.order.push(mapKey);
+                }
+                var allocTcBlockIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+                setVar("next_claude_block_idx", String(allocTcBlockIdx + 1));
+                toolState.map[mapKey] = allocTcBlockIdx;
+                hasExistingKey = true;
+                prevStreamToolCount++;
+                oaiToClaudeScans.push(" " + oaiTc.function.name + ": ");
+                var oaiToolStartBlock = {
+                    "type": "tool_use",
+                    "id": oaiTc.id || ("toolu_" + Math.random().toString(36).substring(2, 12)),
+                    "name": oaiTc.function.name,
+                    "input": {}
+                };
+                if (oaiTc.thought_signature) {
+                    oaiToolStartBlock.thought_signature = oaiTc.thought_signature;
+                }
+                outputChunks.push("event: content_block_start\ndata: " + JSON.stringify({
+                    "type": "content_block_start",
+                    "index": allocTcBlockIdx,
+                    "content_block": oaiToolStartBlock
+                }));
+            }
+            if (oaiTc.function && oaiTc.function.arguments) {
+                var targetClaudeIdx;
+                if (hasExistingKey) {
+                    targetClaudeIdx = parseInt(toolState.map[mapKey], 10);
+                } else {
+                    targetClaudeIdx = parseInt(getVar("next_claude_block_idx") || "1", 10);
+                    setVar("next_claude_block_idx", String(targetClaudeIdx + 1));
+                    toolState.map[mapKey] = targetClaudeIdx;
+                    toolState.order.push(mapKey);
+                }
+                oaiToClaudeScans.push(oaiTc.function.arguments);
+                outputChunks.push("event: content_block_delta\ndata: " + JSON.stringify({
+                    "type": "content_block_delta",
+                    "index": targetClaudeIdx,
+                    "delta": { "type": "input_json_delta", "partial_json": oaiTc.function.arguments }
+                }));
+            }
+        }
+        saveOpenToolState(toolState);
+        setVar("stream_tool_count", String(prevStreamToolCount));
+        toolScanText = oaiToClaudeScans.join("");
+    }
+    recordStreamOutChars(eventText.length + toolScanText.length);
+
+    var sentStop = getVar("sent_message_stop") === "true";
+    var deferClaudeStopForUsage = Boolean(isOpenAiBackend && finishReason && !hasInlineOaiUsage && !isTrailingUsageChunk);
+    if (deferClaudeStopForUsage) {
+        setVar("pending_oai_finish_reason", finishReason);
+        setVar("oai_awaiting_usage", "true");
+    }
+
+    var readyForClaudeStop = (isFinished && !deferClaudeStopForUsage) || isTrailingUsageChunk;
+    if (readyForClaudeStop && !sentStop) {
+        setVar("sent_message_stop", "true");
+        var effectiveStopHint = finishReason || getVar("pending_oai_finish_reason") || "end_turn";
+        var stopChunks = buildDeferredClaudeStopChunks(effectiveStopHint, transUncachedIn, transCacheRead, completionTokens);
+        for (var scIdx = 0; scIdx < stopChunks.length; scIdx++) {
+            outputChunks.push(stopChunks[scIdx]);
+        }
+    }
+
+    if ((readyForClaudeStop && !tokensAlreadyCounted) || isTrailingGemUsageOnly) {
+        emitStreamTokenVariables(transUncachedIn, transCacheRead, 0, completionTokens, transThinking);
+    }
+
+    if (frameState.hasSecondData) {
+        frameState.modifiedMultiFrame = true;
+        for (var ccIdx = 0; ccIdx < outputChunks.length; ccIdx++) {
+            frameState.multiFrameOut.push(outputChunks[ccIdx]);
+        }
+    } else {
+        frameState.modifiedSingleFrame = true;
+        setVar("response.event.current.content", outputChunks.length > 0 ? (outputChunks.join("\n\n") + "\n\n") : "");
+    }
+
+    updateArmorBuffer(eventText + toolScanText, isFinished);
+    return isFinished;
+}
+
+function handleDoneSentinelFrame(frameState) {
+    if (getVar("concurrency_slot_released") !== "true") {
+        setVar("release_concurrency_slot", "true");
+        setVar("concurrency_slot_released", "true");
+    }
+    updateArmorBuffer("", true);
+
+    var reqFmt = getVar("request_format") || "claude";
+    var pendingFinish = getVar("pending_oai_finish_reason");
+
+    if (getVar("stream_tokens_already_counted") !== "true") {
+        var outChars = parseInt(getVar("stream_out_chars") || "0", 10);
+        if (getVar("oai_awaiting_usage") === "true" || outChars > 0) {
+            var fbCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+            var fbCacheWrite = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+            var fbUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+            var fbUncached = fbUncachedStr !== null
+                ? parseInt(fbUncachedStr, 10)
+                : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - fbCacheRead - fbCacheWrite);
+            var fbComp = parseInt(getVar("saved_stream_completion_tokens") || "0", 10);
+            var fbThink = parseInt(getVar("saved_stream_thinking_tokens") || "0", 10);
+            if ((fbUncached + fbCacheRead + fbCacheWrite + fbComp) === 0) {
+                var pChars = parseInt(getVar("prompt_char_len") || "0", 10);
+                fbUncached = Math.max(1, Math.ceil(pChars / 4));
+                fbComp = Math.max(1, Math.ceil(Math.max(1, outChars) / 4));
+            }
+            emitStreamTokenVariables(fbUncached, fbCacheRead, fbCacheWrite, fbComp, fbThink);
+        }
+    }
+
+    if (reqFmt === "openai" && !getVar("oai_sent_final") && getVar("oai_awaiting_usage") === "true" && (targetName === "gemini" || routeFormat === "gemini")) {
+        setVar("oai_sent_final", "true");
+        var doneOaiChunks = [];
+        if (getVar("client_requested_include_usage") === "true") {
+            var dUncached = parseInt(getVar("uncached_prompt_tokens") || getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
+            var dCached = parseInt(getVar("cache_read_tokens") || getVar("saved_stream_cached_tokens") || "0", 10);
+            var dComp = parseInt(getVar("completion_tokens") || getVar("saved_stream_completion_tokens") || "0", 10);
+            var dThink = parseInt(getVar("thinking_tokens") || getVar("saved_stream_thinking_tokens") || "0", 10);
+            doneOaiChunks.push("data: " + JSON.stringify({
+                id: "chatcmpl-gem",
+                object: "chat.completion.chunk",
+                created: Math.floor(Date.now() / 1000),
+                model: getVar("model") || "gemini",
+                choices: [],
+                usage: buildOpenAiStreamUsageObj(dUncached, dCached, 0, dComp, dThink)
+            }));
+        }
+        doneOaiChunks.push("data: [DONE]");
+        if (frameState.hasSecondData) {
+            frameState.modifiedMultiFrame = true;
+            for (var doIdx = 0; doIdx < doneOaiChunks.length; doIdx++) {
+                frameState.multiFrameOut.push(doneOaiChunks[doIdx]);
+            }
+        } else {
+            frameState.modifiedSingleFrame = true;
+            setVar("response.event.current.content", doneOaiChunks.join("\n\n") + "\n\n");
+        }
+    } else if (reqFmt !== "openai" && targetName !== "claude" && routeFormat !== "anthropic") {
+        if (reqFmt === "claude" && pendingFinish && getVar("sent_message_stop") !== "true") {
+            setVar("sent_message_stop", "true");
+            var doneUncached = parseInt(getVar("uncached_prompt_tokens") || getVar("saved_stream_uncached_prompt_tokens") || "0", 10);
+            var doneCached = parseInt(getVar("cache_read_tokens") || getVar("saved_stream_cached_tokens") || "0", 10);
+            var doneComp = parseInt(getVar("completion_tokens") || getVar("saved_stream_completion_tokens") || "0", 10);
+            var doneStopChunks = buildDeferredClaudeStopChunks(pendingFinish, doneUncached, doneCached, doneComp);
+            if (frameState.hasSecondData) {
+                frameState.modifiedMultiFrame = true;
+                for (var dsIdx = 0; dsIdx < doneStopChunks.length; dsIdx++) {
+                    frameState.multiFrameOut.push(doneStopChunks[dsIdx]);
+                }
+            } else {
+                frameState.modifiedSingleFrame = true;
+                setVar("response.event.current.content", doneStopChunks.join("\n\n") + "\n\n");
+            }
+        } else if (frameState.hasSecondData) {
+            frameState.modifiedMultiFrame = true;
+        } else {
+            frameState.modifiedSingleFrame = true;
+            setVar("response.event.current.content", "");
+        }
+    } else if (frameState.hasSecondData) {
+        frameState.multiFrameOut.push("data: [DONE]");
+    }
+}
+
+function endsWithBlankSseSeparator(s) {
+    if (!s || s.length < 2) {
+        return false;
+    }
+    var n = s.length;
+    if (s.charAt(n - 1) === "\n" && s.charAt(n - 2) === "\n") {
+        return true;
+    }
+    if (n >= 4 && s.substring(n - 4) === "\r\n\r\n") {
+        return true;
+    }
+    if (n >= 3 && s.substring(n - 3) === "\n\r\n") {
+        return true;
+    }
+    return false;
+}
+
+function isStandaloneSseJsonLine(payload) {
+    if (!payload) {
+        return false;
+    }
+    if (payload === "[DONE]") {
+        return true;
+    }
+    var first = payload.charAt(0);
+    var last = payload.charAt(payload.length - 1);
+    return (first === "{" && last === "}") || (first === "[" && last === "]");
+}
+
+function parseCoalescedSseEvents(text) {
+    var events = [];
+    var curEvt = "";
+    var curData = [];
+    var lines = text.split("\n");
+    for (var i = 0; i < lines.length; i++) {
+        var ln = lines[i];
+        if (ln.length > 0 && ln.charAt(ln.length - 1) === "\r") {
+            ln = ln.substring(0, ln.length - 1);
+        }
+        if (ln.length === 0) {
+            if (curData.length > 0) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
+            }
+            curEvt = "";
+        } else if (ln.indexOf("event:") === 0) {
+            if (curData.length > 0) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
+            }
+            curEvt = ln.substring(6).trim();
+        } else if (ln.indexOf("data:") === 0) {
+            if (curData.length > 0 && isStandaloneSseJsonLine(curData[curData.length - 1])) {
+                events.push({ evt: curEvt, data: curData.join("\n").trim(), completeBlock: true });
+                curData = [];
+                curEvt = "";
+            }
+            curData.push(ln.substring(5).trim());
+        }
+    }
+    if (curData.length > 0) {
+        events.push({
+            evt: curEvt,
+            data: curData.join("\n").trim(),
+            completeBlock: endsWithBlankSseSeparator(text)
+        });
+    }
+    return events;
+}
+
+function dispatchParsedSseEvent(parsedEvent, eventStr, eventType, frameState) {
+    if (!parsedEvent || typeof parsedEvent !== "object" || Array.isArray(parsedEvent)) {
+        return;
+    }
+    var requestFormat = getVar("request_format") || "claude";
+    var tokensAlreadyCounted = getVar("stream_tokens_already_counted") === "true";
+    var rawModel = getVar("model");
+    var isFinished = false;
+
+    if (requestFormat === "gemini") {
+        isFinished = handleNativeGeminiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
+    } else if (requestFormat === "openai") {
+        var oaiModelName = rawModel || "claude";
+        if (!parsedEvent.choices && !parsedEvent.candidates && (targetName === "claude" || routeFormat === "anthropic" || parsedEvent.type)) {
+            isFinished = handleAnthropicToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
+        } else if (!parsedEvent.choices && (parsedEvent.candidates || parsedEvent.usageMetadata || targetName === "gemini")) {
+            isFinished = handleGeminiToOpenAiFrame(parsedEvent, oaiModelName, tokensAlreadyCounted, frameState);
+        } else {
+            isFinished = handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, frameState);
+        }
+    } else {
+        var claudeModelName = rawModel || "unknown";
+        if (targetName === "claude" || routeFormat === "anthropic") {
+            isFinished = handleNativeClaudeFrame(parsedEvent, eventStr, eventType, tokensAlreadyCounted, frameState);
+        } else {
+            isFinished = handleTranscodedToClaudeFrame(parsedEvent, claudeModelName, tokensAlreadyCounted, frameState);
+        }
+    }
+
+    if (isFinished && getVar("concurrency_slot_released") !== "true") {
+        setVar("release_concurrency_slot", "true");
+        setVar("concurrency_slot_released", "true");
+    }
+}
+
+function isStrictStreamArmorActive() {
+    if (getVar("propertyset.config.model_armor_strict_stream_sync") !== "true") {
+        return false;
+    }
+    if (getVar("model_armor_response_enabled") === "false") {
+        return false;
+    }
+    var tpl = getVar("model_armor_response_template") ||
+              getVar("propertyset.config.model_armor_response_template") ||
+              getVar("propertyset.config.model_armor_template") || "";
+    return Boolean(tpl && tpl.toLowerCase() !== "none");
+}
+
+function applyStrictStreamArmorHold(originalRaw, frameState) {
+    if (!isStrictStreamArmorActive()) {
+        return;
+    }
+    var currentWire = (frameState.modifiedSingleFrame || (frameState.hasSecondData && frameState.modifiedMultiFrame))
+        ? (getVar("response.event.current.content") || "")
+        : (originalRaw || "");
+    var prevHeld = getVar("held_sse_frames") || "";
+    var combinedWire = prevHeld + currentWire;
+
+    if (combinedWire.length >= 49152 && getVar("tmp_buffer_has_new") === "true" && getVar("buff_ready") !== "true") {
+        updateArmorBuffer("", true);
+    }
+
+    if (getVar("buff_ready") === "true" || getVar("tmp_buffer_has_new") !== "true") {
+        if (prevHeld.length > 0) {
+            setVar("response.event.current.content", combinedWire);
+            remVar("held_sse_frames");
+        }
+    } else {
+        setVar("held_sse_frames", combinedWire);
+        setVar("response.event.current.content", "");
+    }
+}
+
+var prevPartialCarry = getVar("sse_partial_carry");
+var effectiveRaw = prevPartialCarry ? (prevPartialCarry + (rawContent || "")) : rawContent;
+if (prevPartialCarry) {
+    remVar("sse_partial_carry");
+}
+
+var dataIdx = effectiveRaw ? effectiveRaw.indexOf("data:") : -1;
+if (effectiveRaw && dataIdx !== -1) {
+    var hasSecondData = Boolean(prevPartialCarry) ||
+                        effectiveRaw.indexOf("\ndata:", dataIdx + 5) !== -1 ||
+                        effectiveRaw.indexOf("\r\ndata:", dataIdx + 5) !== -1;
+    var frameState = {
+        hasSecondData: hasSecondData,
+        multiFrameOut: [],
+        modifiedMultiFrame: Boolean(prevPartialCarry),
+        modifiedSingleFrame: false
+    };
+
+    if (!hasSecondData) {
+        var singleStr = effectiveRaw.substring(dataIdx + 5).trim();
+        var singleEvtType = "";
+        if (dataIdx > 0) {
+            var hdrSlice = effectiveRaw.substring(0, dataIdx);
+            var evtPos = hdrSlice.indexOf("event:");
+            if (evtPos !== -1) {
+                var evtEnd = hdrSlice.indexOf("\n", evtPos);
+                singleEvtType = (evtEnd !== -1 ? hdrSlice.substring(evtPos + 6, evtEnd) : hdrSlice.substring(evtPos + 6)).trim();
+            }
+        }
+        if (singleStr === "[DONE]") {
+            handleDoneSentinelFrame(frameState);
+        } else if (singleStr) {
+            try {
+                var singleParsed = JSON.parse(singleStr);
+                dispatchParsedSseEvent(singleParsed, singleStr, singleEvtType, frameState);
+            } catch (singleErr) {
+                if (!endsWithBlankSseSeparator(effectiveRaw) && effectiveRaw.length <= 65536) {
+                    setVar("sse_partial_carry", effectiveRaw);
+                    setVar("response.event.current.content", "");
+                    return;
+                }
+                print("JSON Error: " + singleErr);
+            }
+        }
+    } else {
+        var sseEvents = parseCoalescedSseEvents(effectiveRaw);
+        for (var fIdx = 0; fIdx < sseEvents.length; fIdx++) {
+            var evObj = sseEvents[fIdx];
+            var eventStr = evObj.data;
+            if (!eventStr) {
+                continue;
+            }
+            if (eventStr === "[DONE]") {
+                handleDoneSentinelFrame(frameState);
+            } else {
+                try {
+                    var parsedEvent = JSON.parse(eventStr);
+                    dispatchParsedSseEvent(parsedEvent, eventStr, evObj.evt, frameState);
+                } catch (multiErr) {
+                    var isLastEv = (fIdx === sseEvents.length - 1);
+                    if (isLastEv && !evObj.completeBlock) {
+                        var carryRaw = (evObj.evt ? ("event: " + evObj.evt + "\n") : "") + "data: " + eventStr;
+                        if (carryRaw.length <= 65536) {
+                            setVar("sse_partial_carry", carryRaw);
+                            frameState.modifiedMultiFrame = true;
+                            break;
+                        }
+                    }
+                    print("JSON Error: " + multiErr);
+                }
+            }
+        }
+    }
+
+    if (getVar("stream_prompt_checkpointed") === null && getVar("stream_tokens_already_counted") !== "true") {
+        if (getVar("propertyset.config.stream_prompt_checkpoint") !== "true") {
+            setVar("stream_prompt_checkpointed", "skip");
+        } else if (getVar("saved_stream_uncached_prompt_tokens") !== null || getVar("saved_stream_prompt_tokens") !== null || getVar("saved_stream_cached_tokens") !== null || getVar("saved_stream_cache_write_tokens") !== null) {
+            var ckptCacheRead = parseInt(getVar("saved_stream_cached_tokens") || "0", 10);
+            var ckptCacheWrite = parseInt(getVar("saved_stream_cache_write_tokens") || "0", 10);
+            var ckptUncachedStr = getVar("saved_stream_uncached_prompt_tokens");
+            var ckptUncached = ckptUncachedStr !== null
+                ? parseInt(ckptUncachedStr, 10)
+                : Math.max(0, parseInt(getVar("saved_stream_prompt_tokens") || "0", 10) - ckptCacheRead - ckptCacheWrite);
+            if ((ckptUncached + ckptCacheRead + ckptCacheWrite) > 0) {
+                emitStreamTokenVariables(ckptUncached, ckptCacheRead, ckptCacheWrite, 0, 0, true);
+            }
+        }
+    }
+
+    if (frameState.hasSecondData && frameState.modifiedMultiFrame) {
+        setVar("response.event.current.content", frameState.multiFrameOut.length > 0 ? (frameState.multiFrameOut.join("\n\n") + "\n\n") : "");
+    }
+
+    applyStrictStreamArmorHold(rawContent, frameState);
+} else if (prevPartialCarry && effectiveRaw && effectiveRaw.length <= 65536 && !endsWithBlankSseSeparator(effectiveRaw)) {
+    setVar("sse_partial_carry", effectiveRaw);
+    setVar("response.event.current.content", "");
 }
 
 })();

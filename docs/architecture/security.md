@@ -40,6 +40,8 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
           enabled: true
           jwks_uri: "https://login.corp.example.com/oauth2/v1/keys"
           issuer: "https://login.corp.example.com"
+          audience: "api://ai-gateway"
+          algorithm: "RS256"
           user_claim: "email"
           persona_claim: "groups"
           team_claim: "department"
@@ -180,7 +182,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
         enabled: true
         agent_identity:
           enabled: true
-          allowed_email_suffix: ".iam.gserviceaccount.com" # Or "*@my-project.iam.gserviceaccount.com"
+          allowed_email_suffix: "@my-project.iam.gserviceaccount.com,@my-data-project.iam.gserviceaccount.com" # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com"
           persona: "agent"              # Fallback persona tier for verified Service Accounts
           token_ttl_ms: 3600000
         personas:
@@ -221,7 +223,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     features:
       auth:
         enabled: true
-        oauth:
+        apigee_oauth:
           enabled: true
     ```
 
@@ -242,9 +244,10 @@ Because persona settings (`models`, `quota`, `per_model`, `team_budget`, `rate_l
    features:
      auth:
        exceptions:
-         # 1. Individual time-bound quota boost + full model catalog access:
+         # 1. Individual time-bound quota boost + emergency team-budget isolation + full catalog access:
          - match: ["alice@corp.example.com"]
-           quota_limit: 5000000                  # Overrides primary quota AND isolates Alice if her team budget is exhausted
+           quota_limit: 5000000                  # Overrides Alice's individual primary quota cap
+           bypass_team_budget: true              # Isolates Alice so she keeps working even if her shared team budget is exhausted
            expires_at: "2026-12-31T17:00:00Z"    # Automatically reverts to baseline persona quota after this UTC timestamp
            models: ["*"]
 
@@ -311,4 +314,19 @@ When you first set up the gateway (Day 1), add a brand-new persona to `features.
 > 2. **Never Rotates Existing Keys:** If `<proxy>-<persona>-app` already exists, the script reuses its existing active `consumerKey` (`client_id`) so live traffic is never disrupted.
 > 3. **Scoped Naming (`<proxy>-<persona>`):** Only manages resources prefixed with your `gateway.name` (e.g., `ai-gateway-developer`), leaving all other API Products in your Apigee organization untouched.
 > 4. **Optional Single-App Fallback (`default_client_id`):** If you prefer not to create a separate Apigee Developer App per persona, set `features.auth.default_client_id` to a single shared Consumer Key—the gateway will still enforce each persona's exact `models`, `quota`, `per_model`, `team_budget`, and `model_armor` rules in-memory from `config.properties`.
+
+---
+
+## 4. Zero-Leak Gateway Fault Hardening & Opt-In Upstream Error Scrubbing
+
+All `ProxyEndpoint` and `TargetEndpoint` `<DefaultFaultRule>` blocks enforce `<AlwaysEnforce>true</AlwaysEnforce>` (guarded by `sanitized_error_applied` so explicit `429` rate-limit, `403` Model Armor, `400`/`405`/`415` validation, and `200` fallback-recovery responses are preserved), strip backend fingerprint headers (`Server`, `X-Powered-By`, `X-AspNet-Version`, `X-Application-Context`), and attach OWASP `Cache-Control: no-store` and `X-Content-Type-Options: nosniff` headers.
+
+By default (`features.security.sanitize_upstream_errors: false`), unrecovered upstream `4xx`/`5xx` provider error payloads pass through unchanged for byte-for-byte SDK compatibility. To scrub internal GCP project IDs/numbers, service account emails, quota IDs, private IPs, and backend URLs from unrecovered `4xx`/`5xx` errors—and convert raw HTML `502`/`503` pages or cross-protocol errors into clean caller-native JSON while preserving SDK error fields (`type`, `code`, `param`, `status`)—enable:
+
+```yaml
+features:
+  security:
+    sanitize_upstream_errors: true
+```
+
 

@@ -13,10 +13,6 @@ ServiceCallout:
         Header:
           .name: Authorization
           -Data: 'Bearer {auth_bearer_token}'
-      QueryParams:
-        QueryParam:
-          .name: access_token
-          -Data: '{auth_bearer_token}'
       Verb: GET
   Response: agentTokenVerifyResponse
   HTTPTargetConnection:

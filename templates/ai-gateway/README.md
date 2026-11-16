@@ -22,7 +22,8 @@ templates/ai-gateway/
 │   ├── LTQ-CountOnly.yaml
 │   └── ...
 └── resources/
-    ├── jsc/                       # JavaScript callouts (Smart Router, Converters, Rating)
+    ├── java/                      # Shaded Java Callouts JAR (Auth, Smart Router, Transcoders, Cost/Billing)
+    ├── jsc/                       # EventFlow SSE streaming aggregator (combine_resp.js)
     ├── oas/                       # OpenAPI schema definitions
     └── properties/                # Target directory for generated propertysets
 ```
@@ -31,10 +32,11 @@ templates/ai-gateway/
 
 ## 🛠 Usage & Generation
 
-### 1. Build or Install `apigee-go-gen`
+### 1. Install `apigee-go-gen`
 ```bash
-cd apigeegg/apigee-go-gen
-go build -o ./bin/apigee-go-gen ./cmd/apigee-go-gen
+curl -s https://apigee.github.io/apigee-go-gen/install | bash
+# Or via Go:
+# go install github.com/apigee/apigee-go-gen/cmd/...@latest
 ```
 
 ### 2. Render Proxy Bundle
@@ -44,7 +46,8 @@ Generate a deployable Apigee API proxy bundle (`.zip` or directory):
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
     --values ./templates/ai-gateway/values.yaml \
-    --output ./out/ai-gateway.zip
+    --output ./out/ai-gateway.zip \
+    --validate=true
 ```
 
 ### 3. Deploy to Apigee
@@ -54,6 +57,7 @@ apigeecli apis create bundle \
     --name ai-gateway \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
+    -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
     --default-token
@@ -71,11 +75,11 @@ models:
   - name: "custom-llama-3"
     displayName: "Llama 3 70B (vLLM)"
     publisher: "custom"
-    target: "gemini-openai-compat"
-    format: "openai"                            # openai | anthropic | gemini | passthrough
+    target: "openai-custom"
+    format: "openai"                            # openai | anthropic | gemini
     custom_url: "https://vllm.internal.corp/v1/chat/completions"
     auth:
-      type: "bearer"                            # api_key | bearer | header | none
+      type: "bearer"                            # api_key | bearer | none
       token_ref: "propertyset.provider_keys.vllm_api_key"
     pricing:
       input_rate: 0.050
@@ -104,13 +108,13 @@ Configure features, unified Personas (AI Products), and individual/team Exceptio
 features:
   monetization:
     enabled: true
+    enforce_apigee_wallet: false
   model_armor:
-    enabled: true
+    enabled: false
+    location: "us-central1"
   llm_judge:
     enabled: true
   quotas:
-    enabled: true
-  cors:
     enabled: true
   auth:
     enabled: true

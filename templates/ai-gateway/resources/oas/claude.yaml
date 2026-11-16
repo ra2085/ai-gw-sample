@@ -7,6 +7,11 @@ servers:
   - url: https://workshop.iloveapi.management
 security:
   - ApiKeyAuth: []
+  - AnthropicApiKeyAuth: []
+  - AnthropicAltApiKeyAuth: []
+  - GoogleApiKeyAuth: []
+  - AzureApiKeyAuth: []
+  - BearerAuth: []
 paths:
   /:
     post:
@@ -14,6 +19,22 @@ paths:
         - Claude Messages Format
       summary: Send a message to Claude
       description: Sends a prompt to the assistant and receives a response in Claude's messages format.
+      parameters:
+        - name: beta
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: key
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: apikey
+          in: query
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -48,6 +69,25 @@ components:
       type: apiKey
       in: header
       name: x-apikey
+    AnthropicApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    AnthropicAltApiKeyAuth:
+      type: apiKey
+      in: header
+      name: anthropic-api-key
+    GoogleApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-goog-api-key
+    AzureApiKeyAuth:
+      type: apiKey
+      in: header
+      name: api-key
+    BearerAuth:
+      type: http
+      scheme: bearer
   schemas:
     ClaudeRequest:
       type: object
@@ -194,15 +234,23 @@ components:
               type: integer
     ErrorResponse:
       type: object
+      additionalProperties: true
       properties:
-        fault:
+        type:
+          type: string
+          example: error
+        error:
           type: object
+          additionalProperties: true
           properties:
-            faultstring:
+            type:
               type: string
-            detail:
-              type: object
-              properties:
-                errorcode:
-                  type: string
-                  example: steps.sanitize.user.prompt.FilterMatched
+              example: invalid_request_error
+            message:
+              type: string
+              example: Request blocked by AI Gateway policy.
+            code:
+              oneOf:
+                - type: integer
+                - type: string
+              example: 403

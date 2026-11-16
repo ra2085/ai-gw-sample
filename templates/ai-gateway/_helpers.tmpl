@@ -7,15 +7,91 @@
 # SECTION 1: DYNAMIC CATALOG & DEFAULT ROUTING
 # ==============================================================================
 # Master list consumed dynamically by /v1/models endpoint
+{{- $globalDefaultRegion := "global" -}}
+{{- if and $.Values.defaults $.Values.defaults.region -}}
+  {{- $globalDefaultRegion = printf "%v" $.Values.defaults.region -}}
+{{- end -}}
 {{- $modelNames := list -}}
+{{- $chatModels := list -}}
+{{- $catalogMap := dict -}}
+{{- $regionMap := dict -}}
+{{- $flaggedDefaultModel := "" -}}
+{{- $modelTierLow := "" -}}
+{{- $modelTierMedium := "" -}}
+{{- $modelTierHigh := "" -}}
+{{- $modelTierMax := "" -}}
+{{- $liteCandidate := "" -}}
+{{- $highCandidate := "" -}}
+{{- $maxCandidate := "" -}}
+{{- $geminiLiteCandidate := "" -}}
+{{- $firstGeminiModel := "" -}}
 {{- range $.Values.models -}}
-  {{- $modelNames = append $modelNames .name -}}
+  {{- $mName := printf "%v" .name -}}
+  {{- $mFmt := printf "%v" (.format | default "gemini") -}}
+  {{- $mTier := printf "%v" (.tier | default "") -}}
+  {{- $mPub := "google" -}}
+  {{- if .publisher -}}
+    {{- $mPub = printf "%v" .publisher -}}
+  {{- else if eq $mFmt "anthropic" -}}
+    {{- $mPub = "anthropic" -}}
+  {{- else if eq $mFmt "openai" -}}
+    {{- $mPub = "openai" -}}
+  {{- end -}}
+  {{- $mReg := printf "%v" (.endpoint | default .region | default $globalDefaultRegion) -}}
+  {{- $modelNames = append $modelNames $mName -}}
+  {{- $_ := set $catalogMap $mName true -}}
+  {{- $_ := set $regionMap $mName $mReg -}}
+  {{- if and .is_default (eq $flaggedDefaultModel "") -}}
+    {{- $flaggedDefaultModel = $mName -}}
+  {{- end -}}
+  {{- if not (regexMatch "(?i)embedding" $mName) -}}
+    {{- $chatModels = append $chatModels $mName -}}
+    {{- if and (eq $mTier "low") (eq $modelTierLow "") }}{{- $modelTierLow = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "medium") (eq $modelTierMedium "") }}{{- $modelTierMedium = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "high") (eq $modelTierHigh "") }}{{- $modelTierHigh = $mName -}}{{- end -}}
+    {{- if and (eq $mTier "max") (eq $modelTierMax "") }}{{- $modelTierMax = $mName -}}{{- end -}}
+    {{- if and (eq $liteCandidate "") (regexMatch "(?i)(lite|haiku|-mini\\b|-nano\\b)" $mName) -}}
+      {{- $liteCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $highCandidate "") (regexMatch "(?i)(-pro\\b|sonnet|opus|argon|ultra)" $mName) -}}
+      {{- $highCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $maxCandidate "") (regexMatch "(?i)(opus|argon|ultra)" $mName) -}}
+      {{- $maxCandidate = $mName -}}
+    {{- end -}}
+    {{- if and (eq $mPub "google") (not .custom_url) -}}
+      {{- if eq $firstGeminiModel "" }}{{- $firstGeminiModel = $mName -}}{{- end -}}
+      {{- if and (eq $geminiLiteCandidate "") (regexMatch "(?i)(lite|flash)" $mName) -}}
+        {{- $geminiLiteCandidate = $mName -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
 {{- end }}
 models.catalog={{ $modelNames | join "," }}
+{{- $defaultModel := "gemini-3.5-flash" -}}
+{{- if and $.Values.defaults $.Values.defaults.model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.defaults.model))) -}}
+  {{- $defaultModel = printf "%v" $.Values.defaults.model -}}
+{{- else if $flaggedDefaultModel -}}
+  {{- $defaultModel = $flaggedDefaultModel -}}
+{{- else if $chatModels -}}
+  {{- $defaultModel = index $chatModels 0 -}}
+{{- else if $.Values.models -}}
+  {{- $defaultModel = printf "%v" (index $.Values.models 0).name -}}
+{{- end -}}
+{{- $defaultFallback := $defaultModel -}}
+{{- if and $.Values.defaults $.Values.defaults.fallback (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.defaults.fallback))) -}}
+  {{- $defaultFallback = printf "%v" $.Values.defaults.fallback -}}
+{{- else if $modelTierLow -}}
+  {{- $defaultFallback = $modelTierLow -}}
+{{- else if $liteCandidate -}}
+  {{- $defaultFallback = $liteCandidate -}}
+{{- else if empty $catalogMap -}}
+  {{- $defaultFallback = "gemini-3.1-flash-lite" -}}
+{{- end }}
 
 # Global defaults
-default.model={{ if and $.Values.defaults $.Values.defaults.model }}{{ $.Values.defaults.model }}{{ else if $.Values.models }}{{ (index $.Values.models 0).name }}{{ else }}gemini-3.5-flash{{ end }}
-default.fallback={{ if and $.Values.defaults $.Values.defaults.fallback }}{{ $.Values.defaults.fallback }}{{ else }}gemini-3.1-flash-lite{{ end }}
+default.model={{ $defaultModel }}
+default.fallback={{ $defaultFallback }}
 default.target={{ if and $.Values.defaults $.Values.defaults.target }}{{ $.Values.defaults.target }}{{ else }}gemini{{ end }}
 default.publisher={{ if and $.Values.defaults $.Values.defaults.publisher }}{{ $.Values.defaults.publisher }}{{ else }}google{{ end }}
 default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Values.defaults.format }}{{ else }}gemini{{ end }}
@@ -23,23 +99,105 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
 # ==============================================================================
 # SECTION 2: SMART ROUTER TIERS & TASK MAPPINGS
 # ==============================================================================
-tier.low={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.low | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
-tier.medium={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.medium | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-tier.high={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.high | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-tier.max={{ if and $.Values.routing $.Values.routing.tiers }}{{ $.Values.routing.tiers.max | default "claude-sonnet-4-6" }}{{ else }}claude-sonnet-4-6{{ end }}
-
-task.coding={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.coding | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-task.reasoning={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.reasoning | default "gemini-3.1-pro-preview" }}{{ else }}gemini-3.1-pro-preview{{ end }}
-task.summarization={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.summarization | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
-task.simple_chat={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.simple_chat | default "gemini-3.5-flash" }}{{ else }}gemini-3.5-flash{{ end }}
-task.classifier_model={{ if and $.Values.routing $.Values.routing.tasks }}{{ $.Values.routing.tasks.classifier_model | default "gemini-3.1-flash-lite" }}{{ else }}gemini-3.1-flash-lite{{ end }}
+{{- $tierLow := $defaultFallback -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.low (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.low))) -}}
+  {{- $tierLow = printf "%v" $.Values.routing.tiers.low -}}
+{{- else if $modelTierLow -}}
+  {{- $tierLow = $modelTierLow -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-flash-lite") -}}
+  {{- $tierLow = "gemini-3.1-flash-lite" -}}
+{{- else if $liteCandidate -}}
+  {{- $tierLow = $liteCandidate -}}
+{{- end -}}
+{{- $tierMedium := $defaultModel -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.medium (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.medium))) -}}
+  {{- $tierMedium = printf "%v" $.Values.routing.tiers.medium -}}
+{{- else if $modelTierMedium -}}
+  {{- $tierMedium = $modelTierMedium -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.5-flash") -}}
+  {{- $tierMedium = "gemini-3.5-flash" -}}
+{{- end -}}
+{{- $tierHigh := $defaultModel -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.high (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.high))) -}}
+  {{- $tierHigh = printf "%v" $.Values.routing.tiers.high -}}
+{{- else if $modelTierHigh -}}
+  {{- $tierHigh = $modelTierHigh -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-pro-preview") -}}
+  {{- $tierHigh = "gemini-3.1-pro-preview" -}}
+{{- else if $highCandidate -}}
+  {{- $tierHigh = $highCandidate -}}
+{{- end -}}
+{{- $tierMax := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.max (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.max))) -}}
+  {{- $tierMax = printf "%v" $.Values.routing.tiers.max -}}
+{{- else if $modelTierMax -}}
+  {{- $tierMax = $modelTierMax -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "claude-sonnet-4-6") -}}
+  {{- $tierMax = "claude-sonnet-4-6" -}}
+{{- else if $maxCandidate -}}
+  {{- $tierMax = $maxCandidate -}}
+{{- end }}
+tier.low={{ $tierLow }}
+tier.medium={{ $tierMedium }}
+tier.high={{ $tierHigh }}
+tier.max={{ $tierMax }}
+{{- $taskCoding := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.coding (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.coding))) -}}
+  {{- $taskCoding = printf "%v" $.Values.routing.tasks.coding -}}
+{{- end -}}
+{{- $taskReasoning := $tierHigh -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.reasoning (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.reasoning))) -}}
+  {{- $taskReasoning = printf "%v" $.Values.routing.tasks.reasoning -}}
+{{- end -}}
+{{- $taskCreativeWriting := $tierMax -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.creative_writing (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.creative_writing))) -}}
+  {{- $taskCreativeWriting = printf "%v" $.Values.routing.tasks.creative_writing -}}
+{{- end -}}
+{{- $taskSummarization := $tierLow -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.summarization (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.summarization))) -}}
+  {{- $taskSummarization = printf "%v" $.Values.routing.tasks.summarization -}}
+{{- end -}}
+{{- $taskExtraction := $tierLow -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.extraction (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.extraction))) -}}
+  {{- $taskExtraction = printf "%v" $.Values.routing.tasks.extraction -}}
+{{- end -}}
+{{- $taskSimpleChat := $tierMedium -}}
+{{- if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.simple_chat (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.simple_chat))) -}}
+  {{- $taskSimpleChat = printf "%v" $.Values.routing.tasks.simple_chat -}}
+{{- end }}
+task.coding={{ $taskCoding }}
+task.reasoning={{ $taskReasoning }}
+task.creative_writing={{ $taskCreativeWriting }}
+task.summarization={{ $taskSummarization }}
+task.extraction={{ $taskExtraction }}
+task.simple_chat={{ $taskSimpleChat }}
+{{- $classifierModel := $geminiLiteCandidate | default $firstGeminiModel | default "gemini-3.1-flash-lite" -}}
+{{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.classifier_model -}}
+  {{- $classifierModel = printf "%v" $.Values.features.llm_judge.classifier_model -}}
+{{- else if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.classifier_model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.classifier_model))) -}}
+  {{- $classifierModel = printf "%v" $.Values.routing.tasks.classifier_model -}}
+{{- end -}}
+{{- $judgeLoc := "global" -}}
+{{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.location -}}
+  {{- $judgeLoc = printf "%v" $.Values.features.llm_judge.location -}}
+{{- else if hasKey $regionMap $classifierModel -}}
+  {{- $judgeLoc = get $regionMap $classifierModel -}}
+{{- else if and $.Values.defaults $.Values.defaults.region -}}
+  {{- $judgeLoc = printf "%v" $.Values.defaults.region -}}
+{{- end }}
+task.classifier_model={{ $classifierModel }}
+judge.model={{ $classifierModel }}
+judge.location={{ $judgeLoc }}
 
 # ==============================================================================
 # SECTION 3: BACKWARD COMPATIBILITY ALIASES & REWRITES
 # ==============================================================================
 {{- if and $.Values.routing $.Values.routing.aliases }}
 {{- range $alias, $target := $.Values.routing.aliases }}
-alias.{{ $alias }}={{ $target }}
+{{- $targetStr := printf "%v" $target }}
+{{- if or (empty $catalogMap) (hasKey $catalogMap $targetStr) }}
+alias.{{ (printf "%v" $alias) | replace ":" "\\:" }}={{ $targetStr }}
+{{- end }}
 {{- end }}
 {{- end }}
 
@@ -47,70 +205,74 @@ alias.{{ $alias }}={{ $target }}
 # SECTION 4: ACTIVE MODEL DEFINITIONS (METADATA, REGIONS & CUSTOM URLS)
 # ==============================================================================
 {{- range $.Values.models }}
+{{- $mKey := (printf "%v" .name) | replace ":" "\\:" }}
 # --- {{ .displayName | default .name }} ---
-{{ .name }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
-{{ .name }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
-{{ .name }}.endpoint={{ .endpoint | default .region | default "global" }}
-{{ .name }}.model={{ .region | default "global" }}
-{{ .name }}.format={{ .format | default "gemini" }}
-{{ .name }}.display_name={{ .displayName | default .name }}
+{{ $mKey }}.publisher={{ if .publisher }}{{ .publisher }}{{ else if eq .format "anthropic" }}anthropic{{ else if eq .format "openai" }}openai{{ else }}google{{ end }}
+{{ $mKey }}.target={{ if .target }}{{ .target }}{{ else if eq .format "anthropic" }}claude{{ else if or (eq .publisher "openai") (and .custom_url (not (contains "googleapis.com" .custom_url))) }}openai-custom{{ else if eq .format "openai" }}gemini-openai-compat{{ else }}gemini{{ end }}
+{{ $mKey }}.endpoint={{ .endpoint | default .region | default "global" }}
+{{ $mKey }}.model={{ .region | default "global" }}
+{{ $mKey }}.format={{ .format | default "gemini" }}
+{{ $mKey }}.display_name={{ .displayName | default .name }}
 
 {{- if .created_at }}
-{{ .name }}.created_at={{ .created_at }}
+{{ $mKey }}.created_at={{ .created_at }}
 {{- end }}
 {{- if .custom_url }}
-{{ .name }}.url={{ .custom_url }}
+{{ $mKey }}.url={{ .custom_url }}
 {{- end }}
 {{- if .upstream_model }}
-{{ .name }}.upstream_model={{ .upstream_model }}
+{{ $mKey }}.upstream_model={{ .upstream_model }}
 {{- end }}
 {{- if .openai_org_id }}
-{{ .name }}.openai_org_id={{ .openai_org_id }}
+{{ $mKey }}.openai_org_id={{ .openai_org_id }}
 {{- end }}
 {{- if .openai_project_id }}
-{{ .name }}.openai_project_id={{ .openai_project_id }}
+{{ $mKey }}.openai_project_id={{ .openai_project_id }}
 {{- end }}
 {{- if .anthropic_version }}
-{{ .name }}.anthropic_version={{ .anthropic_version }}
+{{ $mKey }}.anthropic_version={{ .anthropic_version }}
 {{- end }}
 {{- if .anthropic_beta }}
-{{ .name }}.anthropic_beta={{ .anthropic_beta }}
+{{ $mKey }}.anthropic_beta={{ .anthropic_beta }}
 {{- end }}
 {{- if .auth }}
 {{- if .auth.type }}
-{{ .name }}.auth_type={{ .auth.type }}
+{{ $mKey }}.auth_type={{ .auth.type }}
 {{- end }}
 {{- if .auth.header_name }}
-{{ .name }}.auth_header={{ .auth.header_name }}
+{{ $mKey }}.auth_header={{ .auth.header_name }}
 {{- end }}
 {{- if .auth.token_ref }}
-{{ .name }}.auth_token_ref={{ .auth.token_ref }}
+{{ $mKey }}.auth_token_ref={{ .auth.token_ref }}
 {{- end }}
 {{- if .auth.token }}
-{{ .name }}.auth_token={{ .auth.token }}
+{{ $mKey }}.auth_token={{ .auth.token }}
 {{- end }}
 {{- end }}
 {{- if .model_armor }}
 {{- if .model_armor.template }}
-{{ .name }}.model_armor_template={{ .model_armor.template }}
+{{ $mKey }}.model_armor_template={{ .model_armor.template }}
 {{- end }}
 {{- if .model_armor.request_template }}
-{{ .name }}.model_armor_request_template={{ .model_armor.request_template }}
+{{ $mKey }}.model_armor_request_template={{ .model_armor.request_template }}
 {{- end }}
 {{- if .model_armor.response_template }}
-{{ .name }}.model_armor_response_template={{ .model_armor.response_template }}
+{{ $mKey }}.model_armor_response_template={{ .model_armor.response_template }}
 {{- end }}
 {{- end }}
 
 
 {{ end }}
 # --- Fallback Defaults ---
-default_gemini.endpoint=global
-default_gemini.model=global
+default_gemini.endpoint={{ if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
+default_gemini.model={{ if and $.Values.defaults $.Values.defaults.region }}{{ $.Values.defaults.region }}{{ else }}global{{ end }}
 default_claude.endpoint=us-east5
 default_claude.model=us-east5
 default_openai.endpoint=global
 default_openai.model=us
+{{- if and $.Values.defaults (hasKey $.Values.defaults "auto_fallback") }}
+default.auto_fallback={{ $.Values.defaults.auto_fallback }}
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -121,28 +283,37 @@ default_openai.model=us
 # Default fallback pricing parameters
 default.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
 platform.currency={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_currency | default "USD" }}{{ else }}USD{{ end }}
-default.markup={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
-platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization }}{{ $.Values.features.monetization.default_markup | default 1.0 }}{{ else }}1.0{{ end }}
-default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_input_rate }}{{ $.Values.features.monetization.default_input_rate }}{{ else }}0.10{{ end }}
-default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization $.Values.features.monetization.default_output_rate }}{{ $.Values.features.monetization.default_output_rate }}{{ else }}0.40{{ end }}
+default.markup={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_markup") (ne $.Values.features.monetization.default_markup nil) }}{{ printf "%v" $.Values.features.monetization.default_markup | trim | trimPrefix "$" }}{{ else }}1.0{{ end }}
+platform.markup_multiplier={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_markup") (ne $.Values.features.monetization.default_markup nil) }}{{ printf "%v" $.Values.features.monetization.default_markup | trim | trimPrefix "$" }}{{ else }}1.0{{ end }}
+default.input_rate_per_m={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_input_rate") (ne $.Values.features.monetization.default_input_rate nil) }}{{ printf "%v" $.Values.features.monetization.default_input_rate | trim | trimPrefix "$" }}{{ else }}0.10{{ end }}
+default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetization (hasKey $.Values.features.monetization "default_output_rate") (ne $.Values.features.monetization.default_output_rate nil) }}{{ printf "%v" $.Values.features.monetization.default_output_rate | trim | trimPrefix "$" }}{{ else }}0.40{{ end }}
 
 # Per-model token pricing (USD per 1,000,000 tokens)
 {{- range $.Values.models }}
-{{- if .pricing }}
-{{ .name }}.input_rate_per_m={{ .pricing.input_rate }}
-{{ .name }}.output_rate_per_m={{ .pricing.output_rate }}
-{{ .name }}.input_rate={{ .pricing.input_rate }}
-{{ .name }}.output_rate={{ .pricing.output_rate }}
-{{- if .pricing.cache_read_rate }}
-{{ .name }}.cache_read_rate_per_m={{ .pricing.cache_read_rate }}
-{{ .name }}.cache_read_rate={{ .pricing.cache_read_rate }}
+{{- if and .pricing (kindIs "map" .pricing) }}
+{{- $mPriceKey := (printf "%v" .name) | replace ":" "\\:" }}
+{{- if and (hasKey .pricing "input_rate") (ne .pricing.input_rate nil) (ne (printf "%v" .pricing.input_rate | trim) "") }}
+{{- $inRate := printf "%v" .pricing.input_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.input_rate_per_m={{ $inRate }}
+{{ $mPriceKey }}.input_rate={{ $inRate }}
 {{- end }}
-{{- if .pricing.cache_write_rate }}
-{{ .name }}.cache_write_rate_per_m={{ .pricing.cache_write_rate }}
-{{ .name }}.cache_write_rate={{ .pricing.cache_write_rate }}
+{{- if and (hasKey .pricing "output_rate") (ne .pricing.output_rate nil) (ne (printf "%v" .pricing.output_rate | trim) "") }}
+{{- $outRate := printf "%v" .pricing.output_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.output_rate_per_m={{ $outRate }}
+{{ $mPriceKey }}.output_rate={{ $outRate }}
 {{- end }}
-{{- if .pricing.markup }}
-{{ .name }}.markup={{ .pricing.markup }}
+{{- if and (hasKey .pricing "cache_read_rate") (ne .pricing.cache_read_rate nil) (ne (printf "%v" .pricing.cache_read_rate | trim) "") }}
+{{- $crRate := printf "%v" .pricing.cache_read_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.cache_read_rate_per_m={{ $crRate }}
+{{ $mPriceKey }}.cache_read_rate={{ $crRate }}
+{{- end }}
+{{- if and (hasKey .pricing "cache_write_rate") (ne .pricing.cache_write_rate nil) (ne (printf "%v" .pricing.cache_write_rate | trim) "") }}
+{{- $cwRate := printf "%v" .pricing.cache_write_rate | trim | trimPrefix "$" }}
+{{ $mPriceKey }}.cache_write_rate_per_m={{ $cwRate }}
+{{ $mPriceKey }}.cache_write_rate={{ $cwRate }}
+{{- end }}
+{{- if and (hasKey .pricing "markup") (ne .pricing.markup nil) (ne (printf "%v" .pricing.markup | trim) "") }}
+{{ $mPriceKey }}.markup={{ printf "%v" .pricing.markup | trim | trimPrefix "$" }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -153,17 +324,60 @@ default.output_rate_per_m={{ if and $.Values.features $.Values.features.monetiza
   Dynamically builds config.properties
 */}}
 {{- define "generate_config_properties" -}}
-project_id={{ if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
-model_armor_project_id={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id }}{{ $.Values.features.model_armor.project_id }}{{ else if and $.Values.gateway $.Values.gateway.project_id }}{{ $.Values.gateway.project_id }}{{ else }}{organization.name}{{ end }}
-model_armor_location={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.location | default "us-central1" }}{{ else }}us-central1{{ end }}
+{{- $gwProjStr := "" -}}
+{{- if and $.Values.gateway $.Values.gateway.project_id -}}
+  {{- $rawGwProj := printf "%v" $.Values.gateway.project_id -}}
+  {{- if and (ne $rawGwProj "") (ne $rawGwProj "your-gcp-project-id") (ne $rawGwProj "{organization.name}") -}}
+    {{- $gwProjStr = $rawGwProj -}}
+  {{- end -}}
+{{- end -}}
+{{- $maProjStr := $gwProjStr -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.project_id -}}
+  {{- $rawMaProj := printf "%v" $.Values.features.model_armor.project_id -}}
+  {{- if and (ne $rawMaProj "") (ne $rawMaProj "your-gcp-project-id") (ne $rawMaProj "{organization.name}") -}}
+    {{- $maProjStr = $rawMaProj -}}
+  {{- end -}}
+{{- end -}}
+{{- $maLocStr := "us-central1" -}}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.location -}}
+  {{- $rawMaLoc := printf "%v" $.Values.features.model_armor.location -}}
+  {{- if and (ne $rawMaLoc "") (ne ($rawMaLoc | lower) "global") -}}
+    {{- $maLocStr = $rawMaLoc -}}
+  {{- end -}}
+{{- end -}}
+gateway_name={{ if and $.Values.gateway $.Values.gateway.name }}{{ $.Values.gateway.name }}{{ else }}ai-gateway{{ end }}
+project_id={{ $gwProjStr }}
+model_armor_enabled={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "enabled") }}{{ $.Values.features.model_armor.enabled }}{{ else }}false{{ end }}
+llm_judge_enabled={{ if or (not $.Values.features) (not $.Values.features.llm_judge) (not (hasKey $.Values.features.llm_judge "enabled")) (ne (printf "%v" $.Values.features.llm_judge.enabled) "false") }}true{{ else }}false{{ end }}
+model_armor_project_id={{ $maProjStr }}
+model_armor_location={{ $maLocStr }}
 model_armor_template={{ if and $.Values.features $.Values.features.model_armor }}{{ $.Values.features.model_armor.template | default "ai-gw-template" }}{{ else }}ai-gw-template{{ end }}
 model_armor_request_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.request_template }}{{ $.Values.features.model_armor.request_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
 model_armor_response_template={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.response_template }}{{ $.Values.features.model_armor.response_template }}{{ else if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.template }}{{ $.Values.features.model_armor.template }}{{ else }}ai-gw-template{{ end }}
+model_armor_allow_claim_bypass={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "allow_claim_bypass") }}{{ $.Values.features.model_armor.allow_claim_bypass }}{{ else }}true{{ end }}
+model_armor_strict_stream_sync={{ if and $.Values.features $.Values.features.model_armor (hasKey $.Values.features.model_armor "strict_stream_sync") }}{{ $.Values.features.model_armor.strict_stream_sync }}{{ else }}false{{ end }}
 default_burst_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst $.Values.features.rate_limits.burst.rate }}{{ $.Values.features.rate_limits.burst.rate }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.burst_rate }}{{ $.Values.features.rate_limits.burst_rate }}{{ else }}600pm{{ end }}
+default_prompt_token_rate={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens $.Values.features.rate_limits.prompt_tokens.rate }}{{ $.Values.features.rate_limits.prompt_tokens.rate }}{{ else }}100000pm{{ end }}
+prompt_token_limit_enabled={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens (hasKey $.Values.features.rate_limits.prompt_tokens "enabled") }}{{ $.Values.features.rate_limits.prompt_tokens.enabled }}{{ else }}false{{ end }}
 default_concurrency_limit={{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.limit }}{{ $.Values.features.rate_limits.concurrency.limit }}{{ else if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.concurrency_limit }}{{ $.Values.features.rate_limits.concurrency_limit }}{{ else }}20{{ end }}
 cb_error_threshold={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.error_threshold }}{{ $.Values.features.circuit_breaker.error_threshold }}{{ else }}3{{ end }}
 cb_window_interval={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_interval }}{{ $.Values.features.circuit_breaker.window_interval }}{{ else }}1{{ end }}
 cb_window_unit={{ if and $.Values.features $.Values.features.circuit_breaker $.Values.features.circuit_breaker.window_unit }}{{ $.Values.features.circuit_breaker.window_unit }}{{ else }}minute{{ end }}
+preflight_prompt_guard={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "preflight_prompt_guard") }}{{ $.Values.features.quotas.preflight_prompt_guard }}{{ else }}false{{ end }}
+stream_prompt_checkpoint={{ if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "stream_prompt_checkpoint") }}{{ $.Values.features.quotas.stream_prompt_checkpoint }}{{ else }}false{{ end }}
+secondary_quota_enabled={{ if and (or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false")) $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (eq (printf "%v" $.Values.features.quotas.secondary_window.enabled) "true") }}true{{ else }}false{{ end }}
+{{- if and $.Values.features $.Values.features.quotas (hasKey $.Values.features.quotas "default_quota") (ne $.Values.features.quotas.default_quota nil) (eq (printf "%v" $.Values.features.quotas.default_quota | trim) "0") }}
+default_quota=0
+{{- end }}
+{{- if and $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window }}
+{{- if and (hasKey $.Values.features.quotas.secondary_window "allow_usd") (ne $.Values.features.quotas.secondary_window.allow_usd nil) (ne (printf "%v" $.Values.features.quotas.secondary_window.allow_usd | trim) "") }}
+secondary_default_quota_mode=usd
+secondary_default_quota={{ include "usd_to_micro" $.Values.features.quotas.secondary_window.allow_usd }}
+{{- else if and (hasKey $.Values.features.quotas.secondary_window "allow_count") (ne $.Values.features.quotas.secondary_window.allow_count nil) (eq (printf "%v" $.Values.features.quotas.secondary_window.allow_count | trim) "0") }}
+secondary_default_quota=0
+{{- end }}
+{{- end }}
+sanitize_upstream_errors={{ if and $.Values.features $.Values.features.security (hasKey $.Values.features.security "sanitize_upstream_errors") }}{{ $.Values.features.security.sanitize_upstream_errors }}{{ else if and $.Values.features $.Values.features.circuit_breaker (hasKey $.Values.features.circuit_breaker "sanitize_upstream_errors") }}{{ $.Values.features.circuit_breaker.sanitize_upstream_errors }}{{ else if and $.Values.gateway (hasKey $.Values.gateway "sanitize_upstream_errors") }}{{ $.Values.gateway.sanitize_upstream_errors }}{{ else }}false{{ end }}
 {{- if and $.Values.gateway $.Values.gateway.openai_base_url }}
 openai_base_url={{ $.Values.gateway.openai_base_url }}
 {{- end }}
@@ -185,9 +399,18 @@ openai_project_id={{ $.Values.gateway.openai_project_id }}
 
 # Authentication & Persona-Based Token Import Configuration
 auth_allow_bearer_api_key={{ if hasKey $auth "allow_bearer_api_key" }}{{ $auth.allow_bearer_api_key }}{{ else }}true{{ end }}
+auth_apigee_oauth_enabled={{ if and $auth.apigee_oauth (hasKey $auth.apigee_oauth "enabled") }}{{ $auth.apigee_oauth.enabled }}{{ else }}true{{ end }}
 auth_agent_token_enabled={{ if and $auth.agent_identity (hasKey $auth.agent_identity "enabled") }}{{ $auth.agent_identity.enabled }}{{ else }}false{{ end }}
-auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain }}{{ else }}.system.id.goog{{ end }}
-auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix }}{{ else }}.iam.gserviceaccount.com{{ end }}
+auth_agent_allowed_trust_domain={{ if and $auth.agent_identity $auth.agent_identity.allowed_trust_domain }}{{ if kindIs "slice" $auth.agent_identity.allowed_trust_domain }}{{ $auth.agent_identity.allowed_trust_domain | join "," }}{{ else }}{{ $auth.agent_identity.allowed_trust_domain }}{{ end }}{{ end }}
+auth_agent_allowed_email_suffix={{ if and $auth.agent_identity $auth.agent_identity.allowed_email_suffix }}{{ if kindIs "slice" $auth.agent_identity.allowed_email_suffix }}{{ $auth.agent_identity.allowed_email_suffix | join "," }}{{ else }}{{ $auth.agent_identity.allowed_email_suffix }}{{ end }}{{ else if $gwProjStr }}@{{ $gwProjStr }}.iam.gserviceaccount.com{{ end }}
+{{- if and $auth.agent_identity (or $auth.agent_identity.expected_audience $auth.agent_identity.audience) }}
+{{- $agentAud := default $auth.agent_identity.audience $auth.agent_identity.expected_audience }}
+auth_agent_expected_audience={{ if kindIs "slice" $agentAud }}{{ $agentAud | join "," }}{{ else }}{{ $agentAud }}{{ end }}
+{{- end }}
+{{- if and $auth.agent_identity (or $auth.agent_identity.required_scopes $auth.agent_identity.scope) }}
+{{- $agentScopes := default $auth.agent_identity.scope $auth.agent_identity.required_scopes }}
+auth_agent_required_scopes={{ if kindIs "slice" $agentScopes }}{{ $agentScopes | join "," }}{{ else }}{{ $agentScopes }}{{ end }}
+{{- end }}
 auth_agent_persona={{ if and $auth.agent_identity $auth.agent_identity.persona }}{{ $auth.agent_identity.persona }}{{ else }}agent{{ end }}
 auth_agent_token_ttl_ms={{ if and $auth.agent_identity $auth.agent_identity.token_ttl_ms }}{{ $auth.agent_identity.token_ttl_ms }}{{ else }}3600000{{ end }}
 
@@ -199,9 +422,46 @@ auth_idp_opaque_team_claim={{ if and $auth.idp_opaque $auth.idp_opaque.team_clai
 auth_idp_opaque_quota_override_claim={{ if and $auth.idp_opaque $auth.idp_opaque.quota_override_claim }}{{ $auth.idp_opaque.quota_override_claim }}{{ else }}ai_quota_override{{ end }}
 auth_idp_opaque_token_ttl_ms={{ if and $auth.idp_opaque $auth.idp_opaque.token_ttl_ms }}{{ $auth.idp_opaque.token_ttl_ms }}{{ else }}3600000{{ end }}
 
-auth_idp_jwt_enabled={{ if and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") }}{{ $auth.idp_jwt.enabled }}{{ else }}false{{ end }}
-auth_idp_jwt_jwks_uri={{ if and $auth.idp_jwt $auth.idp_jwt.jwks_uri }}{{ $auth.idp_jwt.jwks_uri }}{{ else }}https://idp.example.com/oauth2/v1/keys{{ end }}
-auth_idp_jwt_issuer={{ if and $auth.idp_jwt $auth.idp_jwt.issuer }}{{ $auth.idp_jwt.issuer }}{{ else }}https://idp.example.com{{ end }}
+{{- $idpJwtEnabled := and $auth.idp_jwt (hasKey $auth.idp_jwt "enabled") (eq (printf "%v" $auth.idp_jwt.enabled) "true") }}
+{{- $idpJwtJwksUri := "" }}
+{{- if and $auth.idp_jwt (hasKey $auth.idp_jwt "jwks_uri") }}
+  {{- $idpJwtJwksUri = printf "%v" $auth.idp_jwt.jwks_uri | trim }}
+{{- else if not $idpJwtEnabled }}
+  {{- $idpJwtJwksUri = "https://idp.example.com/oauth2/v1/keys" }}
+{{- end }}
+{{- $idpJwtIssuer := "" }}
+{{- if and $auth.idp_jwt (hasKey $auth.idp_jwt "issuer") }}
+  {{- $idpJwtIssuer = printf "%v" $auth.idp_jwt.issuer | trim }}
+{{- else if not $idpJwtEnabled }}
+  {{- $idpJwtIssuer = "https://idp.example.com" }}
+{{- end }}
+{{- $idpJwtAudience := "" }}
+{{- if and $auth.idp_jwt $auth.idp_jwt.audience }}
+  {{- if kindIs "slice" $auth.idp_jwt.audience }}
+    {{- $idpJwtAudience = $auth.idp_jwt.audience | join "," | trim }}
+  {{- else }}
+    {{- $idpJwtAudience = printf "%v" $auth.idp_jwt.audience | trim }}
+  {{- end }}
+{{- end }}
+{{- if $idpJwtEnabled }}
+  {{- if eq $idpJwtJwksUri "" }}
+    {{- fail "features.auth.idp_jwt.jwks_uri must be non-empty when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+  {{- if eq $idpJwtIssuer "" }}
+    {{- fail "features.auth.idp_jwt.issuer must be non-empty when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+  {{- if or (eq $idpJwtAudience "") (eq $idpJwtAudience "*") }}
+    {{- fail "features.auth.idp_jwt.audience must be explicitly set (and cannot be '*') when features.auth.idp_jwt.enabled=true" }}
+  {{- end }}
+{{- end }}
+{{- $idpJwtAlg := include "resolve_idp_jwt_algorithm" . }}
+auth_idp_jwt_enabled={{ if $idpJwtEnabled }}true{{ else }}false{{ end }}
+auth_idp_jwt_jwks_uri={{ $idpJwtJwksUri }}
+auth_idp_jwt_issuer={{ $idpJwtIssuer }}
+{{- if ne $idpJwtAudience "" }}
+auth_idp_jwt_audience={{ $idpJwtAudience }}
+{{- end }}
+auth_idp_jwt_algorithm={{ $idpJwtAlg }}
 auth_idp_jwt_user_claim={{ if and $auth.idp_jwt $auth.idp_jwt.user_claim }}{{ $auth.idp_jwt.user_claim }}{{ else }}email{{ end }}
 auth_idp_jwt_persona_claim={{ if and $auth.idp_jwt $auth.idp_jwt.persona_claim }}{{ $auth.idp_jwt.persona_claim }}{{ else }}role{{ end }}
 auth_idp_jwt_team_claim={{ if and $auth.idp_jwt $auth.idp_jwt.team_claim }}{{ $auth.idp_jwt.team_claim }}{{ else }}department{{ end }}
@@ -213,19 +473,22 @@ auth_idp_jwt_token_ttl_ms={{ if and $auth.idp_jwt $auth.idp_jwt.token_ttl_ms }}{
 auth_default_client_id={{ $defaultClientId }}
 {{- end }}
 {{- $personas := dict }}
-{{- if $.Values.personas }}
+{{- if and $.Values.personas (kindIs "map" $.Values.personas) }}
 {{- $personas = $.Values.personas }}
-{{- else if $auth.personas }}
+{{- else if and $auth.personas (kindIs "map" $auth.personas) }}
 {{- $personas = $auth.personas }}
 {{- end }}
-{{- if $personas }}
 {{- $pNames := list -}}
-{{- range $pName, $_ := $personas -}}
-  {{- $pNames = append $pNames $pName -}}
+{{- range $pName, $pVal := $personas -}}
+  {{- if kindIs "map" $pVal -}}
+    {{- $pNames = append $pNames $pName -}}
+  {{- end -}}
 {{- end }}
+{{- if gt (len $pNames) 0 }}
 auth_personas_list={{ $pNames | sortAlpha | join "," }}
 auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
 {{- range $pName, $pCfg := $personas }}
+{{- if kindIs "map" $pCfg }}
 persona.{{ $pName }}.match_claims={{ if $pCfg.match_claims }}{{ if kindIs "slice" $pCfg.match_claims }}{{ $pCfg.match_claims | join "," }}{{ else }}{{ $pCfg.match_claims }}{{ end }}{{ else }}{{ $pName }}{{ end }}
 persona.{{ $pName }}.client_id={{ $pCfg.client_id | default $defaultClientId }}
 {{- if or $pCfg.display_name $pCfg.displayName }}
@@ -234,12 +497,13 @@ persona.{{ $pName }}.display_name={{ $pCfg.display_name | default $pCfg.displayN
 {{- if or $pCfg.models $pCfg.allowed_models }}
 persona.{{ $pName }}.models={{ if $pCfg.models }}{{ if kindIs "slice" $pCfg.models }}{{ $pCfg.models | join "," }}{{ else }}{{ $pCfg.models }}{{ end }}{{ else if kindIs "slice" $pCfg.allowed_models }}{{ $pCfg.allowed_models | join "," }}{{ else }}{{ $pCfg.allowed_models }}{{ end }}
 {{- end }}
-{{- if $pCfg.quota }}
-{{- if $pCfg.quota.limit_usd }}
+{{- if and $pCfg.quota (kindIs "map" $pCfg.quota) }}
+{{- if and (hasKey $pCfg.quota "limit_usd") (ne $pCfg.quota.limit_usd nil) (ne (printf "%v" $pCfg.quota.limit_usd | trim) "") }}
+{{- $pCleanUsd := printf "%v" $pCfg.quota.limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.quota_mode=usd
-persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota.limit_usd }}
-persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota.limit_usd 1000000) }}
-{{- else if $pCfg.quota.limit }}
+persona.{{ $pName }}.quota_limit_usd={{ $pCleanUsd }}
+persona.{{ $pName }}.quota_limit={{ include "usd_to_micro" $pCfg.quota.limit_usd }}
+{{- else if and (hasKey $pCfg.quota "limit") (ne $pCfg.quota.limit nil) (ne (printf "%v" $pCfg.quota.limit | trim) "") }}
 {{- if $pCfg.quota.mode }}
 persona.{{ $pName }}.quota_mode={{ $pCfg.quota.mode }}
 {{- end }}
@@ -251,32 +515,38 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota.interval }}
 {{- if or $pCfg.quota.unit $pCfg.quota.time_unit }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota.unit | default $pCfg.quota.time_unit }}
 {{- end }}
-{{- if $pCfg.quota.per_model_usd }}
-{{- $pmUsdList := list -}}
+{{- $pmCombinedList := list }}
+{{- if and $pCfg.quota.per_model_usd (kindIs "map" $pCfg.quota.per_model_usd) }}
 {{- range $mName, $mLimitUsd := $pCfg.quota.per_model_usd }}
-{{- $mMicro := printf "%.0f" (mulf $mLimitUsd 1000000) -}}
-persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mMicro }}
-{{- $pmUsdList = append $pmUsdList (printf "%s:%s" $mName $mMicro) -}}
+{{- if and (ne $mLimitUsd nil) (ne (printf "%v" $mLimitUsd | trim) "") }}
+{{- $mKey := (printf "%v" $mName) | replace ":" "\\:" }}
+{{- $mCleanUsd := printf "%v" $mLimitUsd | trim | trimPrefix "$" }}
+{{- $mMicro := include "usd_to_micro" $mLimitUsd }}
+persona.{{ $pName }}.model_quota_usd.{{ $mKey }}={{ $mCleanUsd }}
+persona.{{ $pName }}.model_quota.{{ $mKey }}={{ $mMicro }}
+{{- $pmCombinedList = append $pmCombinedList (printf "%s:%s" $mName $mMicro) }}
 {{- end }}
-{{- if $pmUsdList }}
-persona.{{ $pName }}.per_model_quotas={{ $pmUsdList | sortAlpha | join "," }}
 {{- end }}
-{{- else if $pCfg.quota.per_model }}
-{{- $pmList := list -}}
+{{- end }}
+{{- if and $pCfg.quota.per_model (kindIs "map" $pCfg.quota.per_model) }}
 {{- range $mName, $mLimit := $pCfg.quota.per_model }}
-persona.{{ $pName }}.model_quota.{{ $mName }}={{ $mLimit }}
-{{- $pmList = append $pmList (printf "%s:%v" $mName $mLimit) -}}
-{{- end }}
-{{- if $pmList }}
-persona.{{ $pName }}.per_model_quotas={{ $pmList | sortAlpha | join "," }}
-{{- end }}
+{{- if and (or (not $pCfg.quota.per_model_usd) (not (hasKey $pCfg.quota.per_model_usd $mName))) (ne $mLimit nil) (ne (printf "%v" $mLimit | trim) "") }}
+{{- $mKey := (printf "%v" $mName) | replace ":" "\\:" }}
+persona.{{ $pName }}.model_quota.{{ $mKey }}={{ $mLimit }}
+{{- $pmCombinedList = append $pmCombinedList (printf "%s:%v" $mName $mLimit) }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.quota_limit_usd }}
+{{- end }}
+{{- if $pmCombinedList }}
+persona.{{ $pName }}.per_model_quotas={{ $pmCombinedList | sortAlpha | join "," }}
+{{- end }}
+{{- end }}
+{{- if and (hasKey $pCfg "quota_limit_usd") (ne $pCfg.quota_limit_usd nil) (ne (printf "%v" $pCfg.quota_limit_usd | trim) "") }}
+{{- $flatCleanUsd := printf "%v" $pCfg.quota_limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.quota_mode=usd
-persona.{{ $pName }}.quota_limit_usd={{ $pCfg.quota_limit_usd }}
-persona.{{ $pName }}.quota_limit={{ printf "%.0f" (mulf $pCfg.quota_limit_usd 1000000) }}
-{{- else if $pCfg.quota_limit }}
+persona.{{ $pName }}.quota_limit_usd={{ $flatCleanUsd }}
+persona.{{ $pName }}.quota_limit={{ include "usd_to_micro" $pCfg.quota_limit_usd }}
+{{- else if and (hasKey $pCfg "quota_limit") (ne $pCfg.quota_limit nil) (ne (printf "%v" $pCfg.quota_limit | trim) "") }}
 persona.{{ $pName }}.quota_limit={{ $pCfg.quota_limit }}
 {{- end }}
 {{- if $pCfg.quota_interval }}
@@ -285,12 +555,13 @@ persona.{{ $pName }}.quota_interval={{ $pCfg.quota_interval }}
 {{- if or $pCfg.quota_unit $pCfg.quota_time_unit }}
 persona.{{ $pName }}.quota_unit={{ $pCfg.quota_unit | default $pCfg.quota_time_unit }}
 {{- end }}
-{{- if $pCfg.team_budget }}
-{{- if $pCfg.team_budget.limit_usd }}
+{{- if and $pCfg.team_budget (kindIs "map" $pCfg.team_budget) }}
+{{- if and (hasKey $pCfg.team_budget "limit_usd") (ne $pCfg.team_budget.limit_usd nil) (ne (printf "%v" $pCfg.team_budget.limit_usd | trim) "") }}
+{{- $tCleanUsd := printf "%v" $pCfg.team_budget.limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.team_quota_mode=usd
-persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_budget.limit_usd }}
-persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_budget.limit_usd 1000000) }}
-{{- else if $pCfg.team_budget.limit }}
+persona.{{ $pName }}.team_quota_limit_usd={{ $tCleanUsd }}
+persona.{{ $pName }}.team_quota_limit={{ include "usd_to_micro" $pCfg.team_budget.limit_usd }}
+{{- else if and (hasKey $pCfg.team_budget "limit") (ne $pCfg.team_budget.limit nil) (ne (printf "%v" $pCfg.team_budget.limit | trim) "") }}
 {{- if $pCfg.team_budget.mode }}
 persona.{{ $pName }}.team_quota_mode={{ $pCfg.team_budget.mode }}
 {{- end }}
@@ -303,11 +574,12 @@ persona.{{ $pName }}.team_quota_interval={{ $pCfg.team_budget.interval }}
 persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_budget.unit | default $pCfg.team_budget.time_unit }}
 {{- end }}
 {{- end }}
-{{- if $pCfg.team_quota_limit_usd }}
+{{- if and (hasKey $pCfg "team_quota_limit_usd") (ne $pCfg.team_quota_limit_usd nil) (ne (printf "%v" $pCfg.team_quota_limit_usd | trim) "") }}
+{{- $tFlatCleanUsd := printf "%v" $pCfg.team_quota_limit_usd | trim | trimPrefix "$" }}
 persona.{{ $pName }}.team_quota_mode=usd
-persona.{{ $pName }}.team_quota_limit_usd={{ $pCfg.team_quota_limit_usd }}
-persona.{{ $pName }}.team_quota_limit={{ printf "%.0f" (mulf $pCfg.team_quota_limit_usd 1000000) }}
-{{- else if $pCfg.team_quota_limit }}
+persona.{{ $pName }}.team_quota_limit_usd={{ $tFlatCleanUsd }}
+persona.{{ $pName }}.team_quota_limit={{ include "usd_to_micro" $pCfg.team_quota_limit_usd }}
+{{- else if and (hasKey $pCfg "team_quota_limit") (ne $pCfg.team_quota_limit nil) (ne (printf "%v" $pCfg.team_quota_limit | trim) "") }}
 persona.{{ $pName }}.team_quota_limit={{ $pCfg.team_quota_limit }}
 {{- end }}
 {{- if $pCfg.team_quota_interval }}
@@ -320,12 +592,18 @@ persona.{{ $pName }}.team_quota_unit={{ $pCfg.team_quota_unit }}
 {{- if or $pCfg.rate_limits.burst_rate $pCfg.rate_limits.burst }}
 persona.{{ $pName }}.burst_rate={{ $pCfg.rate_limits.burst_rate | default $pCfg.rate_limits.burst }}
 {{- end }}
+{{- if or $pCfg.rate_limits.prompt_token_rate $pCfg.rate_limits.prompt_tokens }}
+persona.{{ $pName }}.prompt_token_rate={{ $pCfg.rate_limits.prompt_token_rate | default $pCfg.rate_limits.prompt_tokens }}
+{{- end }}
 {{- if or $pCfg.rate_limits.concurrency_limit $pCfg.rate_limits.concurrency }}
 persona.{{ $pName }}.concurrency_limit={{ $pCfg.rate_limits.concurrency_limit | default $pCfg.rate_limits.concurrency }}
 {{- end }}
 {{- end }}
 {{- if $pCfg.burst_rate }}
 persona.{{ $pName }}.burst_rate={{ $pCfg.burst_rate }}
+{{- end }}
+{{- if $pCfg.prompt_token_rate }}
+persona.{{ $pName }}.prompt_token_rate={{ $pCfg.prompt_token_rate }}
 {{- end }}
 {{- if $pCfg.concurrency_limit }}
 persona.{{ $pName }}.concurrency_limit={{ $pCfg.concurrency_limit }}
@@ -351,6 +629,7 @@ model_armor.persona.{{ $pName }}.request_template={{ $pCfg.model_armor_request_t
 model_armor.persona.{{ $pName }}.response_template={{ $pCfg.model_armor_response_template }}
 {{- end }}
 {{- end }}
+{{- end }}
 {{- else }}
 auth_personas_list=knowledge-worker,developer,it,agent
 auth_persona_default={{ $auth.default_persona | default $.Values.default_persona | default "" }}
@@ -363,8 +642,9 @@ persona.it.client_id={{ $defaultClientId }}
 persona.agent.match_claims=agent,service-account,automation
 persona.agent.client_id={{ $defaultClientId }}
 {{- end }}
-{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas }}
+{{- if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.personas (kindIs "map" $.Values.features.model_armor.personas) }}
 {{- range $maPersona, $maCfg := $.Values.features.model_armor.personas }}
+{{- if kindIs "map" $maCfg }}
 {{- if $maCfg.template }}
 model_armor.persona.{{ $maPersona }}.template={{ $maCfg.template }}
 {{- end }}
@@ -373,6 +653,7 @@ model_armor.persona.{{ $maPersona }}.request_template={{ $maCfg.request_template
 {{- end }}
 {{- if $maCfg.response_template }}
 model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_template }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -396,11 +677,12 @@ model_armor.persona.{{ $maPersona }}.response_template={{ $maCfg.response_templa
 model_armor_identity_rules_count={{ len $allRules }}
 {{- range $idx, $rule := $allRules }}
 model_armor.rule.{{ $idx }}.match={{ if kindIs "slice" $rule.match }}{{ $rule.match | join "," }}{{ else }}{{ $rule.match }}{{ end }}
-{{- if $rule.quota_limit_usd }}
+{{- if and (hasKey $rule "quota_limit_usd") (ne $rule.quota_limit_usd nil) (ne (printf "%v" $rule.quota_limit_usd | trim) "") }}
+{{- $rCleanUsd := printf "%v" $rule.quota_limit_usd | trim | trimPrefix "$" }}
 model_armor.rule.{{ $idx }}.quota_mode=usd
-model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rule.quota_limit_usd }}
-model_armor.rule.{{ $idx }}.quota_limit={{ printf "%.0f" (mulf $rule.quota_limit_usd 1000000) }}
-{{- else if $rule.quota_limit }}
+model_armor.rule.{{ $idx }}.quota_limit_usd={{ $rCleanUsd }}
+model_armor.rule.{{ $idx }}.quota_limit={{ include "usd_to_micro" $rule.quota_limit_usd }}
+{{- else if and (hasKey $rule "quota_limit") (ne $rule.quota_limit nil) (ne (printf "%v" $rule.quota_limit | trim) "") }}
 model_armor.rule.{{ $idx }}.quota_limit={{ $rule.quota_limit }}
 {{- end }}
 {{- if $rule.expires_at }}
@@ -409,20 +691,31 @@ model_armor.rule.{{ $idx }}.expires_at={{ $rule.expires_at }}
 {{- if $rule.bypass_team_budget }}
 model_armor.rule.{{ $idx }}.bypass_team_budget={{ $rule.bypass_team_budget }}
 {{- end }}
-{{- if or $rule.team_budget_limit_usd $rule.team_quota_limit_usd }}
-{{- $tbUsd := $rule.team_budget_limit_usd | default $rule.team_quota_limit_usd }}
+{{- if and (hasKey $rule "team_budget_limit_usd") (ne $rule.team_budget_limit_usd nil) (ne (printf "%v" $rule.team_budget_limit_usd | trim) "") }}
+{{- $tbCleanUsd := printf "%v" $rule.team_budget_limit_usd | trim | trimPrefix "$" }}
 model_armor.rule.{{ $idx }}.team_budget_mode=usd
 model_armor.rule.{{ $idx }}.team_quota_mode=usd
-model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbUsd }}
-model_armor.rule.{{ $idx }}.team_budget_limit={{ printf "%.0f" (mulf $tbUsd 1000000) }}
-{{- else if or $rule.team_budget_limit $rule.team_quota_limit }}
-model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit | default $rule.team_quota_limit }}
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbCleanUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ include "usd_to_micro" $rule.team_budget_limit_usd }}
+{{- else if and (hasKey $rule "team_quota_limit_usd") (ne $rule.team_quota_limit_usd nil) (ne (printf "%v" $rule.team_quota_limit_usd | trim) "") }}
+{{- $tbCleanUsd := printf "%v" $rule.team_quota_limit_usd | trim | trimPrefix "$" }}
+model_armor.rule.{{ $idx }}.team_budget_mode=usd
+model_armor.rule.{{ $idx }}.team_quota_mode=usd
+model_armor.rule.{{ $idx }}.team_budget_limit_usd={{ $tbCleanUsd }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ include "usd_to_micro" $rule.team_quota_limit_usd }}
+{{- else if and (hasKey $rule "team_budget_limit") (ne $rule.team_budget_limit nil) (ne (printf "%v" $rule.team_budget_limit | trim) "") }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_budget_limit }}
+{{- else if and (hasKey $rule "team_quota_limit") (ne $rule.team_quota_limit nil) (ne (printf "%v" $rule.team_quota_limit | trim) "") }}
+model_armor.rule.{{ $idx }}.team_budget_limit={{ $rule.team_quota_limit }}
 {{- end }}
 {{- if or $rule.models $rule.allowed_models }}
 model_armor.rule.{{ $idx }}.models={{ if $rule.models }}{{ if kindIs "slice" $rule.models }}{{ $rule.models | join "," }}{{ else }}{{ $rule.models }}{{ end }}{{ else if kindIs "slice" $rule.allowed_models }}{{ $rule.allowed_models | join "," }}{{ else }}{{ $rule.allowed_models }}{{ end }}
 {{- end }}
 {{- if $rule.burst_rate }}
 model_armor.rule.{{ $idx }}.burst_rate={{ $rule.burst_rate }}
+{{- end }}
+{{- if $rule.prompt_token_rate }}
+model_armor.rule.{{ $idx }}.prompt_token_rate={{ $rule.prompt_token_rate }}
 {{- end }}
 {{- if $rule.concurrency_limit }}
 model_armor.rule.{{ $idx }}.concurrency_limit={{ $rule.concurrency_limit }}
@@ -457,7 +750,7 @@ model_armor.rule.{{ $idx }}.response_template={{ $rule.response_template }}
 */}}
 {{- define "generate_extract_expressions_properties" -}}
 prompt_exp=$.messages[?(@.role=='user')].content
-buffer_size=50
+buffer_size={{ if and $.Values.features $.Values.features.model_armor $.Values.features.model_armor.stream_buffer_size }}{{ $.Values.features.model_armor.stream_buffer_size }}{{ else }}50{{ end }}
 {{- end -}}
 
 {{/*
@@ -465,25 +758,37 @@ buffer_size=50
   Renders the unified 4-option Auth & Persona Token Import PreFlow steps
 */}}
 {{- define "auth_preflow_steps" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $apigeeOauthEnabled := true -}}
+{{- if and $auth.apigee_oauth (hasKey $auth.apigee_oauth "enabled") -}}
+  {{- $apigeeOauthEnabled = ne (printf "%v" $auth.apigee_oauth.enabled) "false" -}}
+{{- end -}}
 - Step:
     Name: JS-extract-auth-credentials
 - Step:
     Condition: '(auth_has_apikey = "true") or (auth_try_bearer_as_apikey = "true")'
     Name: VA-ApiKey
+{{- if $apigeeOauthEnabled }}
 - Step:
     Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false")'
     Name: OA-VerifyAccessToken
+{{- end }}
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "agent_identity") and (propertyset.config.auth_agent_token_enabled = "true")'
     Name: SC-VerifyAgentToken
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "idp_opaque") and (propertyset.config.auth_idp_opaque_enabled = "true")'
     Name: SC-VerifyIdpOpaqueToken
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and (auth_token_type = "idp_jwt") and (propertyset.config.auth_idp_jwt_enabled = "true")'
     Name: VJ-VerifyIdpJwt
 - Step:
-    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false") and (oauthV2.OA-VerifyAccessToken.failed = "true") and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
+    Condition: '(auth_bearer_token != null) and (verifyapikey.VA-ApiKey.failed != "false"){{ if $apigeeOauthEnabled }} and (oauthV2.OA-VerifyAccessToken.failed = "true"){{ end }} and ((agentTokenVerifyResponse.status.code = 200) or (idpOpaqueVerifyResponse.status.code = 200) or (jwt.VJ-VerifyIdpJwt.valid = "true") or (jwt.VJ-VerifyIdpJwt.failed = "false"))'
     Name: JS-resolve-auth-persona
 - Step:
     Condition: 'auth_ready_to_import = "true"'
@@ -511,11 +816,55 @@ buffer_size=50
 */}}
 {{- define "circuit_breaker_preflow_steps" -}}
 - Step:
-    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Condition: '(judge_routing_requested != "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
     Name: LTQ-CircuitBreakerCheck
 - Step:
-    Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Condition: '(judge_routing_requested != "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
     Name: JS-resolve-model-location
+{{- end -}}
+
+{{/*
+  Helper: judge_post_guardrail_steps
+  Executes LLM Judge classification strictly AFTER Persona RBAC, Burst/Quota/Concurrency rate limits, and Model Armor request sanitization
+*/}}
+{{- define "judge_post_guardrail_steps" -}}
+{{- $quotasEnabled := or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false") -}}
+- Step:
+    Condition: '(judge_routing_requested = "true") or (request.header.X-Gateway-Judge = "true") or (request.header.x-enable-judge = "true") or (model = "auto:judge") or (model = "gateway/judge") or (judge_plugin_id = "judge") or (judge_plugin_id = "task-classifier") or (has_judge_payload = "true")'
+    Name: JS-prepare-judge-request
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: SC-LLMJudge
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: JS-process-judge-response
+- Step:
+    Condition: 'trigger_judge = "true"'
+    Name: JS-resolve-model-location
+{{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+- Step:
+    Condition: '(trigger_judge = "true") and (model_access_denied = "true") and (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)'
+    Name: RQ-ReleaseConcurrencySlot
+{{- end }}
+- Step:
+    Condition: '(trigger_judge = "true") and (model_access_denied = "true")'
+    Name: RF-Unauthorized
+{{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
+- Step:
+    Condition: '(trigger_judge = "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: LTQ-CircuitBreakerCheck
+- Step:
+    Condition: '(trigger_judge = "true") and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true") and ((ratelimit.LTQ-CircuitBreakerCheck.failed = true) or (ratelimit.LTQ-CircuitBreakerCheck.exceed.count > 0) or (ratelimit.LTQ-CircuitBreakerCheck.available.count = 0))'
+    Name: JS-resolve-model-location
+{{- end }}
+{{- if $quotasEnabled }}
+- Step:
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null) and (zero_primary_quota != "true")'
+    Name: LTQ-EnforceOnly
+- Step:
+    Condition: '(trigger_judge = "true") and (judge_quota_recheck_needed = "true") and (apiproduct.name != null) and ((zero_primary_quota = "true") or ((propertyset.config.preflight_prompt_guard = "true") and (prompt_char_len != null) and (prompt_char_len != "0")))'
+    Name: JS-resolve-model-location
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -526,6 +875,9 @@ buffer_size=50
 - Step:
     Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
     Name: LTQ-CircuitBreakerCount
+- Step:
+    Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+    Name: AM-model
 - Step:
     Condition: '((response.status.code = 429) or (response.status.code >= 500)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
     Name: JS-prepare-fallback-request
@@ -540,6 +892,188 @@ buffer_size=50
     Name: JS-apply-fallback-response
 {{- end -}}
 
+{{- define "javacallout_embedded_propertysets" -}}
+- Property:
+    .name: propertyset_config_b64
+    -Data: {{ include "generate_config_properties" . | b64enc }}
+- Property:
+    .name: propertyset_model_locations_b64
+    -Data: {{ include "generate_model_locations_properties" . | b64enc }}
+- Property:
+    .name: propertyset_monetization_rates_b64
+    -Data: {{ include "generate_monetization_rates_properties" . | b64enc }}
+- Property:
+    .name: propertyset_extract_expressions_b64
+    -Data: {{ include "generate_extract_expressions_properties" . | b64enc }}
+{{- end -}}
+
+{{- define "target_transport_fallback_faultrule" -}}
+{{- $quotasEnabled := or (not $.Values.features) (not $.Values.features.quotas) (not (hasKey $.Values.features.quotas "enabled")) (ne (printf "%v" $.Values.features.quotas.enabled) "false") -}}
+{{- $secondaryQuotaEnabled := and $quotasEnabled $.Values.features $.Values.features.quotas $.Values.features.quotas.secondary_window (eq (printf "%v" $.Values.features.quotas.secondary_window.enabled) "true") -}}
+{{- $monetizationEnabled := or (not $.Values.features) (not $.Values.features.monetization) (not (hasKey $.Values.features.monetization "enabled")) (ne (printf "%v" $.Values.features.monetization.enabled) "false") -}}
+{{- $modelArmorEnabled := and $.Values.features $.Values.features.model_armor (eq (printf "%v" $.Values.features.model_armor.enabled) "true") -}}
+{{- if or (not $.Values.features) (not $.Values.features.circuit_breaker) (ne $.Values.features.circuit_breaker.enabled false) }}
+- FaultRule:
+    .name: transport-fallback
+    -Data:
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Condition: '(fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: LTQ-CircuitBreakerCount
+      - Step:
+          Condition: '(!(stream = true) or (response.status.code = null)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: AM-model
+      - Step:
+          Condition: '(!(stream = true) or (response.status.code = null)) and (fallback_model != null) and (fallback_model != "") and (allow_fallbacks = "true")'
+          Name: JS-prepare-fallback-request
+      - Step:
+          Condition: '(fallback_ready = "true") and (fallback_use_google_iam = "true")'
+          Name: SC-FallbackGoogleIAM
+      - Step:
+          Condition: '(fallback_ready = "true") and (fallback_use_google_iam != "true")'
+          Name: SC-FallbackExternal
+      - Step:
+          Condition: 'fallback_ready = "true"'
+          Name: JS-apply-fallback-response
+      - Step:
+          Condition: 'fallback_succeeded = "true"'
+          Name: JS-calculate-tokens-non-streaming
+      {{- if $modelArmorEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (model_armor_response_enabled != "false") and (response_partial != null) and (response_partial != "")'
+          Name: SMR-SanitizeFallbackInFault
+      {{- end }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND")'
+          Name: JS-calculate-monetization-cost
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND")'
+          Name: DC-CaptureTokenCountsNonStreaming
+      {{- if $quotasEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND") and (((usage_total_tokens != null) and (usage_total_tokens != "0")) or ((judge_total_tokens != null) and (judge_total_tokens != "0"))) and (apiproduct.name != null)'
+          Name: LTQ-CountOnly
+      {{- if $secondaryQuotaEnabled }}
+      - Step:
+          Condition: '(fallback_succeeded = "true") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed != true) and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState != "MATCH_FOUND") and (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState != "MATCH_FOUND") and (((usage_total_tokens != null) and (usage_total_tokens != "0")) or ((judge_total_tokens != null) and (judge_total_tokens != "0"))) and (apiproduct.name != null)'
+          Name: LTQ-SecondaryCountOnly
+      {{- end }}
+      {{- end }}
+      - Step:
+          Condition: '(fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")'
+          Name: JS-inject-deidentified-finding
+      - Step:
+          Condition: '(fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND")'
+          Name: AM-CustomError
+      - Condition: (fault.category = "Transport") or (fault.name = "GatewayTimeout") or (fault.name = "ConnectTimeout") or (fault.name = "ServiceUnavailable") or (fault.name = "HostNotReachable") or (fault.name = "NoResolvedHost") or (fault.name = "UnresolvedHost") or (fault.name = "ErrorDnsLookupFailed") or (fault.name = "DnsLookupFailed") or (fault.name = "DNSLookupFailed") or (fault.name = "DNSLookupTimeout") or (fault.name = "UnexpectedEOFAtTarget") or (fault.name = "PrematurelyClosed") or (fault.name = "ConnectionResetByPeer") or (fault.name = "SslHandshakeFailed") or (fault.name = "SSLHandshakeFailed") or (fault.name = "GeneralSSLEngineProblem") or (fault.name = "NoActiveTargets") or (fault.name = "BadGateway") or (fault.name = "TargetConnectError") or ((callout_aborted != "true") and (response.status.code = null) and (fault.name != "RaiseFault") and (fault.name != "raisefault"))
+{{- end }}
+{{- end -}}
+
+{{- define "callout_abort_faultrule" -}}
+- FaultRule:
+    .name: callout-abort
+    -Data:
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Name: AM-CustomError
+      - Condition: callout_aborted = "true"
+{{- end -}}
+
+{{- define "default_fault_rule" -}}
+- DefaultFaultRule:
+    .name: default-fault-cleanup
+    -Data:
+      - AlwaysEnforce: true
+      {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+      - Step:
+          Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+          Name: RQ-ReleaseConcurrencySlot
+      {{- end }}
+      - Step:
+          Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+          Name: JS-inject-deidentified-finding
+      - Step:
+          Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+          Name: AM-CustomError
+{{- end -}}
+
+{{- define "default_fault_rule_map" -}}
+DefaultFaultRule:
+  .name: default-fault-cleanup
+  -Data:
+    - AlwaysEnforce: true
+    {{- if and $.Values.features $.Values.features.rate_limits (or (and $.Values.features.rate_limits.concurrency $.Values.features.rate_limits.concurrency.enabled) $.Values.features.rate_limits.enabled) }}
+    - Step:
+        Condition: (ratelimit.Q-ConcurrencyLimit.used.count != null) and (apigee.metrics.policy.RQ-ReleaseConcurrencySlot.timeTaken = null)
+        Name: RQ-ReleaseConcurrencySlot
+    {{- end }}
+    - Step:
+        Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+        Name: JS-inject-deidentified-finding
+    - Step:
+        Condition: (sanitized_error_applied != "true") and (fault.name != "RaiseFault") and (fault.name != "raisefault") and ((fallback_succeeded != "true") or (SanitizeModelResponse.SMR-SanitizeModelResponse.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeModelResponse.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.failed = true) or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.filterMatchState = "MATCH_FOUND") or (SanitizeModelResponse.SMR-SanitizeFallbackInFault.sdpFilterResult.deidentifyResult.matchState = "MATCH_FOUND"))
+        Name: AM-CustomError
+{{- end -}}
+
+{{- define "resolve_idp_jwt_algorithm" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $rawAlg := "RS256" -}}
+{{- if and $auth.idp_jwt (or (hasKey $auth.idp_jwt "algorithm") (hasKey $auth.idp_jwt "algorithms")) -}}
+  {{- $cfgAlg := default $auth.idp_jwt.algorithms $auth.idp_jwt.algorithm -}}
+  {{- if kindIs "slice" $cfgAlg -}}
+    {{- $rawAlg = $cfgAlg | join "," | trim -}}
+  {{- else if $cfgAlg -}}
+    {{- $rawAlg = printf "%v" $cfgAlg | trim -}}
+  {{- else -}}
+    {{- $rawAlg = "" -}}
+  {{- end -}}
+{{- end -}}
+{{- $cleanAlg := ($rawAlg | upper | replace " " "" | replace "\t" "") -}}
+{{- if not (regexMatch "^((RS256|RS384|RS512|PS256|PS384|PS512)(,(RS256|RS384|RS512|PS256|PS384|PS512))*|(ES256|ES384|ES512)(,(ES256|ES384|ES512))*)$" $cleanAlg) -}}
+  {{- fail (printf "features.auth.idp_jwt.algorithm %q is invalid: must specify asymmetric RSA (RS256/RS384/RS512/PS256/PS384/PS512) or ECDSA (ES256/ES384/ES512) algorithms without mixing ES* with RS*/PS* families" $rawAlg) -}}
+{{- end -}}
+{{- $cleanAlg -}}
+{{- end -}}
+
+{{- define "has_single_exact_idp_jwt_audience" -}}
+{{- $auth := dict -}}
+{{- if $.Values.auth -}}
+  {{- $auth = $.Values.auth -}}
+{{- else if and $.Values.features $.Values.features.auth -}}
+  {{- $auth = $.Values.features.auth -}}
+{{- end -}}
+{{- $aud := "" -}}
+{{- if and $auth.idp_jwt $auth.idp_jwt.audience -}}
+  {{- if kindIs "slice" $auth.idp_jwt.audience -}}
+    {{- $aud = $auth.idp_jwt.audience | join "," | trim -}}
+  {{- else -}}
+    {{- $aud = printf "%v" $auth.idp_jwt.audience | trim -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (ne $aud "") (not (contains "," $aud)) (not (contains "*" $aud)) -}}true{{- else -}}false{{- end -}}
+{{- end -}}
+
+{{- define "usd_to_micro" -}}
+{{- $clean := (printf "%v" . | trim | trimPrefix "$") -}}
+{{- printf "%.0f" (mulf ($clean | float64) 1000000) -}}
+{{- end -}}
+
+{{- define "positive_allow_count" -}}
+{{- $n := (printf "%v" . | trim | int64) -}}
+{{- if gt $n 0 -}}{{ $n }}{{- else -}}1{{- end -}}
+{{- end -}}
+
 {{- define "blank" -}}{{- end -}}
-
-

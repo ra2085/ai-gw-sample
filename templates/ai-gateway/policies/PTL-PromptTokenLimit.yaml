@@ -1,0 +1,13 @@
+PromptTokenLimit:
+  .continueOnError: false
+  .enabled: true
+  .name: PTL-PromptTokenLimit
+  DisplayName: PTL-PromptTokenLimit
+  Identifier:
+    .ref: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens $.Values.features.rate_limits.prompt_tokens.identifier_ref }}{{ $.Values.features.rate_limits.prompt_tokens.identifier_ref }}{{ else }}rate_limit_client_id{{ end }}
+  Rate:
+    .ref: prompt_token_rate_limit
+    -Data: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens $.Values.features.rate_limits.prompt_tokens.rate }}{{ $.Values.features.rate_limits.prompt_tokens.rate }}{{ else }}100000pm{{ end }}
+  UserPromptSource: '{extracted_prompt}'
+  IgnoreUnresolvedVariables: true
+  UseEffectiveCount: {{ if and $.Values.features $.Values.features.rate_limits $.Values.features.rate_limits.prompt_tokens (hasKey $.Values.features.rate_limits.prompt_tokens "use_effective_count") (ne $.Values.features.rate_limits.prompt_tokens.use_effective_count nil) }}{{ $.Values.features.rate_limits.prompt_tokens.use_effective_count }}{{ else }}false{{ end }}

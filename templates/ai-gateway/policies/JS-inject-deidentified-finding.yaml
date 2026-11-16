@@ -10,5 +10,6 @@ JavaCallout:
     - Property:
         .name: error_prefix
         -Data: armor.
+    {{- include "javacallout_embedded_propertysets" . | nindent 4 }}
   ClassName: com.google.apigee.callouts.FallbackAndErrorCallout
   ResourceURL: java://ai-gateway-callouts.jar

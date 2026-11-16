@@ -43,12 +43,12 @@ Before packaging and deploying to Apigee, validate that your `values.yaml` confi
 # 1. Validate XML template rendering
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --dry-run xml
 
 # 2. Preview API Product (llmOperationGroup) & Developer App upserts (zero network calls)
 bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV" \
     --dry-run
@@ -67,14 +67,14 @@ export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
 # 1. (Optional — Day 1 or when adding new personas/catalog models)
 # Safely upsert Apigee API Products (llmOperationGroup) & Developer Apps
 bash ./scripts/sync-personas.sh \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --org "$PROJECT_ID" \
     --env "$APIGEE_ENV"
 
 # 2. Render bundle from template
 apigee-go-gen render apiproxy \
     --template ./templates/ai-gateway/apiproxy.yaml \
-    --values ./templates/ai-gateway/values.yaml \
+    --values ./values.yaml \
     --output ./out/ai-gateway.zip
 
 # 3. Deploy to Apigee

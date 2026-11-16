@@ -148,7 +148,7 @@ On every request, the gateway independently resolves the **Request Template** an
 
 | Priority | Source (`X-Gateway-Model-Armor-Source`) | How It Is Configured |
 | :---: | :--- | :--- |
-| **1 (Highest)** | **`identity_claim`** | Explicit claim in the verified IdP JWT, `/userinfo` response, or OAuth token (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). |
+| **1 (Highest)** | **`identity_claim`** | Explicit same-project template claim in the verified IdP JWT, `/userinfo` response, or OAuth token (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). Set `features.model_armor.allow_claim_bypass: false` to disallow `"none"` bypasses and keep admin `identity_rules` non-overridable. |
 | **2** | **`identity_rule`** | Matches caller identity (`user_id`, `email`, SPIFFE `principal://...`, or `team:<department>`) against `features.model_armor.identity_rules` using linear-time `*` glob matching ranked by specificity. |
 | **3** | **`app_attribute`** | Custom attribute on the Apigee Developer App (`model_armor_request_template`, `model_armor_response_template`, or `model_armor_template`). |
 | **4** | **`persona:<name>`** | Persona-level config under `features.auth.personas.<name>.model_armor` (or `features.model_armor.personas.<name>`). |
@@ -157,8 +157,8 @@ On every request, the gateway independently resolves the **Request Template** an
 
 ### Flexible Template Formats & Phase Bypass (`"none"`)
 
-* **Short ID, Regional Path, or Full Resource URI:** Every template field accepts a short template ID (`strict-pci-dlp`), a regional shorthand (`us-east1/strict-pci-dlp`), or a full cross-project resource name (`projects/sec-ops-prod/locations/us-central1/templates/strict-pci-dlp`).
-* **Selective Phase Bypass (`"none"` / `"disabled"`):** Setting `request_template: "none"` or `response_template: "none"` dynamically skips Model Armor execution for that specific phase without disabling the other phase.
+* **Short ID, Regional Path, or Full Resource URI:** Admin-configured template fields accept a short template ID (`strict-pci-dlp`), a regional shorthand (`us-east1/strict-pci-dlp`), or a full cross-project resource name (`projects/sec-ops-prod/locations/us-central1/templates/strict-pci-dlp`). Token-supplied `identity_claim` overrides are restricted to the gateway's own project (or `allowed_gcp_projects`).
+* **Selective Phase Bypass (`"none"` / `"disabled"`):** Setting `request_template: "none"` or `response_template: "none"` dynamically skips Model Armor execution for that specific phase without disabling the other phase (controlled for token claims via `features.model_armor.allow_claim_bypass`, default `true`).
 * **End-to-End Audit Headers & Block Diagnostics:** Every response includes `X-Gateway-Model-Armor-Request-Template`, `X-Gateway-Model-Armor-Response-Template`, and `X-Gateway-Model-Armor-Source`. When a prompt or model response is blocked (`HTTP 403`), the gateway returns `X-Gateway-Model-Armor-Phase` (`request` or `response`), `X-Gateway-Model-Armor-Template`, the resolved persona, and any Sensitive Data Protection `deidentifiedData` redaction preview.
 
 
