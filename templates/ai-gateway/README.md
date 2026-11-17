@@ -92,6 +92,7 @@ models:
     target: "gemini"
     format: "gemini"
     region: "europe-west1"                      # Automatically routes to europe-west1-aiplatform.googleapis.com
+    # project_id: "eu-vertex-spoke"             # Optional: Route this model to a dedicated GCP project (Persona > Model > Gateway)
     pricing:
       input_rate: 2.000
       output_rate: 12.000
@@ -122,6 +123,7 @@ features:
     personas:
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business-*"]
+        # project_id: "biz-vertex-prod"         # Optional: Route this persona's Vertex AI calls to a dedicated GCP project
         models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
         quota:
           limit: 50000
