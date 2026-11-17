@@ -108,19 +108,14 @@ Select a routing strategy below to see how it is configured in `values.yaml` and
         publisher: "anthropic"
         region: "us-east5"
         project_id: "vertex-anthropic-hub"        # Default project when caller's persona has no project_id
-      - name: "medlm-tuned-v1"
-        publisher: "google"
-        region: "us-central1"
-        project_id: "clinical-ml-prod"
-        pin_project: true                         # Pinned: always routes to clinical-ml-prod regardless of caller persona
     ```
 
-    **Deterministic Project Precedence (Across `/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, `/ai-gateway`, and Fallback Chains):**
-    1. `models[].project_id` when `models[].pin_project: true`
-    2. `exceptions[].project_id` (active, non-expired identity/team exception rule)
-    3. `personas.<persona>.project_id` (**Persona wins over unpinned Model** for clean department billing)
-    4. `models[].project_id`
-    5. `gateway.project_id`
+    **Default Project Precedence (Across `/v1/messages`, `/v1/chat/completions`, `/v1/embeddings`, `/ai-gateway`, and Fallback Chains):**
+    1. **`personas.<persona>.project_id`** — Persona wins over Model for clean department billing & quota isolation
+    2. **`models[].project_id`** — Per-model Vertex AI project (when the caller's persona has no `project_id`)
+    3. **`gateway.project_id`** — Default gateway hub project
+
+    *Optional advanced overrides:* Set `pin_project: true` alongside `models[].project_id` to lock a fine-tuned/provisioned model to its host project regardless of persona, or set `project_id` on an active `exceptions[]` rule to route a specific identity/team above its persona default.
 
     !!! note "Cross-Project IAM Requirement"
         Grant the Apigee proxy deployment Service Account `roles/aiplatform.user` on each target Vertex AI spoke project (`gcloud projects add-iam-policy-binding <SPOKE_PROJECT_ID> --member="serviceAccount:<APIGEE_RUNTIME_SA>" --role="roles/aiplatform.user"`). Circuit-breaker counters (`cb_identifier`) are automatically isolated per target project (`<model>:proj:<project_id>`), and cross-persona project spoofing on `/ai-gateway` is blocked with `HTTP 403`.
