@@ -22,6 +22,10 @@ ExtractVariables:
         .name: reasoning_tokens
         .type: integer
         JSONPath: $.usage.completion_tokens_details.reasoning_tokens
+    - Variable:
+        .name: upstream_total_tokens
+        .type: integer
+        JSONPath: $.usage.total_tokens
   Source:
     .clearPayload: false
     -Data: response
