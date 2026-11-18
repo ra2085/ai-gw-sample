@@ -193,6 +193,12 @@ function parseCleanRate(rawStr, fallbackVal, minExclusive) {
     return v;
 }
 
+function normalizeOaiStreamOut(inT, outT, reasoningT, totalT) {
+    if (reasoningT <= 0) return outT;
+    if (totalT > 0 && totalT >= (inT + outT + reasoningT)) return outT + reasoningT;
+    return Math.max(outT, reasoningT);
+}
+
 function computeJudgeStreamCost(defaultMarkup) {
     var jm = getVar("judge_model") || "gemini-2.5-flash-lite";
     var bareJm = jm.indexOf("/") !== -1 ? jm.split("/").slice(1).join("/") : jm;
@@ -796,8 +802,10 @@ function handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
     if (parsedEvent.usage) {
         var inT = parsedEvent.usage.prompt_tokens || 0;
         var cachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
-        var outT = parsedEvent.usage.completion_tokens || 0;
+        var rawOutT = parsedEvent.usage.completion_tokens || 0;
         var reasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+        var rawTotalT = parsedEvent.usage.total_tokens || 0;
+        var outT = normalizeOaiStreamOut(inT, rawOutT, reasoningT, rawTotalT);
         if (inT > 0 || outT > 0 || cachedT > 0 || reasoningT > 0) {
             setVar("saved_stream_prompt_tokens", String(inT));
             setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, inT - cachedT)));
@@ -805,7 +813,7 @@ function handleNativeOpenAiFrame(parsedEvent, eventStr, tokensAlreadyCounted, fr
             setVar("saved_stream_completion_tokens", String(outT));
             setVar("saved_stream_thinking_tokens", String(reasoningT));
         }
-        if (outT > 0 || (parsedEvent.usage.total_tokens || 0) > 0) {
+        if (outT > 0 || rawTotalT > 0) {
             hasInlineCompleteUsage = true;
         }
     }
@@ -1088,8 +1096,10 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
         if (parsedEvent.usage) {
             var oInT = parsedEvent.usage.prompt_tokens || 0;
             var oCachedT = (parsedEvent.usage.prompt_tokens_details && parsedEvent.usage.prompt_tokens_details.cached_tokens) || 0;
-            var oOutT = parsedEvent.usage.completion_tokens || 0;
+            var oRawOutT = parsedEvent.usage.completion_tokens || 0;
             var oReasoningT = (parsedEvent.usage.completion_tokens_details && parsedEvent.usage.completion_tokens_details.reasoning_tokens) || 0;
+            var oTotalT = parsedEvent.usage.total_tokens || 0;
+            var oOutT = normalizeOaiStreamOut(oInT, oRawOutT, oReasoningT, oTotalT);
             if (oInT > 0 || oOutT > 0 || oCachedT > 0 || oReasoningT > 0) {
                 setVar("saved_stream_prompt_tokens", String(oInT));
                 setVar("saved_stream_uncached_prompt_tokens", String(Math.max(0, oInT - oCachedT)));
@@ -1097,7 +1107,7 @@ function handleTranscodedToClaudeFrame(parsedEvent, modelName, tokensAlreadyCoun
                 setVar("saved_stream_completion_tokens", String(oOutT));
                 setVar("saved_stream_thinking_tokens", String(oReasoningT));
             }
-            if (oOutT > 0 || (parsedEvent.usage.total_tokens || 0) > 0) {
+            if (oOutT > 0 || oTotalT > 0) {
                 hasInlineOaiUsage = true;
             }
         }
