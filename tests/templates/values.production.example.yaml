@@ -1,0 +1,251 @@
+# Copyright 2027 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ==============================================================================
+# Apigee AI Gateway - Production Configuration Example
+# ==============================================================================
+
+gateway:
+  name: "ai-gateway"
+  displayName: "Apigee Enterprise AI Gateway"
+  description: "Enterprise AI Gateway with Smart Routing, LLM Judge, Model Armor Security, and Token Monetization"
+  project_id: "your-gcp-project-id"
+
+endpoints:
+  claude_messages:
+    enabled: true
+    name: "claude-messages"
+    base_path: "/v1/messages"
+
+  gemini_native:
+    enabled: true
+    name: "gemini-native"
+    base_path: "/ai-gateway"
+
+  openai_compat:
+    enabled: true
+    name: "openai-compat"
+    base_path: "/v1/chat/completions"
+
+  openai_embeddings:
+    enabled: true
+    name: "openai-embeddings"
+    base_path: "/v1/embeddings"
+
+  models_catalog:
+    enabled: true
+    name: "claude-models"
+    base_path: "/v1/models"
+
+features:
+  auth:
+    enabled: true
+    allow_bearer_api_key: true
+    apigee_oauth:
+      enabled: true
+    agent_identity:
+      enabled: true
+      tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
+      allowed_trust_domain: ".system.id.goog"
+      allowed_email_suffix: ".iam.gserviceaccount.com"
+      persona: "agent"
+      token_ttl_ms: 3600000
+    idp_opaque:
+      enabled: false
+    idp_jwt:
+      enabled: false
+    personas:
+      knowledge-worker:
+        match_claims: ["business-*", "knowledge-worker", "general"]
+        client_id: "YOUR_PERSONA_CONSUMER_KEY"
+      developer:
+        match_claims: ["swe-*", "engineering", "developer"]
+        client_id: "YOUR_PERSONA_CONSUMER_KEY"
+      it:
+        match_claims: ["sre-*", "devops", "it"]
+        client_id: "YOUR_PERSONA_CONSUMER_KEY"
+      agent:
+        match_claims: ["principal://agents.global.org-*.system.id.goog/*", "*@*.iam.gserviceaccount.com", "agent"]
+        client_id: "YOUR_PERSONA_CONSUMER_KEY"
+
+  quotas:
+    enabled: true
+    default_quota: 1000000
+
+  monetization:
+    enabled: true
+    enforce_apigee_wallet: false
+    default_currency: "USD"
+    default_markup: 1.0
+
+  model_armor:
+    enabled: true
+    location: "us-central1"
+    template: "ai-gw-template"
+    request_template: "ai-gw-template"
+    response_template: "ai-gw-template"
+
+  llm_judge:
+    enabled: true
+    classifier_model: "gemini-3.1-flash-lite"
+
+  circuit_breaker:
+    enabled: true
+    shared_name: "llm-circuit-breaker"
+    error_threshold: 3
+    window_interval: 1
+    window_unit: "minute"
+
+models:
+  # --- Gemini 3.x Series ---
+  - name: "gemini-3.7-flash"
+    displayName: "Gemini 3.7 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-06-01T00:00:00Z"
+    pricing:
+      input_rate: 1.500
+      output_rate: 9.000
+      cache_read_rate: 0.150
+
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    is_default: true
+    created_at: "2026-03-01T00:00:00Z"
+    pricing:
+      input_rate: 1.500
+      output_rate: 9.000
+      cache_read_rate: 0.150
+
+  - name: "gemini-3.1-pro-preview"
+    displayName: "Gemini 3.1 Pro Preview"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-05-01T00:00:00Z"
+    pricing:
+      input_rate: 2.000
+      output_rate: 12.000
+      cache_read_rate: 0.200
+
+  - name: "gemini-3.1-flash-lite"
+    displayName: "Gemini 3.1 Flash-Lite"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2026-05-07T00:00:00Z"
+    pricing:
+      input_rate: 0.250
+      output_rate: 1.500
+      cache_read_rate: 0.025
+
+  # --- Gemini 2.5 Series ---
+  - name: "gemini-2.5-pro"
+    displayName: "Gemini 2.5 Pro"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2025-06-01T00:00:00Z"
+    pricing:
+      input_rate: 1.250
+      output_rate: 10.000
+      cache_read_rate: 0.125
+
+  - name: "gemini-2.5-flash"
+    displayName: "Gemini 2.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    created_at: "2025-06-01T00:00:00Z"
+    pricing:
+      input_rate: 0.300
+      output_rate: 2.500
+      cache_read_rate: 0.030
+
+  # --- Anthropic Claude Models ---
+  - name: "claude-haiku-4-5"
+    displayName: "Claude Haiku 4.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "us-east5"
+    created_at: "2025-10-01T00:00:00Z"
+    pricing:
+      input_rate: 1.000
+      output_rate: 5.000
+      cache_read_rate: 0.100
+      cache_write_rate: 1.250
+
+  # --- Vertex AI Text Embedding Models ---
+  - name: "text-embedding-005"
+    displayName: "Vertex Text Embedding 005"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "gemini"
+    region: "us-central1"
+    created_at: "2024-11-01T00:00:00Z"
+    pricing:
+      input_rate: 0.025
+      output_rate: 0.000
+
+routing:
+  tiers:
+    low: "gemini-3.1-flash-lite"
+    medium: "gemini-3.5-flash"
+    high: "gemini-2.5-pro"
+    max: "claude-haiku-4-5"
+  tasks:
+    coding: "gemini-2.5-pro"
+    reasoning: "gemini-2.5-pro"
+    summarization: "gemini-3.1-flash-lite"
+    simple_chat: "gemini-3.5-flash"
+    classifier_model: "gemini-3.1-flash-lite"
+  aliases:
+    "gemini-1.5-flash": "gemini-3.5-flash"
+    "gemini-1.5-flash-001": "gemini-3.5-flash"
+    "gemini-1.5-pro": "gemini-2.5-pro"
+    "gemini-1.5-pro-001": "gemini-2.5-pro"
+    "gemini-3.1-pro": "gemini-3.1-pro-preview"
+    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
+    "claude-3-5-sonnet": "claude-haiku-4-5"
+    "claude-3-5-haiku": "claude-haiku-4-5"
+    "claude-sonnet-4-6": "claude-haiku-4-5"
+    "claude-sonnet-4-5": "claude-haiku-4-5"
+    "gpt-4o": "gemini-2.5-pro"
+    "gpt-4o-mini": "gemini-3.1-flash-lite"
+    "text-embedding-3-small": "text-embedding-005"
+    "text-embedding-3-large": "text-embedding-005"
+    "text-embedding-ada-002": "text-embedding-005"
+    "auto": "gemini-3.5-flash"
+    "gateway/auto": "gemini-3.5-flash"
+    "auto:judge": "gemini-3.5-flash"
+    "gateway/judge": "gemini-3.5-flash"
+
+defaults:
+  model: "gemini-3.5-flash"
+  fallback: "gemini-3.1-flash-lite"
+  target: "gemini"
+  publisher: "google"
+  format: "gemini"
+  region: "global"

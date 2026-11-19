@@ -112,3 +112,16 @@ The documentation is organized into four task-oriented sections:
 | **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI & Anthropic (`provider_keys` PropertySet), token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
 | **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md) | Complete schema table, feature toggles, and client SDK compatibility matrix. |
 | **4. Analytics & Operations** | • [Analytics & Looker Studio Dashboards](docs/operations/looker-studio-dashboard.md)<br>• [Telemetry & Headers](docs/operations/telemetry.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Looker Studio persona dashboards (multi-bucket FinOps chargeback, Prompt Cache ROI, team/peer insights, developer self-service, security & quota governance, Judge ROI), response headers (`X-Gateway-*`, `x-quota-*`), and CI/CD deployment. |
+
+---
+
+## License
+
+Copyright 2027 Google LLC.
+
+Licensed under the **Apache License, Version 2.0** (the "License"); you may not use the files in this repository except in compliance with the License. You may obtain a copy of the License at [LICENSE](LICENSE) or [https://www.apache.org/licenses/LICENSE-2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an **"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND**, either express or implied. See the [LICENSE](LICENSE) for the specific language governing permissions and limitations under the License.
+
+> **Disclaimer:** This repository is a reference architecture and sample implementation; it is not an officially supported Google product.
+
