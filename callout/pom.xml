@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright 2027 Google LLC
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.google.apigee.callouts</groupId>
+  <artifactId>ai-gateway-callouts</artifactId>
+  <version>1.0</version>
+  <packaging>jar</packaging>
+
+  <name>Apigee AI Gateway Java Callouts</name>
+  <description>
+    Thread-safe, zero-waste Apigee X and Apigee Hybrid Java Callouts (BaseCallout)
+    for the Apigee Multi-Model AI Gateway.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.release>11</maven.compiler.release>
+    <jackson.core.version>2.17.0</jackson.core.version>
+    <junit.jupiter.version>5.13.1</junit.jupiter.version>
+  </properties>
+
+  <dependencies>
+    <!-- Jackson Streaming Core (Zero-reflection, thread-local BufferRecycler, STRICT_DUPLICATE_DETECTION) -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>${jackson.core.version}</version>
+    </dependency>
+
+    <!-- Apigee Gateway Runtime APIs (provided by Apigee MP at runtime) -->
+    <dependency>
+      <groupId>com.apigee.gateway.libraries</groupId>
+      <artifactId>message-flow</artifactId>
+      <version>1.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.apigee.infra.libraries</groupId>
+      <artifactId>expressions</artifactId>
+      <version>1.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- JUnit 5 for Unit, Concurrency, Security & Performance Skill Validation -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.jupiter.version}</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>ai-gateway-callouts</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>11</release>
+          <encoding>UTF-8</encoding>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.4</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <minimizeJar>false</minimizeJar>
+              <relocations>
+                <relocation>
+                  <pattern>com.fasterxml.jackson.core</pattern>
+                  <shadedPattern>com.google.apigee.callouts.shaded.jackson.core</shadedPattern>
+                </relocation>
+              </relocations>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/versions/**</exclude>
+                    <exclude>META-INF/maven/**</exclude>
+                    <exclude>META-INF/services/**</exclude>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>module-info.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <!--
+    Default builds omit <repositories> so environments using an internal artifact mirror
+    never contact external registries directly.
+    On clean external machines / CI runners without cached Apigee SPI JARs, activate:
+      mvn -f callout/pom.xml package -Ppublic-apigee-repo
+    (./tests/run.sh activates this profile automatically when message-flow-1.0.0.jar is
+    absent from the local Maven repository and no mirror is configured in settings.xml.)
+  -->
+  <profiles>
+    <profile>
+      <id>public-apigee-repo</id>
+      <repositories>
+        <repository>
+          <id>apigee-java-callout-dependencies</id>
+          <url>https://us-maven.pkg.dev/apigee-release/apigee-java-callout-dependencies</url>
+          <releases>
+            <enabled>true</enabled>
+          </releases>
+          <snapshots>
+            <enabled>false</enabled>
+          </snapshots>
+        </repository>
+      </repositories>
+    </profile>
+  </profiles>
+</project>

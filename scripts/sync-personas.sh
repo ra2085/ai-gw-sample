@@ -1,4 +1,18 @@
 #!/usr/bin/env bash
+# Copyright 2027 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # ==============================================================================
 # Apigee AI Gateway — Safe, Additive Persona & API Product Upsert Tool
 # ==============================================================================
@@ -138,10 +152,10 @@ if [[ -z "$BUNDLE_DIR" ]]; then
     fi
     if command -v apigee-go-gen &>/dev/null; then
         APIGEE_GEN="apigee-go-gen"
+    elif [[ -f "/usr/local/bin/apigee-go-gen" ]]; then
+        APIGEE_GEN="/usr/local/bin/apigee-go-gen"
     elif [[ -f "$REPO_ROOT/bin/apigee-go-gen" ]]; then
         APIGEE_GEN="$REPO_ROOT/bin/apigee-go-gen"
-    elif [[ -f "$REPO_ROOT/apigeegg/apigee-go-gen/bin/apigee-go-gen" ]]; then
-        APIGEE_GEN="$REPO_ROOT/apigeegg/apigee-go-gen/bin/apigee-go-gen"
     else
         echo -e "${RED}✗ Error: 'apigee-go-gen' not found in PATH. Provide --bundle <dir> or install apigee-go-gen.${NC}" >&2
         exit 1
@@ -215,7 +229,7 @@ fetch_gcloud_token() {
     if [[ -n "${GCLOUD_TOKEN_CMD:-}" ]]; then
         eval "$GCLOUD_TOKEN_CMD" 2>/dev/null || true
     else
-        CLOUDSDK_METRICS_ENVIRONMENT="${CLOUDSDK_METRICS_ENVIRONMENT:+$CLOUDSDK_METRICS_ENVIRONMENT }datacloud.antigravity" gcloud auth print-access-token 2>/dev/null || true
+        gcloud auth print-access-token 2>/dev/null || true
     fi
 }
 

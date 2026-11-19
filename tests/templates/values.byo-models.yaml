@@ -1,0 +1,285 @@
+# Copyright 2027 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# ==============================================================================
+# Apigee AI Gateway - BYO Models, Auth Personas & Custom URLs Test Template
+# ==============================================================================
+
+gateway:
+  name: "ai-gateway"
+  display_name: "Apigee Enterprise AI Gateway"
+  project_id: "your-gcp-project-id"
+
+endpoints:
+  claude_messages:
+    enabled: true
+    name: "claude-messages"
+    base_path: "/v1/messages"
+
+  gemini_native:
+    enabled: true
+    name: "gemini-native"
+    base_path: "/ai-gateway"
+
+  openai_compat:
+    enabled: true
+    name: "openai-compat"
+    base_path: "/v1/chat/completions"
+
+  openai_embeddings:
+    enabled: true
+    name: "openai-embeddings"
+    base_path: "/v1/embeddings"
+
+  models_catalog:
+    enabled: true
+    name: "claude-models"
+    base_path: "/v1/models"
+
+features:
+  auth:
+    enabled: true
+    allow_bearer_api_key: true
+    apigee_oauth:
+      enabled: true
+    agent_identity:
+      enabled: true
+      tokeninfo_url: "https://your-apigee-host.example.com/mock/oauth2/tokeninfo"
+      allowed_trust_domain: ".system.id.goog"
+      allowed_email_suffix: ".iam.gserviceaccount.com"
+      persona: "agent"
+      token_ttl_ms: 3600000
+    idp_opaque:
+      enabled: true
+      userinfo_url: "https://your-apigee-host.example.com/mock/oauth2/v1/userinfo"
+      user_claim: "email"
+      persona_claim: "role"
+      team_claim: "department"
+      quota_override_claim: "ai_quota_override"
+      token_ttl_ms: 3600000
+    personas:
+      knowledge-worker:
+        match_claims: ["business-*", "knowledge-worker", "general"]
+        client_id: "__API_KEY__"
+        model_armor:
+          request_template: "ai-gw-template"
+          response_template: "ai-gw-template"
+      developer:
+        match_claims: ["swe-*", "engineering", "developer"]
+        client_id: "__DEV_KEY__"
+        model_armor:
+          request_template: "ai-gw-template"
+          response_template: "gap_template"
+      it:
+        match_claims: ["sre-*", "devops", "it"]
+        client_id: "__IT_KEY__"
+        model_armor:
+          request_template: "gap_template"
+          response_template: "none"
+      agent:
+        match_claims: ["principal://agents.global.org-*.system.id.goog/*", "*@*.iam.gserviceaccount.com", "agent"]
+        client_id: "__AGENT_KEY__"
+        model_armor:
+          request_template: "__STRICT_ARMOR_TEMPLATE__"
+          response_template: "none"
+      matrix-wallet:
+        match_claims: ["*@matrix-team-*.iam.gserviceaccount.com", "*@matrix-topup-*.iam.gserviceaccount.com"]
+        client_id: "__API_KEY__"
+        quota:
+          limit_usd: 0.05
+          interval: 1
+          unit: "day"
+        team_budget:
+          limit_usd: 0.10
+          interval: 7
+          unit: "day"
+        model_armor:
+          request_template: "ai-gw-template"
+          response_template: "none"
+    exceptions:
+      - match: ["alice-exc-*@matrix-*.iam.gserviceaccount.com"]
+        quota_limit_usd: 0.20
+        expires_at: "2099-12-31T23:59:59Z"
+      - match: ["alice-bypass-*@matrix-*.iam.gserviceaccount.com"]
+        quota_limit_usd: 0.20
+        bypass_team_budget: true
+        expires_at: "2099-12-31T23:59:59Z"
+      - match: ["team:project:matrix-topup-*"]
+        team_budget_limit_usd: 0.25
+        expires_at: "2099-12-31T23:59:59Z"
+
+  quotas:
+    enabled: true
+    default_quota: 100000000
+    secondary_window:
+      enabled: true
+      allow_count: 100000000
+      interval: 7
+      time_unit: "day"
+
+  monetization:
+    enabled: true
+    enforce_apigee_wallet: false
+
+  model_armor:
+    enabled: true
+    location: "us-central1"
+    template: "ai-gw-template"
+    request_template: "ai-gw-template"
+    response_template: "ai-gw-template"
+    identity_rules:
+      - match: ["finance-*@*.iam.gserviceaccount.com", "team:pci-compliance"]
+        request_template: "__STRICT_ARMOR_TEMPLATE__"
+        response_template: "__STRICT_ARMOR_TEMPLATE__"
+      - match: ["principal://agents.global.org-123456789012.system.id.goog/*/reasoningEngines/deep-research-*"]
+        request_template: "gap_template"
+        response_template: "none"
+
+  llm_judge:
+    enabled: true
+    classifier_model: "gemini-3.1-flash-lite"
+
+  circuit_breaker:
+    enabled: true
+    error_threshold: 3
+    window_interval: 1
+    window_unit: "minute"
+
+models:
+  - name: "gemini-2.5-flash"
+    displayName: "Gemini 2.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    is_default: true
+    pricing:
+      input_rate: 0.300
+      output_rate: 2.500
+      cache_read_rate: 0.030
+
+  - name: "gemini-3.5-flash"
+    displayName: "Gemini 3.5 Flash"
+    publisher: "google"
+    target: "gemini"
+    format: "gemini"
+    region: "global"
+    pricing:
+      input_rate: 1.500
+      output_rate: 9.000
+      cache_read_rate: 0.150
+
+  - name: "claude-haiku-4-5"
+    displayName: "Claude 4.5 Haiku"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "us-east5"
+    pricing:
+      input_rate: 1.000
+      output_rate: 5.000
+      cache_read_rate: 0.100
+      cache_write_rate: 1.250
+
+  - name: "qwen-2.5-coder"
+    displayName: "Qwen 2.5 Coder (Vertex AI Model Garden MaaS)"
+    publisher: "qwen"
+    target: "gemini-openai-compat"
+    format: "openai"
+    region: "global"
+    upstream_model: "google/gemini-2.5-flash"
+    pricing:
+      input_rate: 0.200
+      output_rate: 0.600
+      cache_read_rate: 0.020
+
+  - name: "gpt-4o-mini"
+    displayName: "GPT-4o Mini (Direct OpenAI Provider)"
+    publisher: "openai"
+    target: "openai-custom"
+    format: "openai"
+    custom_url: "https://your-apigee-host.example.com/mock/v1/chat/completions"
+    openai_org_id: "org-ai-gateway-test"
+    openai_project_id: "proj-ai-gateway-test"
+    auth:
+      type: "api_key"
+      token_ref: "propertyset.provider_keys.openai_api_key"
+      token: "sk-mock-openai-direct-key"
+    pricing:
+      input_rate: 0.150
+      output_rate: 0.600
+      cache_read_rate: 0.075
+
+  - name: "my-vllm-model"
+    displayName: "Llama 3 (Self-Hosted Cloud Run Mock)"
+    publisher: "custom"
+    target: "openai-custom"
+    format: "openai"
+    custom_url: "https://your-apigee-host.example.com/mock/v1/chat/completions"
+    pricing:
+      input_rate: 0.200
+      output_rate: 0.500
+      cache_read_rate: 0.020
+
+  - name: "claude-on-bedrock"
+    displayName: "Claude 4.5 Sonnet (BYO / Direct Anthropic Mock)"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    custom_url: "https://your-apigee-host.example.com/mock/v1/messages"
+    anthropic_version: "2023-06-01"
+    anthropic_beta: "prompt-caching-2024-07-31"
+    auth:
+      type: "api_key"
+      header_name: "x-api-key"
+      token_ref: "propertyset.provider_keys.anthropic_api_key"
+      token: "sk-ant-mock-direct-key"
+    pricing:
+      input_rate: 3.000
+      output_rate: 15.000
+      cache_read_rate: 0.300
+      cache_write_rate: 3.750
+
+  - name: "deepseek-r1-custom"
+    displayName: "DeepSeek R1 (Custom vLLM OpenAI-Compatible)"
+    publisher: "custom"
+    target: "openai-custom"
+    format: "openai"
+    custom_url: "https://your-apigee-host.example.com/mock/v1/chat/completions"
+    pricing:
+      input_rate: 0.550
+      output_rate: 2.190
+      cache_read_rate: 0.140
+
+  - name: "byo-gemini-model"
+    displayName: "Vertex AI Text Embedding 005 (:predict)"
+    publisher: "google"
+    target: "gemini-openai-compat"
+    format: "openai"
+    region: "us-central1"
+    upstream_model: "text-embedding-005"
+    pricing:
+      input_rate: 0.025
+      output_rate: 0.000
+
+routing:
+  tiers:
+    low: "gemini-2.5-flash"
+    medium: "gemini-2.5-flash"
+    high: "claude-haiku-4-5"
+    max: "claude-haiku-4-5"
+
+defaults:
+  model: "gemini-2.5-flash"
+  fallback: "gemini-2.5-flash"
