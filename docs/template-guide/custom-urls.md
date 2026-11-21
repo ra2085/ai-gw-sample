@@ -290,13 +290,13 @@ apigeecli res create \
     --name provider_keys \
     --type properties \
     --respath ./provider_keys.properties \
-    --default-token
+    -t "$(gcloud auth print-access-token)"
 
 # Delete the local plaintext file once uploaded
 rm ./provider_keys.properties
 ```
 
-*(To rotate a key later without redeploying the proxy, run `apigeecli res update --org "$PROJECT_ID" --env "$APIGEE_ENV" --name provider_keys --type properties --respath ./provider_keys.properties --default-token`).*
+*(To rotate a key later without redeploying the proxy, run `apigeecli res update --org "$PROJECT_ID" --env "$APIGEE_ENV" --name provider_keys --type properties --respath ./provider_keys.properties -t "$(gcloud auth print-access-token)"`).*
 
 ### Step 3: Reference the PropertySet key in `values.yaml`
 

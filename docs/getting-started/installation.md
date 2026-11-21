@@ -91,8 +91,11 @@ export APIGEE_ENV="eval"
 
 gcloud config set project "$PROJECT_ID"
 gcloud auth login
-gcloud auth application-default login
 ```
+
+> [!TIP]
+> **Do I need `gcloud auth application-default login` (ADC)?**
+> **No** for manual setup, `sync-personas.sh`, `apigeecli -t "$(gcloud auth print-access-token)"`, or calling the deployed gateway with an Apigee API key / Bearer token. ADC is **only** needed for headless CI/CD pipelines using Workload Identity (`apigeecli --default-token`), Terraform, or Cloud Run / GKE / Agent Engine workloads authenticating via Option 3 (`agent_identity`).
 
 ---
 
@@ -133,6 +136,7 @@ Apigee captures real-time token metrics, micro-transaction costs, and identity a
 Run this loop once per organization to create all **18 required Data Collectors** (covering granular token types, per-type USD costs, model routing, and identity attribution):
 
 ```bash
+TOKEN="$(gcloud auth print-access-token)"
 for dc in \
   "dc_prompt_token_count:INTEGER" \
   "dc_uncached_prompt_token_count:INTEGER" \
@@ -153,7 +157,7 @@ for dc in \
   "dc_identity_persona:STRING" \
   "dc_identity_team:STRING"; do
   IFS=":" read -r name type <<< "$dc"
-  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" -t "$TOKEN" || true
 done
 ```
 

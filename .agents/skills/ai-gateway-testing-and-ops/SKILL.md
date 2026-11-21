@@ -35,8 +35,13 @@ Always run tests through `./tests/run.sh` from the repository root. Its `ensure_
 ./tests/run.sh quickstart                  # Render & schema-validate values.quickstart.yaml locally
 ```
 
-### 1.2 Live Apigee X Integration Suites & Zero-Secret Rule
+### 1.2 Live Apigee X Integration Suites, Auth Selection & Zero-Secret Rule
 > **Zero-Secret Rule**: Never hardcode real Consumer Keys, GCP project IDs, Apigee hostnames, or Service Account emails in `tests/templates/*.yaml` or `tests/scripts/*.sh`. Copy `tests/env/example.env` to a gitignored `tests/env/<your-env>.env` file; live scripts substitute `${PROJECT_ID}`, `${APIGEE_HOST}`, `${API_KEY}`, etc. into a temporary rendered values file at runtime. Never run two live `byo` deployments concurrently against the same Apigee environment (`--ovr` revision replacement will cause the first poller to `404`).
+>
+> **Control-Plane & Client Testing Auth (When vs. When Not to Use ADC)**:
+> - **Interactive CLI / Local Runs**: Always prefer `-t "$(gcloud auth print-access-token)"` (`gcloud auth login`) over `--default-token` so operators and agents never require `gcloud auth application-default login` or pick up stale ADC files.
+> - **Data-Plane Gateway Probes**: Authenticate with the Apigee Consumer Key (`x-api-key: $API_KEY`) or Persona Bearer token. When testing `/ai-gateway` via `google-genai` (`vertexai=True`) or `AnthropicVertex`, pass placeholder credentials (`Credentials("gateway-managed")` / `access_token="gateway-managed"`) with `x-api-key` in headers so client SDKs skip local ADC lookup.
+> - **When ADC *Is* Appropriate**: Only in headless Workload Identity CI/CD without `gcloud` (`apigeecli --default-token`), Terraform, or Option 3 (`agent_identity`) workloads on Cloud Run / GKE / Vertex Agent Engine using metadata-server ADC.
 
 ```bash
 # Run all 72 live BYO/transcoding/Model Armor/circuit-breaker/wallet-matrix tests against an existing deployment

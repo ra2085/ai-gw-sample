@@ -5,7 +5,7 @@ Get an enterprise AI Gateway running in 5 minutes using a single **15-line `valu
 > [!IMPORTANT]
 > **Prerequisites:** Complete the one-time environment setup in **[Prerequisites & Setup](installation.md)** (Steps 1–5) before deploying:
 > 1. Install `apigee-go-gen` and `apigeecli`.
-> 2. Authenticate with Google Cloud (`gcloud auth login` & `gcloud auth application-default login`).
+> 2. Authenticate with Google Cloud (`gcloud auth login`).
 > 3. Create the deployment Service Account with `roles/aiplatform.user`.
 > 4. Create the 18 telemetry Data Collectors in your Apigee organization.
 
@@ -89,7 +89,7 @@ apigeecli apis create bundle \
     -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
-    --default-token
+    -t "$(gcloud auth print-access-token)"
 ```
 
 * **Default AI Products Provisioned:** Because `values.quickstart.yaml` omits a custom `personas` block, `sync-personas.sh` automatically provisions the **4 built-in AI Products** (`ai-gateway-knowledge-worker`, `ai-gateway-developer`, `ai-gateway-it`, and `ai-gateway-agent`) and their Developer Apps (`*-app`). Each product is pre-configured with `llmOperationGroup` token counters (**1M tokens / hour** default limit) for every model in your `models` list—and omitting `features:` automatically enables rolling token/USD quotas, cost attribution, and telemetry headers out-of-the-box.
@@ -98,7 +98,7 @@ apigeecli apis create bundle \
 
 ## 3. Call Any Model from Any SDK or CLI
 
-Once deployed, developers can call any model in your catalog using their preferred client SDK or CLI tool. Click a tab below for ready-to-run examples:
+Once deployed, developers can call any model in your catalog using their preferred client SDK or CLI tool—**no local GCP Application Default Credentials (`gcloud auth application-default login`) required**. Click a tab below for ready-to-run examples:
 
 === "Claude Code / Anthropic SDK (`/v1/messages`)"
 
@@ -127,6 +127,34 @@ Once deployed, developers can call any model in your catalog using their preferr
         "model": "claude-haiku-4-5",
         "messages": [{"role": "user", "content": "Write a haiku about API gateways."}]
       }'
+    ```
+
+=== "Google GenAI SDK (`/ai-gateway`)"
+
+    When using `google-genai` in `vertexai=True` mode, pass placeholder `Credentials("gateway-managed")` so the SDK skips local ADC lookup and lets Apigee authenticate to Vertex AI upstream:
+
+    ```python
+    import os
+    from google import genai
+    from google.genai import types
+    from google.oauth2.credentials import Credentials
+
+    client = genai.Client(
+        vertexai=True,
+        project=os.environ["PROJECT_ID"],
+        location="global",
+        credentials=Credentials("gateway-managed"),
+        http_options=types.HttpOptions(
+            base_url=f"https://{os.environ['APIGEE_HOSTNAME']}/ai-gateway",
+            headers={"x-api-key": os.environ["API_KEY"]},
+        ),
+    )
+
+    resp = client.models.generate_content(
+        model="gemini-3.5-flash",
+        contents="Explain API gateways in one sentence.",
+    )
+    print(resp.text)
     ```
 
 === "Embeddings SDK (`/v1/embeddings`)"
