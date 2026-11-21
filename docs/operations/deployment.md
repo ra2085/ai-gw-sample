@@ -9,6 +9,7 @@ Follow these steps to render, validate, and deploy the AI Gateway in CI/CD or pr
 Apigee requires the following **18 Data Collectors** to record granular token metrics (`prompt`, `uncached_prompt`, `cache_read`, `cache_write`, `thinking`, `completion`, `total`), per-token-type USD cost attribution (`uncached_prompt_cost`, `cache_read_cost`, `cache_write_cost`, `prompt_cost`, `completion_cost`, `total_cost`), and identity dimensions (`user_id`, `persona`, `team`):
 
 ```bash
+TOKEN="$(gcloud auth print-access-token)"
 for dc in \
   "dc_prompt_token_count:INTEGER" \
   "dc_uncached_prompt_token_count:INTEGER" \
@@ -29,7 +30,7 @@ for dc in \
   "dc_identity_persona:STRING" \
   "dc_identity_team:STRING"; do
   IFS=":" read -r name type <<< "$dc"
-  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" --default-token || true
+  apigeecli datacollectors create -o "$PROJECT_ID" -n "$name" -p "$type" -t "$TOKEN" || true
 done
 ```
 
@@ -77,7 +78,7 @@ apigee-go-gen render apiproxy \
     --values ./values.yaml \
     --output ./out/ai-gateway.zip
 
-# 3. Deploy to Apigee
+# 3. Deploy to Apigee (uses your active `gcloud auth login` session; in headless Workload Identity CI without gcloud, pass `--default-token` instead of `-t`)
 apigeecli apis create bundle \
     --name ai-gateway \
     --proxy-zip ./out/ai-gateway.zip \
@@ -86,7 +87,7 @@ apigeecli apis create bundle \
     -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
-    --default-token
+    -t "$(gcloud auth print-access-token)"
 ```
 
 ---

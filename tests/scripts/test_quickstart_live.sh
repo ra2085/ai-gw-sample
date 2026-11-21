@@ -155,6 +155,13 @@ if [ "$SKIP_DEPLOY" = true ]; then
     echo -e "\n${YELLOW}Step 2: Skipping deployment (--skip-deploy specified).${NC}"
 else
     echo -e "\n${BLUE}Step 2: Ensuring Apigee Data Collectors & Deploying to Apigee Org '$PROJECT_ID' ($APIGEE_ENV)...${NC}"
+    GCLOUD_TOKEN=$(gcloud auth print-access-token 2>/dev/null || true)
+    if [ -n "$GCLOUD_TOKEN" ]; then
+        AUTH_FLAGS=(-t "$GCLOUD_TOKEN")
+    else
+        AUTH_FLAGS=(--default-token)
+    fi
+
     for dc in \
         "dc_prompt_token_count:INTEGER" \
         "dc_uncached_prompt_token_count:INTEGER" \
@@ -175,7 +182,7 @@ else
         "dc_identity_persona:STRING" \
         "dc_identity_team:STRING"; do
         IFS=":" read -r dc_name dc_type <<< "$dc"
-        $APIGEECLI datacollectors create -n "$dc_name" -p "$dc_type" -d "AI Gateway Telemetry ($dc_name)" --org "$PROJECT_ID" --default-token >/dev/null 2>&1 || true
+        $APIGEECLI datacollectors create -n "$dc_name" -p "$dc_type" -d "AI Gateway Telemetry ($dc_name)" --org "$PROJECT_ID" "${AUTH_FLAGS[@]}" >/dev/null 2>&1 || true
     done
 
     $APIGEECLI apis create bundle \
@@ -186,7 +193,7 @@ else
         -s "$SERVICE_ACCOUNT" \
         --ovr \
         --wait \
-        --default-token
+        "${AUTH_FLAGS[@]}"
 
     echo -e "${GREEN}✓ Deployed successfully! Waiting 6 seconds for runtime propagation...${NC}"
     sleep 6

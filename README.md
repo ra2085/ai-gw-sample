@@ -97,7 +97,7 @@ apigeecli apis create bundle \
     -s "$SERVICE_ACCOUNT" \
     --ovr \
     --wait \
-    --default-token
+    -t "$(gcloud auth print-access-token)"
 ```
 
 ---

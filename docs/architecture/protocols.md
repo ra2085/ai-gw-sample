@@ -47,7 +47,25 @@ Click a tab below to see how each client protocol is supported:
 
 === "Vertex AI Native (`POST /ai-gateway`)"
 
-    Designed for applications built on the **Google GenAI SDK**, **Vertex AI SDK**, or **Agent Development Kit (ADK)** that send native Vertex AI URL paths:
+    Designed for applications built on the **Google GenAI SDK**, **Vertex AI SDK**, **`AnthropicVertex`**, or **Agent Development Kit (ADK)** that send native Vertex AI URL paths:
 
-    * Supports `:generateContent`, `:streamGenerateContent`, `:rawPredict`, and `:streamRawPredict`.
+    * Supports `:generateContent`, `:streamGenerateContent`, `:rawPredict`, `:streamRawPredict`, `:embedContent`, `:batchEmbedContents`, and `:predict`.
     * Applies the same AI Product authentication, token quotas, shared team budgets, Model Armor safety scans, and USD cost attribution as `/v1/messages` and `/v1/chat/completions`.
+    * **No Local ADC Required:** Because Apigee authenticates upstream to Vertex AI via its attached Service Account (`<GoogleAccessToken>`), pass placeholder credentials (`Credentials("gateway-managed")` in `google-genai`, or `access_token="gateway-managed"` in `AnthropicVertex`) alongside `headers={"x-api-key": api_key}` so the client SDK skips local `gcloud auth application-default login` lookup.
+
+    ```python
+    from google import genai
+    from google.genai import types
+    from google.oauth2.credentials import Credentials
+
+    client = genai.Client(
+        vertexai=True,
+        project="your-gcp-project-id",
+        location="global",
+        credentials=Credentials("gateway-managed"),
+        http_options=types.HttpOptions(
+            base_url="https://ai-gateway.example.com/ai-gateway",
+            headers={"x-api-key": "YOUR_APIGEE_API_KEY"},
+        ),
+    )
+    ```
