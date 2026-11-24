@@ -1,6 +1,6 @@
 # Models & Provider Recipes
 
-Add any model to your gateway by declaring it under the `models:` list in [`values.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.yaml). Once added, the model is automatically registered in the `/v1/models` catalog and accessible from **any client SDK** (`Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, or Vertex AI SDK)—the gateway handles protocol translation, streaming SSE conversion, and token accounting automatically.
+Add any model to your gateway by declaring it under the `models:` list in [`values.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.yaml). Once added, the model is automatically registered in the `/v1/models` catalog and accessible from **any client SDK** (`Claude Code`, `Google Antigravity`, Anthropic SDK, OpenAI SDK, or Vertex AI SDK)—the gateway handles protocol translation, streaming SSE conversion, and token accounting automatically.
 
 ---
 

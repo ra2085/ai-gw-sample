@@ -26,7 +26,7 @@ Instead of building custom API proxies from scratch for every model provider and
 
     ---
 
-    Developers and agents connect using their preferred tools (`Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, or Google GenAI SDK), and the gateway translates requests and streams across **Vertex AI (Gemini, Claude, Llama, Mistral)**, **Direct OpenAI**, and **self-hosted models**.
+    Developers and agents connect using their preferred tools (`Claude Code`, `Google Antigravity`, `GitHub Copilot`, Anthropic SDK, OpenAI SDK, or Google GenAI SDK), and the gateway translates requests and streams across **Vertex AI (Gemini, Claude, Llama, Mistral)**, **Direct OpenAI**, and **self-hosted models**.
 
 -   **4. Invoice-Accurate Cost Attribution & Spend Control**
 
@@ -46,7 +46,7 @@ Instead of building custom API proxies from scratch for every model provider and
 
     ---
 
-    * **Developers & CLI Tools:** `Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, Google GenAI SDK
+    * **Developer Tools & IDEs:** `Claude Code`, `Google Antigravity`, `GitHub Copilot`, `Claude Desktop`, `Cursor`, SDKs
     * **Internal Apps & Portals:** Corporate SSO (`Okta`, `Entra ID`, `Ping`) & Apigee OAuth / API Keys
     * **Autonomous Agents:** Vertex AI Agent Engine (`SPIFFE` `.system.id.goog`) & GCP Service Accounts
 
@@ -78,7 +78,8 @@ Instead of building custom API proxies from scratch for every model provider and
 | **Step 1** | **[5-Minute Quickstart](getting-started/quickstart-template.md)** | Render and deploy a working AI Gateway from a minimal 15-line `values.quickstart.yaml` file. |
 | **Step 2** | **[AI Products, Tenancy & Auth](architecture/security.md)** | Design your **AI Product** tiers for personas and teams, and connect API Keys, Corporate SSO (Okta / Entra / Ping), or GCP Agent identities. |
 | **Step 3** | **[Models & Providers](template-guide/custom-urls.md)** | Add Vertex AI Gemini & Claude, Model Garden MaaS (Llama, Mistral), Direct OpenAI & Anthropic (`provider_keys` PropertySet), Embeddings, or self-hosted vLLM. |
-| **Step 4** | **[Quotas, Budgets & Cost Control](architecture/monetization.md)** | Configure rolling token allowances, per-model caps, shared department budgets, temporary overrides, and **Invoice-Accurate Cost Attribution**. |
-| **Step 5** | **[Smart Routing & Content Safety](architecture/routing.md)** | Set up transparent model aliases, cost tiers, fallback chains, complexity-based routing (`auto:judge`), and GCP Model Armor sanitization. |
-| **Step 6** | **[Analytics & Looker Studio Dashboards](operations/looker-studio-dashboard.md)** | Share multi-bucket cost chargeback, **Prompt Cache ROI**, team/peer consumption, developer self-service, and security governance dashboards across platform personas. |
+| **Step 4** | **[Developer Tools & IDEs](template-guide/developer-tools.md)** | Connect **Claude Code**, **Google Antigravity**, **Claude Desktop**, **GitHub Copilot**, **Cursor**, and **Copilot Studio** across teams. |
+| **Step 5** | **[Quotas, Budgets & Cost Control](architecture/monetization.md)** | Configure rolling token allowances, per-model caps, shared department budgets, temporary overrides, and **Invoice-Accurate Cost Attribution**. |
+| **Step 6** | **[Smart Routing & Content Safety](architecture/routing.md)** | Set up transparent model aliases, cost tiers, fallback chains, complexity-based routing (`auto:judge`), and GCP Model Armor sanitization. |
+| **Step 7** | **[Analytics & Looker Studio Dashboards](operations/looker-studio-dashboard.md)** | Share multi-bucket cost chargeback, **Prompt Cache ROI**, team/peer consumption, developer self-service, and security governance dashboards across platform personas. |
 

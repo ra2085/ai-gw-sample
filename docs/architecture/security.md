@@ -11,7 +11,7 @@ Instead of configuring settings for one user at a time, you define a small set o
 | AI Product Example | Target Persona / Tenant | Allowed Models | Default Guardrails |
 | :--- | :--- | :--- | :--- |
 | **`lead-ai-engineer`** | Principal Engineers & AI Researchers | All Frontier Models (`claude-opus-4-6`, `gemini-3.1-pro-preview`, `gpt-5.4`) | **2M tokens / 4h** per user |
-| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Codex`) | Coding & Reasoning Models (`claude-sonnet-4-6`, `gemini-3.1-pro-preview`) | **500k tokens / 4h** per user |
+| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Google Antigravity`) | Coding & Reasoning Models (`claude-sonnet-4-6`, `gemini-3.1-pro-preview`) | **500k tokens / 4h** per user |
 | **`developer-default`** | Knowledge Workers & Internal Portals | Fast, Cost-Efficient Models (`gemini-3.5-flash`, `claude-haiku-4-5`) | **100k tokens / 4h** per user |
 | **`autonomous-agent`** | Cloud Run / Vertex AI Production Agents | Scoped Task Models (`gemini-3.1-flash-lite`, `text-embedding-005`) | **Dedicated service quota** & burst limit |
 
@@ -27,7 +27,7 @@ Instead of configuring settings for one user at a time, you define a small set o
 Every incoming request is authenticated at the gateway perimeter and resolved to an **AI Product**. Select your caller type below to see how it connects:
 
 === "Corporate SSO (Okta / Entra ID / Ping)"
-    **Best for:** Human engineers and employees using CLI tools (`Claude Code`, `Codex`) or internal web apps with their corporate login.
+    **Best for:** Human engineers and employees using auto-refreshing tools (`Claude Code`, `Microsoft Copilot Studio`) or internal web apps with their corporate login.
 
     The gateway verifies your corporate Identity Provider's **JWT** (via JWKS) or **Opaque Token** (via `/userinfo` introspection) and maps the user's IdP role/group claim directly to the corresponding **AI Product Persona** (`features.auth.personas.<name>`):
 

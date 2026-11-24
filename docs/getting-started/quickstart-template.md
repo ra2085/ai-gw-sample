@@ -115,7 +115,7 @@ Once deployed, developers can call any model in your catalog using their preferr
       }'
     ```
 
-=== "Codex / OpenAI SDK (`/v1/chat/completions`)"
+=== "Antigravity / Copilot / OpenAI SDK (`/v1/chat/completions`)"
 
     Call Gemini, Claude, MaaS, or OpenAI models using the standard OpenAI Chat Completions API:
 

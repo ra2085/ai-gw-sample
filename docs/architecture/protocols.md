@@ -1,6 +1,6 @@
 # Client Endpoints & Protocols
 
-The AI Gateway decouples client SDKs and developer CLI tools (`Claude Code`, `Codex`, OpenAI SDK, Anthropic SDK, Google GenAI SDK) from backend model providers through automatic request and streaming SSE translation.
+The AI Gateway decouples client SDKs and [developer tools](../template-guide/developer-tools.md) (`Claude Code`, `Google Antigravity`, `GitHub Copilot`, `Cursor`, OpenAI SDK, Anthropic SDK, Google GenAI SDK) from backend model providers through automatic request and streaming SSE translation.
 
 ---
 
@@ -10,8 +10,8 @@ Any client endpoint can call any configured model provider:
 
 | Client Endpoint | Google Gemini & Embeddings | Anthropic Claude | OpenAI, MaaS, Azure & vLLM |
 | :--- | :---: | :---: | :---: |
-| **`POST /v1/messages`**<br>*(Claude Code, Anthropic SDK)* | Automatic translation | Native format | Automatic translation |
-| **`POST /v1/chat/completions`**<br>*(Codex, OpenAI SDK)* | Automatic translation | Automatic translation | Native format |
+| **`POST /v1/messages`**<br>*(Claude Code, Claude Desktop, Anthropic SDK)* | Automatic translation | Native format | Automatic translation |
+| **`POST /v1/chat/completions`**<br>*(Antigravity, GitHub Copilot, Cursor, OpenAI SDK)* | Automatic translation | Automatic translation | Native format |
 | **`POST /v1/embeddings`**<br>*(OpenAI Embeddings SDK)* | Automatic translation | N/A | Native format |
 | **`POST /ai-gateway`**<br>*(Vertex AI / Google GenAI SDK)* | Native format | Native format | Use `/v1/chat/completions` |
 | **`GET /v1/models`**<br>*(Model Discovery)* | Dynamic catalog | Dynamic catalog | Dynamic catalog |
@@ -24,7 +24,7 @@ Click a tab below to see how each client protocol is supported:
 
 === "Anthropic Messages (`POST /v1/messages`)"
 
-    Designed for **Claude Code** and the **Anthropic SDK**. Can target Anthropic Claude natively or automatically translate requests and SSE streams to Google Gemini, OpenAI, or Vertex Model Garden MaaS.
+    Designed for **Claude Code**, **Claude Desktop**, and the **Anthropic SDK**. Can target Anthropic Claude natively or automatically translate requests and SSE streams to Google Gemini, OpenAI, or Vertex Model Garden MaaS.
 
     * **Extended Thinking:** Preserves `thinking` (`{type: "thinking", thinking: "...", signature: "..."}`) and `redacted_thinking` blocks across multi-turn agentic loops, mapping `thinking.budget_tokens` to Gemini `thinkingConfig.thinkingBudget` or OpenAI `reasoning_effort`.
     * **Tool Use & Function Calling:** Translates Anthropic `tools`, `tool_choice`, `tool_use`, and `tool_result` blocks (including structured array content) to and from Gemini and OpenAI tool formats.
@@ -33,7 +33,7 @@ Click a tab below to see how each client protocol is supported:
 
 === "OpenAI Chat Completions (`POST /v1/chat/completions`)"
 
-    Designed for **Codex**, **GitHub/Cursor IDE assistants**, **LangChain**, and the **OpenAI SDK**. Can target OpenAI, MaaS, Azure, and vLLM natively, or automatically translate requests and SSE streams to Google Gemini and Anthropic Claude.
+    Designed for **Google Antigravity**, **GitHub Copilot**, **Cursor**, **Microsoft Copilot Studio**, **LangChain**, and the **OpenAI SDK**. Can target OpenAI, MaaS, Azure, and vLLM natively, or automatically translate requests and SSE streams to Google Gemini and Anthropic Claude.
 
     * **Streaming SSE Normalization:** Translates backend stream deltas (including content, reasoning tokens, and tool call arguments) into standard OpenAI `chat.completion.chunk` SSE events (`data: {...}\n\n` followed by `data: [DONE]\n\n`).
     * **Reasoning Effort & Tool Calls:** Maps `reasoning_effort` (`low`, `medium`, `high`) and parallel `tool_calls` across providers.

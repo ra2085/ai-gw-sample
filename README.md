@@ -15,7 +15,7 @@ Instead of managing per-user rules or separate proxies for every model provider,
 
 | AI Product Example | Target Consumers | Allowed Models | Default Token Quota |
 | :--- | :--- | :--- | :--- |
-| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Codex`) | All models (including `claude-opus-4-6` & `gemini-3.1-pro-preview`) | 500,000 tokens / 4 hours |
+| **`lead-ai-engineer`** | Principal & Staff Engineers (`Claude Code`, `Google Antigravity`) | All models (including `claude-opus-4-6` & `gemini-3.1-pro-preview`) | 500,000 tokens / 4 hours |
 | **`power-developer`** | Senior Developers | `claude-sonnet-4-6`, `gemini-3.1-pro-preview`, `gemini-3.5-flash` | 200,000 tokens / 4 hours |
 | **`developer-default`** | Standard Engineering Org | Fast / Economy models (`gemini-3.5-flash`, `claude-haiku-4-5`) | 50,000 tokens / 4 hours |
 | **`autonomous-agent`** | CI/CD Pipelines & Cloud Run Agents | Approved workflow models + shared department budget | 1,000,000 tokens / hour |
@@ -109,7 +109,7 @@ The documentation is organized into four task-oriented sections:
 | Section | Guides | What You Will Find |
 | :--- | :--- | :--- |
 | **1. Getting Started** | • [Overview](docs/index.md)<br>• [5-Minute Quickstart](docs/getting-started/quickstart-template.md)<br>• [Prerequisites & Setup](docs/getting-started/installation.md) | Core architecture, minimal quickstart YAML, and one-time CLI/IAM setup. |
-| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` recipes for Corporate SSO, API Keys, GCP Agents, Vertex AI, MaaS, Direct OpenAI & Anthropic (`provider_keys` PropertySet), token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
+| **2. Guides** | • [AI Products, Tenancy & Auth](docs/architecture/security.md)<br>• [Models & Providers](docs/template-guide/custom-urls.md)<br>• [Developer Tools & IDEs](docs/template-guide/developer-tools.md)<br>• [Quotas, Budgets & Cost Control](docs/architecture/monetization.md)<br>• [Smart Routing & Content Safety](docs/architecture/routing.md) | Copy-pasteable `values.yaml` and MDM recipes for Corporate SSO, API Keys, GCP Agents, developer tools (`Claude Code`, `Antigravity`, `GitHub Copilot`, `Cursor`), Vertex AI, MaaS, Direct OpenAI & Anthropic (`provider_keys` PropertySet), token budgets, Invoice-Accurate Cost Attribution, and Model Armor. |
 | **3. Reference** | • [`values.yaml` Reference](docs/template-guide/configuration.md)<br>• [Feature Toggles](docs/template-guide/feature-flags.md)<br>• [Client Endpoints & Protocols](docs/architecture/protocols.md) | Complete schema table, feature toggles, and client SDK compatibility matrix. |
 | **4. Analytics & Operations** | • [Analytics & Looker Studio Dashboards](docs/operations/looker-studio-dashboard.md)<br>• [Telemetry & Headers](docs/operations/telemetry.md)<br>• [CI/CD & Deployment](docs/operations/deployment.md) | Looker Studio persona dashboards (multi-bucket FinOps chargeback, Prompt Cache ROI, team/peer insights, developer self-service, security & quota governance, Judge ROI), response headers (`X-Gateway-*`, `x-quota-*`), and CI/CD deployment. |
 
