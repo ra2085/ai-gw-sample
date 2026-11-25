@@ -65,25 +65,25 @@ limitations under the License.
     {{- if and (eq $mTier "medium") (eq $modelTierMedium "") }}{{- $modelTierMedium = $mName -}}{{- end -}}
     {{- if and (eq $mTier "high") (eq $modelTierHigh "") }}{{- $modelTierHigh = $mName -}}{{- end -}}
     {{- if and (eq $mTier "max") (eq $modelTierMax "") }}{{- $modelTierMax = $mName -}}{{- end -}}
-    {{- if and (eq $liteCandidate "") (regexMatch "(?i)(lite|haiku|-mini\\b|-nano\\b)" $mName) -}}
+    {{- if and (eq $liteCandidate "") (regexMatch "(?i)(lite|haiku|-mini\\b|-nano\\b|-luna\\b)" $mName) -}}
       {{- $liteCandidate = $mName -}}
     {{- end -}}
-    {{- if and (eq $highCandidate "") (regexMatch "(?i)(-pro\\b|sonnet|opus|argon|ultra)" $mName) -}}
+    {{- if and (eq $highCandidate "") (regexMatch "(?i)(-pro\\b|sonnet|opus|fable|argon|carbon|ultra)" $mName) -}}
       {{- $highCandidate = $mName -}}
     {{- end -}}
-    {{- if and (eq $maxCandidate "") (regexMatch "(?i)(opus|argon|ultra)" $mName) -}}
+    {{- if and (eq $maxCandidate "") (regexMatch "(?i)(opus|fable|argon|carbon|ultra)" $mName) -}}
       {{- $maxCandidate = $mName -}}
     {{- end -}}
     {{- if and (eq $mPub "google") (not .custom_url) -}}
       {{- if eq $firstGeminiModel "" }}{{- $firstGeminiModel = $mName -}}{{- end -}}
-      {{- if and (eq $geminiLiteCandidate "") (regexMatch "(?i)(lite|flash)" $mName) -}}
+      {{- if and (eq $geminiLiteCandidate "") (regexMatch "(?i)(lite|flash|hydrogen)" $mName) -}}
         {{- $geminiLiteCandidate = $mName -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end }}
 models.catalog={{ $modelNames | join "," }}
-{{- $defaultModel := "gemini-3.5-flash" -}}
+{{- $defaultModel := "gemini-4-hydrogen" -}}
 {{- if and $.Values.defaults $.Values.defaults.model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.defaults.model))) -}}
   {{- $defaultModel = printf "%v" $.Values.defaults.model -}}
 {{- else if $flaggedDefaultModel -}}
@@ -101,7 +101,7 @@ models.catalog={{ $modelNames | join "," }}
 {{- else if $liteCandidate -}}
   {{- $defaultFallback = $liteCandidate -}}
 {{- else if empty $catalogMap -}}
-  {{- $defaultFallback = "gemini-3.1-flash-lite" -}}
+  {{- $defaultFallback = "gemini-3.5-flash-lite" -}}
 {{- end }}
 
 # Global defaults
@@ -119,8 +119,8 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
   {{- $tierLow = printf "%v" $.Values.routing.tiers.low -}}
 {{- else if $modelTierLow -}}
   {{- $tierLow = $modelTierLow -}}
-{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-flash-lite") -}}
-  {{- $tierLow = "gemini-3.1-flash-lite" -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.5-flash-lite") -}}
+  {{- $tierLow = "gemini-3.5-flash-lite" -}}
 {{- else if $liteCandidate -}}
   {{- $tierLow = $liteCandidate -}}
 {{- end -}}
@@ -129,16 +129,16 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
   {{- $tierMedium = printf "%v" $.Values.routing.tiers.medium -}}
 {{- else if $modelTierMedium -}}
   {{- $tierMedium = $modelTierMedium -}}
-{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.5-flash") -}}
-  {{- $tierMedium = "gemini-3.5-flash" -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-4-hydrogen") -}}
+  {{- $tierMedium = "gemini-4-hydrogen" -}}
 {{- end -}}
 {{- $tierHigh := $defaultModel -}}
 {{- if and $.Values.routing $.Values.routing.tiers $.Values.routing.tiers.high (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tiers.high))) -}}
   {{- $tierHigh = printf "%v" $.Values.routing.tiers.high -}}
 {{- else if $modelTierHigh -}}
   {{- $tierHigh = $modelTierHigh -}}
-{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-3.1-pro-preview") -}}
-  {{- $tierHigh = "gemini-3.1-pro-preview" -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "gemini-4-argon") -}}
+  {{- $tierHigh = "gemini-4-argon" -}}
 {{- else if $highCandidate -}}
   {{- $tierHigh = $highCandidate -}}
 {{- end -}}
@@ -147,8 +147,10 @@ default.format={{ if and $.Values.defaults $.Values.defaults.format }}{{ $.Value
   {{- $tierMax = printf "%v" $.Values.routing.tiers.max -}}
 {{- else if $modelTierMax -}}
   {{- $tierMax = $modelTierMax -}}
-{{- else if or (empty $catalogMap) (hasKey $catalogMap "claude-sonnet-4-6") -}}
-  {{- $tierMax = "claude-sonnet-4-6" -}}
+{{- else if or (empty $catalogMap) (hasKey $catalogMap "claude-opus-5-5") -}}
+  {{- $tierMax = "claude-opus-5-5" -}}
+{{- else if hasKey $catalogMap "claude-sonnet-5-5" -}}
+  {{- $tierMax = "claude-sonnet-5-5" -}}
 {{- else if $maxCandidate -}}
   {{- $tierMax = $maxCandidate -}}
 {{- end }}
@@ -186,7 +188,7 @@ task.creative_writing={{ $taskCreativeWriting }}
 task.summarization={{ $taskSummarization }}
 task.extraction={{ $taskExtraction }}
 task.simple_chat={{ $taskSimpleChat }}
-{{- $classifierModel := $geminiLiteCandidate | default $firstGeminiModel | default "gemini-3.1-flash-lite" -}}
+{{- $classifierModel := $geminiLiteCandidate | default $firstGeminiModel | default "gemini-3.5-flash-lite" -}}
 {{- if and $.Values.features $.Values.features.llm_judge $.Values.features.llm_judge.classifier_model -}}
   {{- $classifierModel = printf "%v" $.Values.features.llm_judge.classifier_model -}}
 {{- else if and $.Values.routing $.Values.routing.tasks $.Values.routing.tasks.classifier_model (or (empty $catalogMap) (hasKey $catalogMap (printf "%v" $.Values.routing.tasks.classifier_model))) -}}

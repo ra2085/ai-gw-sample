@@ -114,7 +114,7 @@ components:
         model:
           type: string
           description: Target model identifier.
-          example: claude-haiku-4-5
+          example: claude-haiku-5-5
         max_tokens:
           type: integer
           description: Maximum tokens to generate.
@@ -149,6 +149,9 @@ components:
           type: object
           additionalProperties: true
         thinking:
+          type: object
+          additionalProperties: true
+        output_config:
           type: object
           additionalProperties: true
         metadata:

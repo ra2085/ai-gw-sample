@@ -14,7 +14,7 @@ Regardless of how a caller authenticates (**API Key**, **Native OAuth**, **Okta/
 
     ---
 
-    Gives each individual engineer or agent their own isolated rolling budget (in **Tokens** or **USD**), plus optional stricter caps on expensive frontier models (like `claude-opus-4-6`). If exhausted, returns `429 Personal Limit` while teammates keep working.
+    Gives each individual engineer or agent their own isolated rolling budget (in **Tokens** or **USD**), plus optional stricter caps on expensive frontier models (like `claude-opus-5-5`). If exhausted, returns `429 Personal Limit` while teammates keep working.
 
 -   **Valve 2: Shared Team Pool (Opt-In)**
 
@@ -72,7 +72,7 @@ You do not need to hardcode a list of team members in `values.yaml`. You can mod
 Click any tab below for the exact `values.yaml` snippet to copy into your configuration:
 
 === "Recipe 1: Personal Allowance (USD or Tokens)"
-    **Goal:** Cap each individual developer's usage per day (plus a stricter cap on expensive frontier models like `claude-sonnet-4-6`), using either **USD (`limit_usd`)** or **Tokens (`limit`)**:
+    **Goal:** Cap each individual developer's usage per day (plus a stricter cap on expensive frontier models like `claude-opus-5-5` or `claude-sonnet-5-5`), using either **USD (`limit_usd`)** or **Tokens (`limit`)**:
 
     ```yaml
     features:
@@ -83,7 +83,7 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
         enabled: true
       auth:
         personas:
-          # Option A: Virtual USD Spend Wallet ($15/day overall, max $5/day on Claude Sonnet 4.6)
+          # Option A: Virtual USD Spend Wallet ($15/day overall, max $5/day on Claude Sonnet 5.5)
           developer:
             models: ["*"]
             quota:
@@ -91,17 +91,17 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
               interval: 1
               time_unit: "day"
               per_model_usd:
-                claude-sonnet-4-6: 5.00
+                claude-sonnet-5-5: 5.00
 
-          # Option B: Raw Token Quota (500k tokens / 4 hours overall, max 50k on Claude Sonnet 4.6)
+          # Option B: Raw Token Quota (500k tokens / 4 hours overall, max 50k on Claude Sonnet 5.5)
           knowledge-worker:
-            models: ["gemini-3.5-flash", "claude-haiku-4-5", "claude-sonnet-4-6"]
+            models: ["gemini-4-hydrogen", "claude-haiku-5-5", "claude-sonnet-5-5"]
             quota:
               limit: 500000
               interval: 4
               time_unit: "hour"
               per_model:
-                claude-sonnet-4-6: 50000
+                claude-sonnet-5-5: 50000
     ```
 
 === "Recipe 2: Hybrid (Per-User Tokens + Team USD)"
@@ -125,7 +125,7 @@ Click any tab below for the exact `values.yaml` snippet to copy into your config
               interval: 4
               time_unit: "hour"
               per_model:
-                claude-sonnet-4-6: 50000          # Per-model token cap on frontier model
+                claude-opus-5-5: 50000            # Per-model token cap on frontier model
             team_budget:                          # Valve 2 (USD): $250.00 / 30d shared across the department
               limit_usd: 250.00
               interval: 30
@@ -224,24 +224,40 @@ When `features.monetization.enabled: true` is set, the gateway performs **Invoic
 
 ```yaml
 models:
-  - name: "claude-sonnet-4-6"
+  - name: "claude-sonnet-5-5"
+    displayName: "Claude Sonnet 5.5"
     publisher: "anthropic"
+    target: "claude"
     format: "anthropic"
-    region: "global"              # Global base pricing (use 1.1x rates for regional endpoints like "us-east5")
+    region: "global"              # Supports "global", multi-region "us" / "eu", or regional endpoints on Gemini Enterprise Agent Platform (formerly Vertex AI)
     pricing:
-      input_rate: 3.000           # $3.00 per 1M uncached input tokens ($3.30 regional)
-      output_rate: 15.000         # $15.00 per 1M output & reasoning tokens ($16.50 regional)
-      cache_read_rate: 0.300      # $0.30 per 1M cached prompt read tokens (0.10x)
-      cache_write_rate: 3.750     # $3.75 per 1M 5-minute cache write tokens (1.25x)
+      input_rate: 2.000           # $2.00 per 1M uncached input tokens
+      output_rate: 10.000         # $10.00 per 1M output & reasoning tokens
+      cache_read_rate: 0.100      # $0.10 per 1M cached prompt read tokens
+      cache_write_rate: 2.500     # $2.50 per 1M cache creation write tokens (1.25x)
       markup: 1.0                 # Optional markup multiplier
 ```
 
+### Default GA Catalog Pricing Matrix (`values.yaml`, USD per 1M Tokens)
+
+| Model ID | Display Name | Default Region | `input_rate` | `output_rate` | `cache_read_rate` | `cache_write_rate` | Default Role in Gateway |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| **`gemini-4-hydrogen`** | Gemini 4 Hydrogen | `global` | `$1.50` | `$7.50` | `$0.15` | — | Default model, `medium` tier & `simple_chat` |
+| **`gemini-4-argon`** | Gemini 4 Argon | `global` | `$4.00` | `$20.00` | `$0.20` | — | `high` tier, `coding` & `reasoning` tasks |
+| **`gemini-3.5-flash-lite`** | Gemini 3.5 Flash-Lite | `global` | `$0.30` | `$2.50` | `$0.03` | — | Fallback, `low` tier, `summarization` / `extraction` & `llm_judge.classifier_model` |
+| **`claude-opus-5-5`** | Claude Opus 5.5 | `global` | `$4.00` | `$20.00` | `$0.20` | `$5.00` | `max` tier |
+| **`claude-sonnet-5-5`** | Claude Sonnet 5.5 | `global` | `$2.00` | `$10.00` | `$0.10` | `$2.50` | `creative_writing` task |
+| **`claude-haiku-5-5`** | Claude Haiku 5.5 | `global` | `$0.10` | `$0.50` | `$0.01` | `$0.125` | Fast Anthropic tier |
+| **`gemini-embedding-001`** | Gemini Embedding 001 | `us-central1` | `$0.15` | `$0.00` | — | — | Default embeddings (replaces retired `text-embedding-005` alias) |
+
+### Provider Billing Bucket Behavior
+
 | Model Family / Provider | `input_rate` & `output_rate` | `cache_read_rate` | `cache_write_rate` | Why |
 | :--- | :---: | :---: | :---: | :--- |
-| **Google Gemini (`3.x`)** | Required | **Recommended** *(0.10x of `input_rate`)* | Not needed | Gemini bills cached prompt hits at `cache_read_rate`; cache storage is billed by Vertex AI per hour out-of-band rather than per-request write tokens. |
-| **Anthropic Claude (`4.5` / `4.6`)** | Required | **Recommended** *(0.10x of `input_rate`)* | **Recommended** *(1.25x of `input_rate`)* | Claude returns both `cache_read_input_tokens` and `cache_creation_input_tokens` on every response. |
-| **OpenAI (`gpt-5.4`, `gpt-5.4-mini`)** | Required | **Recommended** *(0.10x of `input_rate`)* | Not needed | OpenAI automatic prompt caching bills `cached_tokens` at `cache_read_rate` with no cache write surcharge. |
-| **Vertex MaaS (Llama, Mistral), Embeddings, & Self-Hosted (`vLLM`)** | Required | Not needed | Not needed | These endpoints do not bill separate cached token rates; if omitted, any reported cached tokens default to `input_rate`. |
+| **Google Gemini (`4` & `3.5 Flash-Lite` on Agent Platform)** | Required | **Recommended** | Not needed | Gemini bills cached prompt hits at `cache_read_rate`; cache storage is billed by Agent Platform per hour out-of-band rather than per-request write tokens. |
+| **Anthropic Claude (`5.5` / `Fable 5.2` — Agent Platform & Claude Platform `api.anthropic.com`)** | Required | **Recommended** | **Recommended** *(1.25x of `input_rate`)* | Claude returns both `cache_read_input_tokens` and `cache_creation_input_tokens` on every response. |
+| **OpenAI (`gpt-6.2-sol`, `gpt-6-luna`, `gpt-6-nano`) & Microsoft Foundry (formerly Azure OpenAI)** | Required | **Recommended** | Optional | OpenAI and Microsoft Foundry prompt caching bill `cached_tokens` at `cache_read_rate` (and `cache_write_rate` if configured). |
+| **Agent Platform MaaS (Llama 4, Mistral), Embeddings (`gemini-embedding-001`), & Self-Hosted (`vLLM`)** | Required | Not needed | Not needed | These endpoints do not bill separate cached token rates; if omitted, any reported cached tokens default to `input_rate`. |
 
 * **Chargeback & Showback Analytics:** Every transaction records its exact USD cost (`dc_tx_cost_usd` and `X-Gateway-Total-Cost-Micro-USD`), token breakdown, model (`dc_model`), persona (`dc_identity_persona`), team (`dc_identity_team`), and user (`dc_identity_user_id`) in Apigee Analytics.
 * **Early-Disconnect Stream Protection (`features.quotas.stream_prompt_checkpoint: true`):** Optionally checkpoints exact initial prompt and cache tokens as soon as an SSE stream starts—ensuring large-context requests still deduct prompt quota and record spend even if a client disconnects mid-stream, before settling the remaining completion delta when the stream finishes.

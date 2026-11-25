@@ -101,7 +101,7 @@ gcloud auth login
 
 ## 4. Service Account & IAM Setup (Required for Deployment)
 
-Because the AI Gateway template configures Google Cloud IAM authentication (`<GoogleAccessToken>`) across its TargetEndpoints and communicates with Vertex AI / Model Armor, **a Google Cloud Service Account is mandatory at deployment time**.
+Because the AI Gateway template configures Google Cloud IAM authentication (`<GoogleAccessToken>`) across its TargetEndpoints and communicates with **Gemini Enterprise Agent Platform** (formerly Vertex AI) and Model Armor, **a Google Cloud Service Account is mandatory at deployment time**.
 
 ### Create the Service Account
 
@@ -113,7 +113,7 @@ gcloud iam service-accounts create ai-gateway-sa \
     --description="Apigee AI Gateway Runtime Service Account" \
     --display-name="ai-gateway-sa"
 
-# 2. Grant Vertex AI User role (required for Gemini & Claude on Vertex AI)
+# 2. Grant Agent Platform IAM role (roles/aiplatform.user — required for Gemini, Claude & Embeddings on Agent Platform)
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$SERVICE_ACCOUNT" \
     --role="roles/aiplatform.user"

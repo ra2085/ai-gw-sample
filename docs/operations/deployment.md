@@ -60,7 +60,7 @@ bash ./scripts/sync-personas.sh \
 ## 3. Sync Personas & Deploy Proxy Bundle
 
 > [!IMPORTANT]
-> **Service Account Prerequisite**: Because the gateway's upstream targets and Google Cloud features (Model Armor, LLM Judge) authenticate using Google Cloud IAM tokens, attach a Service Account with `roles/aiplatform.user` (and `roles/modelarmor.user` if Model Armor is enabled) at deploy time using `-s "$SERVICE_ACCOUNT"`.
+> **Service Account Prerequisite**: Because upstream **Gemini Enterprise Agent Platform** (formerly Vertex AI) targets and Google Cloud features (Model Armor, LLM Judge) authenticate using Google Cloud IAM tokens, attach a Service Account with `roles/aiplatform.user` (and `roles/modelarmor.user` if Model Armor is enabled) at deploy time using `-s "$SERVICE_ACCOUNT"`.
 
 ```bash
 export SERVICE_ACCOUNT="ai-gateway-sa@${PROJECT_ID}.iam.gserviceaccount.com"
@@ -106,9 +106,10 @@ curl -i -X POST "https://$APIGEE_HOST/v1/messages" \
   -H "x-api-key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gemini-3.5-flash",
+    "model": "gemini-4-hydrogen",
     "max_tokens": 128,
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
+
 

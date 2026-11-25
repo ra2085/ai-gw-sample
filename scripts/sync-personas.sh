@@ -585,7 +585,7 @@ for pm_key in per_model_map:
 
 # Fallback if catalog was empty
 if not counter_models:
-    counter_models = ["gemini-3.5-flash", "gemini-3.1-flash-lite"]
+    counter_models = ["gemini-4-hydrogen", "gemini-4-argon", "gemini-3.5-flash-lite"]
 
 eff_default_limit = str(q_limit) if q_limit != "" else "1000000"
 eff_interval = str(q_interval) if q_interval else "1"

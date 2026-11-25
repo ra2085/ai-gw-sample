@@ -134,11 +134,14 @@ BUNDLE_ZIP="$TMP_DIR/${PROXY_NAME}.zip"
 LIVE_VALUES="$TMP_DIR/values.quickstart.yaml"
 mkdir -p "$TMP_DIR"
 
+QUICKSTART_GEMINI_MODEL="${QUICKSTART_GEMINI_MODEL:-gemini-4-hydrogen}"
+QUICKSTART_CLAUDE_MODEL="${QUICKSTART_CLAUDE_MODEL:-claude-haiku-5-5}"
+
 sed \
     -e "s|project_id: \"your-gcp-project-id\"|project_id: \"${PROJECT_ID}\"|g" \
     -e "s|name: \"ai-gateway\"|name: \"${PROXY_NAME}\"|g" \
-    -e "s|gemini-3.5-flash|gemini-2.5-flash|g" \
-    -e "s|Gemini 3.5 Flash|Gemini 2.5 Flash|g" \
+    -e "s|gemini-4-hydrogen|${QUICKSTART_GEMINI_MODEL}|g" \
+    -e "s|claude-haiku-5-5|${QUICKSTART_CLAUDE_MODEL}|g" \
     -e "s|https://vllm.internal.corp/v1/chat/completions|https://${APIGEE_HOST}/mock/v1/chat/completions|g" \
     "$REPO_ROOT/templates/ai-gateway/values.quickstart.yaml" > "$LIVE_VALUES"
 
@@ -204,16 +207,16 @@ echo -e "\n${BLUE}Step 3: Running Live API Calls against Deployed Quickstart Gat
 PASSED=0
 TOTAL=6
 
-# --- Test 1: Claude SDK -> Gemini 2.5 Flash ---
-echo -e "\n${YELLOW}[Test 1/6] Claude Ingress (/v1/messages) -> Gemini 2.5 Flash (Transcoded)${NC}"
+# --- Test 1: Claude SDK -> Gemini 4 Hydrogen ---
+echo -e "\n${YELLOW}[Test 1/6] Claude Ingress (/v1/messages) -> ${QUICKSTART_GEMINI_MODEL} (Transcoded)${NC}"
 RESP1=$(curl -s -w "\n%{http_code}" -X POST "https://${APIGEE_HOST}/v1/messages" \
     -H "x-apikey: ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-        "model": "gemini-2.5-flash",
-        "max_tokens": 50,
-        "messages": [{"role": "user", "content": "Respond with exactly: Quickstart Gemini Works"}]
-    }')
+    -d "{
+        \"model\": \"${QUICKSTART_GEMINI_MODEL}\",
+        \"max_tokens\": 50,
+        \"messages\": [{\"role\": \"user\", \"content\": \"Respond with exactly: Quickstart Gemini Works\"}]
+    }")
 CODE1=$(echo "$RESP1" | tail -n 1)
 BODY1=$(echo "$RESP1" | sed '$d')
 echo "HTTP Status: $CODE1"
@@ -225,15 +228,15 @@ else
     echo -e "${RED}✗ FAILED${NC}"
 fi
 
-# --- Test 2: OpenAI Ingress -> Gemini 2.5 Flash ---
-echo -e "\n${YELLOW}[Test 2/6] OpenAI Ingress (/v1/chat/completions) -> Gemini 2.5 Flash (Transcoded)${NC}"
+# --- Test 2: OpenAI Ingress -> Gemini 4 Hydrogen ---
+echo -e "\n${YELLOW}[Test 2/6] OpenAI Ingress (/v1/chat/completions) -> ${QUICKSTART_GEMINI_MODEL} (Transcoded)${NC}"
 RESP2=$(curl -s -w "\n%{http_code}" -X POST "https://${APIGEE_HOST}/v1/chat/completions" \
     -H "x-apikey: ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-        "model": "gemini-2.5-flash",
-        "messages": [{"role": "user", "content": "Respond with exactly: Quickstart OpenAI to Gemini Works"}]
-    }')
+    -d "{
+        \"model\": \"${QUICKSTART_GEMINI_MODEL}\",
+        \"messages\": [{\"role\": \"user\", \"content\": \"Respond with exactly: Quickstart OpenAI to Gemini Works\"}]
+    }")
 CODE2=$(echo "$RESP2" | tail -n 1)
 BODY2=$(echo "$RESP2" | sed '$d')
 echo "HTTP Status: $CODE2"
@@ -245,16 +248,16 @@ else
     echo -e "${RED}✗ FAILED${NC}"
 fi
 
-# --- Test 3: Claude Ingress -> Claude 4.5 Haiku (Native) ---
-echo -e "\n${YELLOW}[Test 3/6] Claude Ingress (/v1/messages) -> Claude 4.5 Haiku (Native Passthrough)${NC}"
+# --- Test 3: Claude Ingress -> Claude Haiku 5.5 (Native) ---
+echo -e "\n${YELLOW}[Test 3/6] Claude Ingress (/v1/messages) -> ${QUICKSTART_CLAUDE_MODEL} (Native Passthrough)${NC}"
 RESP3=$(curl -s -w "\n%{http_code}" -X POST "https://${APIGEE_HOST}/v1/messages" \
     -H "x-apikey: ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-        "model": "claude-haiku-4-5",
-        "max_tokens": 50,
-        "messages": [{"role": "user", "content": "Respond with exactly: Quickstart Claude Haiku Works"}]
-    }')
+    -d "{
+        \"model\": \"${QUICKSTART_CLAUDE_MODEL}\",
+        \"max_tokens\": 50,
+        \"messages\": [{\"role\": \"user\", \"content\": \"Respond with exactly: Quickstart Claude Haiku Works\"}]
+    }")
 CODE3=$(echo "$RESP3" | tail -n 1)
 BODY3=$(echo "$RESP3" | sed '$d')
 echo "HTTP Status: $CODE3"
@@ -266,16 +269,16 @@ else
     echo -e "${RED}✗ FAILED${NC}"
 fi
 
-# --- Test 4: OpenAI Ingress -> Claude 4.5 Haiku (Transcoded) ---
-echo -e "\n${YELLOW}[Test 4/6] OpenAI Ingress (/v1/chat/completions) -> Claude 4.5 Haiku (OpenAI to Claude Transcoded)${NC}"
+# --- Test 4: OpenAI Ingress -> Claude Haiku 5.5 (Transcoded) ---
+echo -e "\n${YELLOW}[Test 4/6] OpenAI Ingress (/v1/chat/completions) -> ${QUICKSTART_CLAUDE_MODEL} (OpenAI to Claude Transcoded)${NC}"
 RESP4=$(curl -s -w "\n%{http_code}" -X POST "https://${APIGEE_HOST}/v1/chat/completions" \
     -H "x-apikey: ${API_KEY}" \
     -H "Content-Type: application/json" \
-    -d '{
-        "model": "claude-haiku-4-5",
-        "max_tokens": 50,
-        "messages": [{"role": "user", "content": "Respond with exactly: Quickstart OpenAI to Claude Works"}]
-    }')
+    -d "{
+        \"model\": \"${QUICKSTART_CLAUDE_MODEL}\",
+        \"max_tokens\": 50,
+        \"messages\": [{\"role\": \"user\", \"content\": \"Respond with exactly: Quickstart OpenAI to Claude Works\"}]
+    }")
 CODE4=$(echo "$RESP4" | tail -n 1)
 BODY4=$(echo "$RESP4" | sed '$d')
 echo "HTTP Status: $CODE4"
@@ -315,7 +318,7 @@ CODE6=$(echo "$RESP6" | tail -n 1)
 BODY6=$(echo "$RESP6" | sed '$d')
 echo "HTTP Status: $CODE6"
 echo "Response: $BODY6"
-if [ "$CODE6" -eq 200 ] && echo "$BODY6" | grep -q "gemini-2.5-flash" && echo "$BODY6" | grep -q "claude-haiku-4-5"; then
+if [ "$CODE6" -eq 200 ] && echo "$BODY6" | grep -q "${QUICKSTART_GEMINI_MODEL}" && echo "$BODY6" | grep -q "${QUICKSTART_CLAUDE_MODEL}"; then
     echo -e "${GREEN}✓ PASSED${NC}"
     PASSED=$((PASSED+1))
 else

@@ -14,8 +14,8 @@
 
 openapi: 3.0.3
 info:
-  title: AI Gateway - Native Gemini & Vertex Anthropic API
-  description: Native Gemini and Vertex AI Anthropic Claude API format endpoints for AI Gateway.
+  title: AI Gateway - Native Gemini & Agent Platform Anthropic API
+  description: Native Gemini and Gemini Enterprise Agent Platform Anthropic Claude API format endpoints for AI Gateway.
   version: 1.0.0
 servers:
   - url: https://workshop.iloveapi.management
@@ -496,7 +496,7 @@ paths:
       tags:
         - Vertex Embeddings Format
       summary: Generate text embeddings (:predict)
-      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      description: Generates vector embeddings using Agent Platform embedding models (e.g. gemini-embedding-001).
       parameters:
         - name: projectId
           in: path
@@ -548,7 +548,7 @@ paths:
       tags:
         - Vertex Embeddings Format
       summary: Generate text embeddings (:predict)
-      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      description: Generates vector embeddings using Agent Platform embedding models (e.g. gemini-embedding-001).
       parameters:
         - name: projectId
           in: path
@@ -925,8 +925,8 @@ components:
       properties:
         model:
           type: string
-          description: Target model identifier (optional when passed in Vertex URL path).
-          example: claude-haiku-4-5
+          description: Target model identifier (optional when passed in Agent Platform URL path).
+          example: claude-haiku-5-5
         anthropic_version:
           type: string
           example: vertex-2023-10-16
@@ -964,6 +964,9 @@ components:
           type: object
           additionalProperties: true
         thinking:
+          type: object
+          additionalProperties: true
+        output_config:
           type: object
           additionalProperties: true
         metadata:

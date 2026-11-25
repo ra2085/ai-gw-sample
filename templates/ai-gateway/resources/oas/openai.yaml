@@ -112,7 +112,7 @@ components:
         model:
           type: string
           description: Target model identifier.
-          example: gemini-3.1-flash-lite
+          example: gemini-4-hydrogen
         models:
           type: array
           description: Optional fallback model array (OpenRouter / AI Gateway convention).
@@ -199,7 +199,7 @@ components:
           enum: [float, base64]
         task_type:
           type: string
-          description: Optional Vertex AI embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
+          description: Optional Agent Platform embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
         user:
           type: string
     OpenAIResponse:

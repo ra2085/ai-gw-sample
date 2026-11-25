@@ -215,7 +215,7 @@ function normalizeOaiStreamOut(inT, outT, reasoningT, totalT) {
 }
 
 function computeJudgeStreamCost(defaultMarkup) {
-    var jm = getVar("judge_model") || "gemini-2.5-flash-lite";
+    var jm = getVar("judge_model") || "gemini-3.5-flash-lite";
     var bareJm = jm.indexOf("/") !== -1 ? jm.split("/").slice(1).join("/") : jm;
     var hasBare = (bareJm !== jm && bareJm !== "default");
     var jInStr = getVar("propertyset.monetization_rates." + jm + ".input_rate_per_m") ||
@@ -539,7 +539,7 @@ function handleAnthropicToOpenAiFrame(parsedEvent, modelName, tokensAlreadyCount
             }
         }
         anthStopReason = (parsedEvent.delta && parsedEvent.delta.stop_reason) ? parsedEvent.delta.stop_reason : null;
-        finishReason = anthStopReason === "tool_use" ? "tool_calls" : (anthStopReason === "max_tokens" ? "length" : (isSafetyStopHint(anthStopReason) ? "content_filter" : "stop"));
+        finishReason = anthStopReason === "tool_use" ? "tool_calls" : ((anthStopReason === "max_tokens" || anthStopReason === "model_context_window_exceeded") ? "length" : (isSafetyStopHint(anthStopReason) ? "content_filter" : "stop"));
         isFinished = true;
     } else if (parsedEvent.type === "message_stop") {
         isFinished = true;

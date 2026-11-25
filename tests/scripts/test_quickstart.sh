@@ -80,20 +80,20 @@ fi
 echo -e "\n${YELLOW}Step 4: Validating Dynamic PropertySets for Quickstart Models...${NC}"
 MODEL_LOC_FILE="$QUICK_OUT/apiproxy/resources/properties/model_locations.properties"
 
-# Check model catalog contains the quickstart models (including text-embedding-005)
-if grep -q "models.catalog=gemini-3.5-flash,claude-haiku-4-5,text-embedding-005,my-vllm-model" "$MODEL_LOC_FILE"; then
-    echo -e "${GREEN}✓ model_locations.properties: Quickstart catalog (with text-embedding-005) generated correctly.${NC}"
+# Check model catalog contains the quickstart models (including gemini-embedding-001)
+if grep -q "models.catalog=gemini-4-hydrogen,claude-haiku-5-5,gemini-embedding-001,my-vllm-model" "$MODEL_LOC_FILE"; then
+    echo -e "${GREEN}✓ model_locations.properties: Quickstart catalog (with gemini-embedding-001) generated correctly.${NC}"
 else
     echo -e "${RED}✗ model_locations.properties missing quickstart models.catalog!${NC}"
     echo "Found catalog: $(grep "models.catalog" "$MODEL_LOC_FILE" || echo "none")"
     exit 1
 fi
 
-# Check claude-haiku-4-5 regional endpoint & placeholder project_id sanitization
+# Check claude-haiku-5-5 global endpoint & placeholder project_id sanitization
 CONFIG_PROP_FILE="$QUICK_OUT/apiproxy/resources/properties/config.properties"
-if grep -q "claude-haiku-4-5.endpoint=us-east5" "$MODEL_LOC_FILE" && \
+if grep -q "claude-haiku-5-5.endpoint=global" "$MODEL_LOC_FILE" && \
    ! grep -q "your-gcp-project-id" "$CONFIG_PROP_FILE"; then
-    echo -e "${GREEN}✓ claude-haiku-4-5 region (us-east5) and placeholder project_id sanitization verified.${NC}"
+    echo -e "${GREEN}✓ claude-haiku-5-5 region (global) and placeholder project_id sanitization verified.${NC}"
 else
     echo -e "${RED}✗ Quickstart region or project_id sanitization failed!${NC}"
     exit 1
@@ -115,8 +115,8 @@ else
 fi
 
 # Check default model fallback
-if grep -q "default.model=gemini-3.5-flash" "$MODEL_LOC_FILE"; then
-    echo -e "${GREEN}✓ default.model correctly inferred as 'gemini-3.5-flash'.${NC}"
+if grep -q "default.model=gemini-4-hydrogen" "$MODEL_LOC_FILE"; then
+    echo -e "${GREEN}✓ default.model correctly inferred as 'gemini-4-hydrogen'.${NC}"
 else
     echo -e "${RED}✗ default.model fallback check failed!${NC}"
     exit 1

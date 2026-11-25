@@ -24,8 +24,8 @@ gateway:
 # 🎯 Models You Want to Enable (with optional custom URLs & pricing)
 # ------------------------------------------------------------------------------
 models:
-  - name: "gemini-3.5-flash"
-    displayName: "Gemini 3.5 Flash"
+  - name: "gemini-4-hydrogen"
+    displayName: "Gemini 4 Hydrogen"
     publisher: "google"
     target: "gemini"
     format: "gemini"
@@ -33,33 +33,33 @@ models:
     is_default: true
     pricing:
       input_rate: 1.500
-      output_rate: 9.000
+      output_rate: 7.500
       cache_read_rate: 0.150
 
-  - name: "claude-haiku-4-5"
-    displayName: "Claude Haiku 4.5"
+  - name: "claude-haiku-5-5"
+    displayName: "Claude Haiku 5.5"
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
-    region: "us-east5"
+    region: "global"
     pricing:
-      input_rate: 1.000
-      output_rate: 5.000
-      cache_read_rate: 0.100
-      cache_write_rate: 1.250
+      input_rate: 0.100
+      output_rate: 0.500
+      cache_read_rate: 0.010
+      cache_write_rate: 0.125
 
-  - name: "text-embedding-005"
-    displayName: "Vertex AI Text Embedding 005"
+  - name: "gemini-embedding-001"
+    displayName: "Gemini Embedding 001"
     publisher: "google"
     target: "gemini-openai-compat"
     format: "openai"
     region: "us-central1"
     pricing:
-      input_rate: 0.025
+      input_rate: 0.150
       output_rate: 0.000
 
   # Bonus: Custom Self-Hosted Model in 4 lines!
   - name: "my-vllm-model"
-    displayName: "Llama 3 (Self-Hosted)"
+    displayName: "Llama 4 (Self-Hosted)"
     format: "openai"
     custom_url: "https://vllm.internal.corp/v1/chat/completions"

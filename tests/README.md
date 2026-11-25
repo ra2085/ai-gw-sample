@@ -45,7 +45,7 @@ tests/
 
 ## Building the Java Callouts (`callout/`)
 
-`./tests/run.sh` automatically compiles `callout/` (`mvn package`), runs all 31 JUnit 5 tests, and syncs the shaded JAR to `templates/ai-gateway/resources/java/ai-gateway-callouts.jar`.
+`./tests/run.sh` automatically compiles `callout/` (`mvn package`), runs all 33 JUnit 5 tests, and syncs the shaded JAR to `templates/ai-gateway/resources/java/ai-gateway-callouts.jar`.
 
 - **Environments using an internal Maven mirror**:
   ```bash
@@ -69,7 +69,7 @@ Run all offline test suites (requires `java` 11+, `mvn`, `node`, and `apigee-go-
 Run specific offline suites:
 
 ```bash
-# Run all 31 JUnit 5 tests + all 5 modular Java/Rhino/policy unit suites (64 test groups)
+# Run all 33 JUnit 5 tests + all 5 modular Java/Rhino/policy unit suites (66 test groups)
 ./tests/run.sh unit
 
 # Run only the apigee-performance-engineering skill validation suite

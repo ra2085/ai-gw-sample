@@ -141,21 +141,40 @@ for lineno, line in enumerate(raw_text.splitlines(), 1):
                 f"Line {lineno}: Detected hardcoded {label}. Use auth.token_ref='propertyset.provider_keys.<key>' instead."
             )
 
+GCP_PROJECT_RE = re.compile(r"^(?:\{[A-Za-z0-9_.-]+\}|(?:[a-z0-9.-]+:)?[a-z][a-z0-9-]{4,28}[a-z0-9])$")
+GCP_AGENT_PLATFORM_REGION_RE = re.compile(r"^(?:global|us|eu|[a-z]+-[a-z]+\d+)$")
+
+def check_gcp_project_id(field_label, raw_val, warn_empty=False):
+    if raw_val is None:
+        if warn_empty:
+            warnings.append(f"{field_label} is empty (will fall back to {{organization.name}}).")
+        return
+    proj = str(raw_val).strip()
+    if not proj:
+        if warn_empty:
+            warnings.append(f"{field_label} is empty (will fall back to {{organization.name}}).")
+        return
+    if proj == "your-gcp-project-id":
+        if not allow_placeholders:
+            warnings.append(
+                f"{field_label} is still set to placeholder 'your-gcp-project-id' (set real project ID in a gitignored local override file before live deploy)."
+            )
+        return
+    if not GCP_PROJECT_RE.match(proj):
+        errors.append(
+            f"{field_label}={proj!r} is not a valid GCP project ID (expected lowercase letters, digits, hyphens, e.g., 'my-gcp-project-01')."
+        )
+
 # 2. Gateway metadata
 gw = data.get("gateway") or {}
 if isinstance(gw, dict):
-    proj = str(gw.get("project_id", "")).strip()
-    if not proj:
-        warnings.append("gateway.project_id is empty (will fall back to {organization.name}).")
-    elif proj == "your-gcp-project-id" and not allow_placeholders:
-        warnings.append(
-            "gateway.project_id is still set to placeholder 'your-gcp-project-id' (set real project ID in a gitignored local override file before live deploy)."
-        )
+    check_gcp_project_id("gateway.project_id", gw.get("project_id"), warn_empty=True)
 
 # 3. Models catalog & pricing checks
 models = data.get("models")
 model_names = set()
 VALID_TARGETS = {"gemini", "claude", "gemini-openai-compat", "openai-custom", "gemini-native-target"}
+AGENT_PLATFORM_TARGETS = {"gemini", "claude", "gemini-openai-compat", "gemini-native-target"}
 VALID_FORMATS = {"gemini", "anthropic", "openai"}
 SYMMETRIC_OR_NONE_ALGS = {"none", "hs256", "hs384", "hs512"}
 
@@ -183,7 +202,16 @@ if models is not None:
             if fmt and fmt not in VALID_FORMATS:
                 errors.append(f"models['{mname}'].format='{fmt}' is invalid (allowed: {sorted(VALID_FORMATS)}).")
 
+            check_gcp_project_id(f"models['{mname}'].project_id", m.get("project_id"))
+
             custom_url = str(m.get("custom_url") or "").strip()
+            region = str(m.get("region") or "").strip()
+            if region and not custom_url and (not tgt or tgt in AGENT_PLATFORM_TARGETS):
+                if not GCP_AGENT_PLATFORM_REGION_RE.match(region):
+                    errors.append(
+                        f"models['{mname}'].region={region!r} is invalid for Agent Platform target '{tgt or 'gemini'}' (expected 'global', 'us', 'eu', or a GCP region like 'us-central1')."
+                    )
+
             if custom_url:
                 if not custom_url.startswith("https://") and not custom_url.startswith("http://localhost"):
                     warnings.append(f"models['{mname}'].custom_url should use https:// ('{custom_url}').")
@@ -225,6 +253,11 @@ defaults = data.get("defaults") or {}
 if isinstance(defaults, dict):
     check_model_ref("defaults.model", defaults.get("model"))
     check_model_ref("defaults.fallback", defaults.get("fallback"))
+    def_reg = str(defaults.get("region") or "").strip()
+    if def_reg and not GCP_AGENT_PLATFORM_REGION_RE.match(def_reg):
+        errors.append(
+            f"defaults.region={def_reg!r} is invalid (expected 'global', 'us', 'eu', or a GCP region like 'us-central1')."
+        )
 
 features = data.get("features") or {}
 if isinstance(features, dict):
@@ -238,45 +271,85 @@ if isinstance(features, dict):
 
     armor = features.get("model_armor") or {}
     if isinstance(armor, dict):
+        check_gcp_project_id("features.model_armor.project_id", armor.get("project_id"))
         loc = str(armor.get("location") or "").strip().lower()
         if loc == "global":
             errors.append(
                 "features.model_armor.location cannot be 'global' — Model Armor requires a regional endpoint (e.g., 'us-central1')."
             )
+        id_rules = armor.get("identity_rules")
+        if isinstance(id_rules, list):
+            for idx, rcfg in enumerate(id_rules):
+                if isinstance(rcfg, dict):
+                    check_gcp_project_id(f"features.model_armor.identity_rules[{idx}].project_id", rcfg.get("project_id"))
 
-    auth = data.get("auth") if isinstance(data.get("auth"), dict) else (features.get("auth") or {})
-    if isinstance(auth, dict):
-        idp_jwt = auth.get("idp_jwt") or {}
-        if isinstance(idp_jwt, dict) and str(idp_jwt.get("enabled", "false")).lower() == "true":
-            for req_field in ("jwks_uri", "issuer", "audience"):
-                val = str(idp_jwt.get(req_field) or "").strip()
-                if not val:
-                    errors.append(f"auth.idp_jwt.{req_field} is required when idp_jwt.enabled=true.")
-            algs = [a.strip().lower() for a in str(idp_jwt.get("algorithm") or "RS256").split(",") if a.strip()]
-            if not algs or any(a in SYMMETRIC_OR_NONE_ALGS for a in algs):
-                errors.append(
-                    f"auth.idp_jwt.algorithm={idp_jwt.get('algorithm')!r} must use asymmetric JWS algorithms (RS*/PS*/ES*), never 'none' or 'HS*'."
-                )
+auth = data.get("auth") if isinstance(data.get("auth"), dict) else (features.get("auth") if isinstance(features, dict) else {})
+if isinstance(auth, dict):
+    idp_jwt = auth.get("idp_jwt") or {}
+    if isinstance(idp_jwt, dict) and str(idp_jwt.get("enabled", "false")).lower() == "true":
+        for req_field in ("jwks_uri", "issuer", "audience"):
+            val = str(idp_jwt.get(req_field) or "").strip()
+            if not val:
+                errors.append(f"auth.idp_jwt.{req_field} is required when idp_jwt.enabled=true.")
+        algs = [a.strip().lower() for a in str(idp_jwt.get("algorithm") or "RS256").split(",") if a.strip()]
+        if not algs or any(a in SYMMETRIC_OR_NONE_ALGS for a in algs):
+            errors.append(
+                f"auth.idp_jwt.algorithm={idp_jwt.get('algorithm')!r} must use asymmetric JWS algorithms (RS*/PS*/ES*), never 'none' or 'HS*'."
+            )
 
-        agent_id = auth.get("agent_identity") or {}
-        if isinstance(agent_id, dict) and str(agent_id.get("enabled", "false")).lower() == "true":
-            td = str(agent_id.get("allowed_trust_domain") or "").strip()
-            if td == "*":
-                errors.append("auth.agent_identity.allowed_trust_domain cannot be wildcard '*'.")
+    agent_id = auth.get("agent_identity") or {}
+    if isinstance(agent_id, dict) and str(agent_id.get("enabled", "false")).lower() == "true":
+        td = str(agent_id.get("allowed_trust_domain") or "").strip()
+        if td == "*":
+            errors.append("auth.agent_identity.allowed_trust_domain cannot be wildcard '*'.")
 
-        personas = auth.get("personas") or {}
-        if isinstance(personas, dict) and model_names:
-            for pname, pcfg in personas.items():
-                if not isinstance(pcfg, dict):
-                    continue
-                pmodels = pcfg.get("models")
-                if isinstance(pmodels, list) and pmodels:
-                    for pat in pmodels:
-                        pat_s = str(pat).strip()
-                        if pat_s and not any(fnmatch.fnmatchcase(m, pat_s) for m in model_names):
-                            warnings.append(
-                                f"auth.personas.{pname}.models pattern '{pat_s}' does not match any model in models[]."
-                            )
+    personas = auth.get("personas") or {}
+    if isinstance(personas, dict):
+        for pname, pcfg in personas.items():
+            if not isinstance(pcfg, dict):
+                continue
+            check_gcp_project_id(f"auth.personas.{pname}.project_id", pcfg.get("project_id"))
+            pmodels = pcfg.get("models")
+            if model_names and isinstance(pmodels, list) and pmodels:
+                for pat in pmodels:
+                    pat_s = str(pat).strip()
+                    if pat_s and not any(fnmatch.fnmatchcase(m, pat_s) for m in model_names):
+                        warnings.append(
+                            f"auth.personas.{pname}.models pattern '{pat_s}' does not match any model in models[]."
+                        )
+            pquota = pcfg.get("quota")
+            if isinstance(pquota, dict):
+                for pm_field in ("per_model", "per_model_usd"):
+                    pm_map = pquota.get(pm_field)
+                    if pm_map is not None:
+                        if not isinstance(pm_map, dict):
+                            errors.append(f"auth.personas.{pname}.quota.{pm_field} must be a mapping.")
+                        else:
+                            for pm_key, pm_val in pm_map.items():
+                                pm_key_s = str(pm_key).strip()
+                                if model_names and pm_key_s and not any(fnmatch.fnmatchcase(m, pm_key_s) for m in model_names):
+                                    warnings.append(
+                                        f"auth.personas.{pname}.quota.{pm_field} key '{pm_key_s}' does not match any model in models[]."
+                                    )
+                                if pm_val is None or isinstance(pm_val, bool) or not isinstance(pm_val, (int, float)) or math.isnan(pm_val) or math.isinf(pm_val) or pm_val < 0:
+                                    errors.append(
+                                        f"auth.personas.{pname}.quota.{pm_field}['{pm_key_s}']={pm_val!r} must be a non-negative finite number (no '$' prefix)."
+                                    )
+
+for exc_label, exc_list in (("exceptions", data.get("exceptions")), ("auth.exceptions", auth.get("exceptions") if isinstance(auth, dict) else None)):
+    if isinstance(exc_list, list):
+        for idx, exc_cfg in enumerate(exc_list):
+            if not isinstance(exc_cfg, dict):
+                continue
+            check_gcp_project_id(f"{exc_label}[{idx}].project_id", exc_cfg.get("project_id"))
+            em_list = exc_cfg.get("models") or exc_cfg.get("allowed_models")
+            if model_names and isinstance(em_list, list):
+                for pat in em_list:
+                    pat_s = str(pat).strip()
+                    if pat_s and not any(fnmatch.fnmatchcase(m, pat_s) for m in model_names):
+                        warnings.append(
+                            f"{exc_label}[{idx}].models pattern '{pat_s}' does not match any model in models[]."
+                        )
 
 routing = data.get("routing") or {}
 if isinstance(routing, dict):

@@ -1,6 +1,6 @@
 # Developer Tools & IDEs
 
-Connect enterprise coding assistants, desktop apps, and agent builders to the AI Gateway so engineering teams can use **Google Gemini**, **Anthropic Claude**, and **OpenAI / MaaS** models from their preferred tools—without distributing cloud provider credentials to developer workstations.
+Connect enterprise coding assistants, desktop apps, and agent builders to the AI Gateway so engineering teams can use **Google Gemini** and **Anthropic Claude** on **Gemini Enterprise Agent Platform** (formerly Vertex AI), **Claude Platform (`api.anthropic.com`)**, **OpenAI**, **Microsoft Foundry** (formerly Azure OpenAI), and **Agent Platform MaaS** models from their preferred tools—without distributing cloud provider credentials to developer workstations.
 
 Every tool below inherits your gateway's **[AI Product](../architecture/security.md)** model allowlists, token and USD budgets, **[Model Armor](../architecture/routing.md)** content safety scans, and **[Looker Studio](../operations/looker-studio-dashboard.md)** cost attribution out of the box.
 
@@ -54,10 +54,10 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
     ```bash
     export ANTHROPIC_BASE_URL="https://ai-gateway.example.com"
     export ANTHROPIC_AUTH_TOKEN="YOUR_APIGEE_API_KEY"
-    claude --model claude-sonnet-4-6
+    claude --model claude-sonnet-5-5
     ```
 
-    Because `/v1/messages` translates across providers, developers can also pass Gemini or OpenAI catalog models (for example, `claude --model gemini-3.5-flash`).
+    Developers can switch between Claude tiers (`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`) or—because `/v1/messages` translates across providers—pass Agent Platform Gemini or OpenAI catalog models directly (for example, `claude --model gemini-4-argon`, `claude --model gemini-4-hydrogen`, or `claude --model gpt-6.2-sol`).
 
 === "2. Google Antigravity (App & CLI)"
 
@@ -82,11 +82,14 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
         "apiKey": "YOUR_TEAM_PERSONA_API_KEY"
       },
       "models": {
-        "defaultModelId": "gemini-3.5-flash",
+        "defaultModelId": "gemini-4-hydrogen",
         "list": [
-          { "modelId": "gemini-3.5-flash" },
-          { "modelId": "gemini-3.1-pro-preview" },
-          { "modelId": "claude-sonnet-4-6" }
+          { "modelId": "gemini-4-hydrogen" },
+          { "modelId": "gemini-4-argon" },
+          { "modelId": "gemini-3.5-flash-lite" },
+          { "modelId": "claude-sonnet-5-5" },
+          { "modelId": "claude-opus-5-5" },
+          { "modelId": "gpt-6.2-sol" }
         ]
       },
       "auth": {
@@ -116,7 +119,7 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
       "inferenceGatewayBaseUrl": "https://ai-gateway.example.com",
       "inferenceGatewayApiKey": "YOUR_TEAM_PERSONA_API_KEY",
       "inferenceGatewayAuthScheme": "bearer",
-      "inferenceModels": "[\"claude-sonnet-4-6\",\"claude-haiku-4-5\",\"gemini-3.5-flash\"]"
+      "inferenceModels": "[\"claude-sonnet-5-5\",\"claude-opus-5-5\",\"claude-haiku-5-5\",\"gemini-4-hydrogen\"]"
     }
     ```
 
@@ -130,7 +133,7 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
 
 === "4. GitHub Copilot"
 
-    **Why it works well at scale:** In **GitHub Copilot Enterprise**, developers sign in with normal corporate SAML/OIDC SSO—API keys never touch developer laptops. Organization administrators store AI Product keys centrally in GitHub's cloud vault, and Apigee's `GET /v1/models` endpoint automatically populates the IDE model picker with only the models permitted for that persona.
+    **Why it works well at scale:** In **GitHub Copilot Enterprise**, developers sign in with normal corporate SAML/OIDC SSO—API keys never touch developer laptops. Organization administrators store AI Product keys centrally in GitHub's cloud vault, and Apigee's `GET /v1/models` endpoint automatically populates the IDE model picker with only the models permitted for that persona (such as `gemini-4-argon`, `gemini-4-hydrogen`, `gemini-3.5-flash-lite`, `claude-sonnet-5-5`, `claude-opus-5-5`, and `gpt-6.2-sol`).
 
     **Option A: GitHub Copilot Enterprise / Organization Vault (Zero Keys on Laptops)**
 
@@ -143,7 +146,7 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
 
     **Option B: VS Code Local Custom Endpoint (Per-Developer Key)**
 
-    Developers using local Bring-Your-Own-Key (BYOK) in VS Code can point Copilot Chat directly to `https://ai-gateway.example.com/v1/chat/completions` and store their personal Apigee Developer App key in VS Code's OS Keychain secret prompt (`${apiKey}`).
+    Developers using local Bring-Your-Own-Key (BYOK) in VS Code can point Copilot Chat directly to `https://ai-gateway.example.com/v1/chat/completions` (for example, selecting `gemini-4-argon`, `claude-sonnet-5-5`, or `gpt-6.2-sol`) and store their personal Apigee Developer App key in VS Code's OS Keychain secret prompt (`${apiKey}`).
 
 === "5. Cursor"
 
@@ -156,14 +159,15 @@ Select a developer tool below for copy-pasteable local and enterprise MDM config
     ```yaml
     routing:
       aliases:
-        "gw-claude-sonnet-4-6": "claude-sonnet-4-6"
-        "gw-claude-haiku-4-5": "claude-haiku-4-5"
+        "gw-claude-sonnet-5-5": "claude-sonnet-5-5"
+        "gw-claude-opus-5-5": "claude-opus-5-5"
+        "gw-claude-haiku-5-5": "claude-haiku-5-5"
     ```
 
     **Step 2: Configure Cursor Settings**
 
     1. Open **Cursor Settings -> Models**.
-    2. Add your gateway model IDs (`gemini-3.5-flash`, `gw-claude-sonnet-4-6`, `gpt-5.4`).
+    2. Add your gateway model IDs (`gemini-4-argon`, `gemini-4-hydrogen`, `gemini-3.5-flash-lite`, `gw-claude-sonnet-5-5`, `gw-claude-opus-5-5`, `gpt-6.2-sol`).
     3. Paste your Apigee AI Product key into **OpenAI API Key**, enable **Override OpenAI Base URL**, and set it to `https://ai-gateway.example.com/v1`:
 
     ```text
