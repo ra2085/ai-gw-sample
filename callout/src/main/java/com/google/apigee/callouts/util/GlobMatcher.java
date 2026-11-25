@@ -221,6 +221,22 @@ public final class GlobMatcher {
         || m.startsWith("text-embedding-ada-");
   }
 
+  public static String resolveAiPlatformHost(String location) {
+    if (location == null
+        || location.isEmpty()
+        || "global".equalsIgnoreCase(location)
+        || !isSafeLocation(location)) {
+      return "aiplatform.googleapis.com";
+    }
+    if ("us".equalsIgnoreCase(location)) {
+      return "aiplatform.us.rep.googleapis.com";
+    }
+    if ("eu".equalsIgnoreCase(location)) {
+      return "aiplatform.eu.rep.googleapis.com";
+    }
+    return location + "-aiplatform.googleapis.com";
+  }
+
   public static boolean isGoogleCloudUrl(String url) {
     if (url == null || url.isEmpty()) {
       return false;
@@ -271,6 +287,11 @@ public final class GlobMatcher {
       return false;
     }
     int subLen = subEnd - 8;
+    if (subLen == 17
+        && (u.regionMatches(true, 8, "aiplatform.us.rep", 0, 17)
+            || u.regionMatches(true, 8, "aiplatform.eu.rep", 0, 17))) {
+      return true;
+    }
     for (int i = 8; i < subEnd; i++) {
       char c = u.charAt(i);
       boolean ok =

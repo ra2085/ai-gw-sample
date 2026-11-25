@@ -1,6 +1,6 @@
 # Models & Provider Recipes
 
-Add any model to your gateway by declaring it under the `models:` list in [`values.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.yaml). Once added, the model is automatically registered in the `/v1/models` catalog and accessible from **any client SDK** (`Claude Code`, `Codex`, Anthropic SDK, OpenAI SDK, or Vertex AI SDK)—the gateway handles protocol translation, streaming SSE conversion, and token accounting automatically.
+Add any model to your gateway by declaring it under the `models:` list in [`values.yaml`](https://github.com/ra2085/ai-gw-sample/blob/main/templates/ai-gateway/values.yaml). Once added, the model is automatically registered in the `/v1/models` catalog and accessible from **any client SDK** (`Claude Code`, `Google Antigravity`, Anthropic SDK, OpenAI SDK, or Google GenAI / **Gemini Enterprise Agent Platform** — formerly Vertex AI — SDK)—the gateway handles protocol translation, streaming SSE conversion, and token accounting automatically.
 
 ---
 
@@ -8,114 +8,195 @@ Add any model to your gateway by declaring it under the `models:` list in [`valu
 
 Select a provider recipe below to copy its `values.yaml` configuration:
 
-=== "1. Google Gemini (Vertex AI)"
-    **How it works:** Uses your gateway's attached Google Cloud Service Account (`roles/aiplatform.user`)—**no API keys required**.
+=== "1. Google Gemini (Agent Platform)"
+    **How it works:** Routes to **Agent Platform** (`aiplatform.googleapis.com`) using your gateway's attached Google Cloud Service Account (`roles/aiplatform.user`)—**no API keys required**.
+
+    > **Global, Multi-Region (`"us"` / `"eu"`), and Regional Endpoints:**
+    > * `region: "global"` routes to `aiplatform.googleapis.com` (`locations/global`) for maximum quota capacity.
+    > * `region: "us"` (`aiplatform.us.rep.googleapis.com`) and `region: "eu"` (`aiplatform.eu.rep.googleapis.com`) enforce continental multi-region data residency.
+    > * Single-region values (such as `"us-central1"` or `"europe-west1"`) route to `<region>-aiplatform.googleapis.com`.
 
     ```yaml
     models:
-      # Gemini 3.5 Flash (Global Endpoint)
-      - name: "gemini-3.5-flash"
-        displayName: "Gemini 3.5 Flash"
+      # Gemini 4 Hydrogen (Default Balanced Tier — Global Endpoint)
+      - name: "gemini-4-hydrogen"
+        displayName: "Gemini 4 Hydrogen"
         publisher: "google"
         target: "gemini"
         format: "gemini"
-        region: "global"                  # Or a specific region such as "us-central1" / "europe-west1"
+        region: "global"                  # Supports "global", multi-region "us" / "eu", or regional (e.g., "us-central1")
         is_default: true
         pricing:
           input_rate: 1.500               # $1.50 / 1M input tokens
-          output_rate: 9.000              # $9.00 / 1M output & reasoning tokens
-          cache_read_rate: 0.150          # $0.15 / 1M cached input tokens (0.10x)
+          output_rate: 7.500              # $7.50 / 1M output & reasoning tokens
+          cache_read_rate: 0.150          # $0.15 / 1M cached input tokens
 
-      # Gemini 3.1 Pro Preview (Frontier Coding & Reasoning)
-      - name: "gemini-3.1-pro-preview"
-        displayName: "Gemini 3.1 Pro Preview"
+      # Gemini 4 Argon (High Tier — Frontier Coding & Reasoning)
+      - name: "gemini-4-argon"
+        displayName: "Gemini 4 Argon"
         publisher: "google"
         target: "gemini"
         format: "gemini"
         region: "global"
         pricing:
-          input_rate: 2.000               # $2.00 / 1M input tokens (<= 200K context)
-          output_rate: 12.000             # $12.00 / 1M output & reasoning tokens
-          cache_read_rate: 0.200          # $0.20 / 1M cached input tokens (0.10x)
+          input_rate: 4.000               # $4.00 / 1M input tokens
+          output_rate: 20.000             # $20.00 / 1M output & reasoning tokens
+          cache_read_rate: 0.200          # $0.20 / 1M cached input tokens
 
-      # Gemini 3.1 Flash-Lite (High-Throughput / Low-Cost Tier)
-      - name: "gemini-3.1-flash-lite"
-        displayName: "Gemini 3.1 Flash-Lite"
+      # Gemini 3.5 Flash-Lite (Low Tier — Fallback, Summarization & LLM Judge)
+      - name: "gemini-3.5-flash-lite"
+        displayName: "Gemini 3.5 Flash-Lite"
         publisher: "google"
         target: "gemini"
         format: "gemini"
         region: "global"
         pricing:
-          input_rate: 0.250               # $0.25 / 1M input tokens
-          output_rate: 1.500              # $1.50 / 1M output & reasoning tokens
-          cache_read_rate: 0.025          # $0.025 / 1M cached input tokens (0.10x)
+          input_rate: 0.300               # $0.30 / 1M input tokens
+          output_rate: 2.500              # $2.50 / 1M output & reasoning tokens
+          cache_read_rate: 0.030          # $0.03 / 1M cached input tokens
+
+      # Optional Frontier Enterprise Recipe: Gemini 4 Carbon
+      - name: "gemini-4-carbon"
+        displayName: "Gemini 4 Carbon (Verified Enterprise)"
+        publisher: "google"
+        target: "gemini"
+        format: "gemini"
+        region: "global"                  # Or "us" (aiplatform.us.rep.googleapis.com) / "eu" (aiplatform.eu.rep.googleapis.com)
+        pricing:
+          input_rate: 2.000               # $2.00 / 1M input tokens
+          output_rate: 10.000             # $10.00 / 1M output & reasoning tokens
+          cache_read_rate: 0.100          # $0.10 / 1M cached input tokens
     ```
 
-=== "2. Anthropic Claude (Vertex AI)"
-    **How it works:** Routes to Anthropic Claude partner models on Google Cloud Vertex AI (`:rawPredict` / `:streamRawPredict`) using your gateway's attached GCP Service Account. The gateway automatically injects `"anthropic_version": "vertex-2023-10-16"` into the request payload and strips `"model"` from the body as required by Vertex AI.
+=== "2. Anthropic Claude (Agent Platform)"
+    **How it works:** Routes to Anthropic Claude partner models on Google Cloud **Agent Platform** (`:rawPredict` / `:streamRawPredict`) using your gateway's attached GCP Service Account (`roles/aiplatform.user`). The gateway automatically injects `"anthropic_version": "vertex-2023-10-16"` into the request payload and strips `"model"` from the body as required by the upstream API.
 
-    > **Global vs. Regional Endpoint Pricing:** On Vertex AI, `region: "global"` uses base pricing. Regional endpoints (`us-east5`, `europe-west1`) carry a **10% regional uplift (`1.1x`)** for Claude 4.5+ models.
+    > **Global, Multi-Region (`"us"` / `"eu"`), and Regional Data Residency:** On Agent Platform, `region: "global"` (`aiplatform.googleapis.com`) uses base global pricing, while multi-region `"us"` (`aiplatform.us.rep.googleapis.com`), `"eu"` (`aiplatform.eu.rep.googleapis.com`), and single-region endpoints (`us-east5`, `europe-west1`) enforce geographic data residency (regional/multi-region endpoints may carry a `1.1x` regional pricing uplift).
 
     ```yaml
     models:
-      # Claude Sonnet 4.6 on Vertex AI
-      - name: "claude-sonnet-4-6"
-        displayName: "Claude Sonnet 4.6"
+      # Claude Opus 5.5 on Agent Platform (Max Tier)
+      - name: "claude-opus-5-5"
+        displayName: "Claude Opus 5.5"
         publisher: "anthropic"
         target: "claude"
         format: "anthropic"
-        region: "global"                  # Or "us-east5" / "europe-west1" for regional data residency
+        region: "global"                  # Supports "global", multi-region "us" / "eu", or "us-east5" / "europe-west1"
         pricing:
-          input_rate: 3.000               # $3.00 / 1M input tokens ($3.30 regional)
-          output_rate: 15.000             # $15.00 / 1M output tokens ($16.50 regional)
-          cache_read_rate: 0.300          # $0.30 / 1M cache hit tokens (0.10x)
-          cache_write_rate: 3.750         # $3.75 / 1M 5m cache write tokens (1.25x)
+          input_rate: 4.000               # $4.00 / 1M input tokens
+          output_rate: 20.000             # $20.00 / 1M output tokens
+          cache_read_rate: 0.200          # $0.20 / 1M cache hit tokens
+          cache_write_rate: 5.000         # $5.00 / 1M 5m cache write tokens
 
-      # Claude Haiku 4.5 on Vertex AI
-      - name: "claude-haiku-4-5"
-        displayName: "Claude Haiku 4.5"
+      # Claude Sonnet 5.5 on Agent Platform
+      - name: "claude-sonnet-5-5"
+        displayName: "Claude Sonnet 5.5"
         publisher: "anthropic"
         target: "claude"
         format: "anthropic"
-        region: "us-east5"
+        region: "global"
         pricing:
-          input_rate: 1.000               # $1.00 / 1M input tokens ($1.10 regional)
-          output_rate: 5.000              # $5.00 / 1M output tokens ($5.50 regional)
-          cache_read_rate: 0.100          # $0.10 / 1M cache hit tokens (0.10x)
-          cache_write_rate: 1.250         # $1.25 / 1M 5m cache write tokens (1.25x)
+          input_rate: 2.000               # $2.00 / 1M input tokens
+          output_rate: 10.000             # $10.00 / 1M output tokens
+          cache_read_rate: 0.100          # $0.10 / 1M cache hit tokens
+          cache_write_rate: 2.500         # $2.50 / 1M 5m cache write tokens
+
+      # Claude Haiku 5.5 on Agent Platform
+      - name: "claude-haiku-5-5"
+        displayName: "Claude Haiku 5.5"
+        publisher: "anthropic"
+        target: "claude"
+        format: "anthropic"
+        region: "global"
+        pricing:
+          input_rate: 0.100               # $0.10 / 1M input tokens
+          output_rate: 0.500              # $0.50 / 1M output tokens
+          cache_read_rate: 0.010          # $0.01 / 1M cache hit tokens
+          cache_write_rate: 0.125         # $0.125 / 1M 5m cache write tokens
+
+      # Optional Frontier Apex Reasoning Model: Claude Fable 5.2
+      - name: "claude-fable-5-2"
+        displayName: "Claude Fable 5.2"
+        publisher: "anthropic"
+        target: "claude"
+        format: "anthropic"
+        region: "global"
+        pricing:
+          input_rate: 8.000               # $8.00 / 1M input tokens
+          output_rate: 40.000             # $40.00 / 1M output tokens
+          cache_read_rate: 0.200          # $0.20 / 1M cache hit tokens
+          cache_write_rate: 10.000        # $10.00 / 1M 5m cache write tokens
     ```
 
-=== "3. Direct Anthropic (`api.anthropic.com`) & BYO Claude"
-    **How it works:** Routes directly to Anthropic's first-party API (`https://api.anthropic.com/v1/messages`) or a custom Anthropic-compatible proxy (e.g., AWS Bedrock gateway / LiteLLM):
+=== "3. Claude Platform (`api.anthropic.com`) & BYO Claude"
+    **How it works:** Routes directly to **Claude Platform (`api.anthropic.com`)** (`https://api.anthropic.com/v1/messages`) or a custom Anthropic-compatible proxy (e.g., AWS Bedrock gateway / LiteLLM):
 
-    * **Authentication (`x-api-key` + `token_ref`):** Direct Anthropic authenticates via the `x-api-key` HTTP header. Reference your key from an Apigee Environment PropertySet (`propertyset.provider_keys.anthropic_api_key`)—see **[Section 2](#2-storing-provider-api-keys-in-an-apigee-propertyset)** below—rather than hardcoding secrets in Git.
-    * **Workspace Isolation:** Unlike OpenAI, Anthropic does not use organization/project headers—each Anthropic API key (`sk-ant-api03-...`) is already bound to a specific **Anthropic Workspace** in the Anthropic Console.
-    * **Headers & Model ID (`anthropic_version`, `anthropic_beta`, `upstream_model`):** When `custom_url` is set, the gateway automatically sets the `anthropic-version: 2023-06-01` HTTP header, omits `vertex-2023-10-16` from the JSON body for `api.anthropic.com`, optionally injects `anthropic-beta` headers, and preserves/rewrites `"model"` in the JSON payload.
+    * **Authentication (`x-api-key` + `token_ref`):** Claude Platform (`api.anthropic.com`) authenticates via the `x-api-key` HTTP header. Reference your key from an Apigee Environment PropertySet (`propertyset.provider_keys.anthropic_api_key`)—see **[Section 2](#2-storing-provider-api-keys-in-an-apigee-propertyset)** below—rather than hardcoding secrets in Git.
+    * **Workspace Isolation:** Unlike OpenAI, Anthropic does not use organization/project headers—each API key (`sk-ant-api03-...`) is already bound to a specific Workspace in **Claude Platform (`api.anthropic.com`)**.
+    * **Headers & Model ID (`anthropic_version`, `anthropic_beta`, `upstream_model`):** When `custom_url` is set, the gateway automatically sets the `anthropic-version: 2023-06-01` HTTP header, omits `vertex-2023-10-16` from the JSON body for `api.anthropic.com`, and preserves/rewrites `"model"` in the JSON payload. Prompt caching is GA on Claude Platform without extra headers; `anthropic_beta` is optional and only needed when opting into experimental beta features.
 
     ```yaml
     models:
-      # Direct Anthropic API (api.anthropic.com)
+      # Claude Sonnet 5.5 on Claude Platform (api.anthropic.com)
       - name: "claude-direct-sonnet"
-        displayName: "Claude Sonnet 4.6 (Direct Anthropic API)"
+        displayName: "Claude Sonnet 5.5 (Claude Platform)"
         publisher: "anthropic"
         target: "claude"
         format: "anthropic"
         custom_url: "https://api.anthropic.com/v1/messages"
-        upstream_model: "claude-sonnet-4-6"               # Model ID sent in the outbound JSON body
+        upstream_model: "claude-sonnet-5-5"               # Model ID sent in the outbound JSON body
         anthropic_version: "2023-06-01"                   # Sets anthropic-version HTTP header (default: 2023-06-01)
-        anthropic_beta: "prompt-caching-2024-07-31"       # Optional: injects anthropic-beta HTTP header
+        # anthropic_beta: ""                              # Optional: injects anthropic-beta header for opt-in beta features
         auth:
           type: "header"
           header_name: "x-api-key"
           token_ref: "propertyset.provider_keys.anthropic_api_key"
         pricing:
-          input_rate: 3.000
-          output_rate: 15.000
-          cache_read_rate: 0.300
-          cache_write_rate: 3.750
+          input_rate: 2.000
+          output_rate: 10.000
+          cache_read_rate: 0.100
+          cache_write_rate: 2.500
+
+      # Claude Opus 5.5 on Claude Platform (api.anthropic.com)
+      - name: "claude-direct-opus"
+        displayName: "Claude Opus 5.5 (Claude Platform)"
+        publisher: "anthropic"
+        target: "claude"
+        format: "anthropic"
+        custom_url: "https://api.anthropic.com/v1/messages"
+        upstream_model: "claude-opus-5-5"
+        anthropic_version: "2023-06-01"
+        auth:
+          type: "header"
+          header_name: "x-api-key"
+          token_ref: "propertyset.provider_keys.anthropic_api_key"
+        pricing:
+          input_rate: 4.000
+          output_rate: 20.000
+          cache_read_rate: 0.200
+          cache_write_rate: 5.000
+
+      # Claude Fable 5.2 on Claude Platform (api.anthropic.com)
+      - name: "claude-direct-fable"
+        displayName: "Claude Fable 5.2 (Claude Platform)"
+        publisher: "anthropic"
+        target: "claude"
+        format: "anthropic"
+        custom_url: "https://api.anthropic.com/v1/messages"
+        upstream_model: "claude-fable-5-2"
+        anthropic_version: "2023-06-01"
+        auth:
+          type: "header"
+          header_name: "x-api-key"
+          token_ref: "propertyset.provider_keys.anthropic_api_key"
+        pricing:
+          input_rate: 8.000
+          output_rate: 40.000
+          cache_read_rate: 0.200
+          cache_write_rate: 10.000
     ```
 
-=== "4. Direct OpenAI (`api.openai.com`)"
+=== "4. Direct OpenAI (`api.openai.com` — GPT-6 Series)"
     **How it works:** Routes to OpenAI (`https://api.openai.com/v1/chat/completions`) while keeping OpenAI API keys stored in an Apigee Environment PropertySet:
 
     * **Authentication (`bearer` + `token_ref`):** Injects `Authorization: Bearer <token>` resolved from `propertyset.provider_keys.openai_api_key` (see **[Section 2](#2-storing-provider-api-keys-in-an-apigee-propertyset)** below).
@@ -125,9 +206,9 @@ Select a provider recipe below to copy its `values.yaml` configuration:
 
     ```yaml
     models:
-      # OpenAI GPT-5.4
-      - name: "gpt-5.4"
-        displayName: "OpenAI GPT-5.4"
+      # OpenAI GPT-6.2 Sol (Frontier Coding & Reasoning)
+      - name: "gpt-6.2-sol"
+        displayName: "OpenAI GPT-6.2 Sol"
         publisher: "openai"
         target: "openai-custom"
         format: "openai"
@@ -139,13 +220,14 @@ Select a provider recipe below to copy its `values.yaml` configuration:
           type: "bearer"
           token_ref: "propertyset.provider_keys.openai_api_key"
         pricing:
-          input_rate: 2.500                               # $2.50 / 1M input tokens
-          output_rate: 15.000                             # $15.00 / 1M output tokens
-          cache_read_rate: 0.250                          # $0.25 / 1M cached input tokens (0.10x)
+          input_rate: 2.000                               # $2.00 / 1M input tokens
+          output_rate: 10.000                             # $10.00 / 1M output tokens
+          cache_read_rate: 0.100                          # $0.10 / 1M cached input tokens
+          cache_write_rate: 2.500                         # $2.50 / 1M cache write tokens
 
-      # OpenAI GPT-4o Mini
-      - name: "gpt-4o-mini"
-        displayName: "OpenAI GPT-4o Mini"
+      # OpenAI GPT-6 Luna (Balanced Mid-Tier)
+      - name: "gpt-6-luna"
+        displayName: "OpenAI GPT-6 Luna"
         publisher: "openai"
         target: "openai-custom"
         format: "openai"
@@ -154,19 +236,34 @@ Select a provider recipe below to copy its `values.yaml` configuration:
           type: "bearer"
           token_ref: "propertyset.provider_keys.openai_api_key"
         pricing:
-          input_rate: 0.150                               # $0.15 / 1M input tokens
-          output_rate: 0.600                               # $0.60 / 1M output tokens
-          cache_read_rate: 0.075                          # $0.075 / 1M cached input tokens
+          input_rate: 0.400                               # $0.40 / 1M input tokens
+          output_rate: 1.600                              # $1.60 / 1M output tokens
+          cache_read_rate: 0.040                          # $0.04 / 1M cached input tokens
+
+      # OpenAI GPT-6 Nano (Ultra-Low-Latency / High-Throughput)
+      - name: "gpt-6-nano"
+        displayName: "OpenAI GPT-6 Nano"
+        publisher: "openai"
+        target: "openai-custom"
+        format: "openai"
+        custom_url: "https://api.openai.com/v1/chat/completions"
+        auth:
+          type: "bearer"
+          token_ref: "propertyset.provider_keys.openai_api_key"
+        pricing:
+          input_rate: 0.100                               # $0.10 / 1M input tokens
+          output_rate: 0.400                              # $0.40 / 1M output tokens
+          cache_read_rate: 0.010                          # $0.01 / 1M cached input tokens
     ```
 
-=== "5. Vertex Model Garden MaaS (Llama, Mistral, Qwen)"
-    **How it works:** Connects to Partner Models-as-a-Service (MaaS) on Vertex AI OpenAI-compatible endpoints (`endpoints/openapi/chat/completions`) using your gateway's GCP Service Account—no API keys needed. Simply set `publisher` (`meta`, `mistralai`, `qwen`, etc.) and `format: "openai"`:
+=== "5. Agent Platform MaaS (Llama 4, DeepSeek)"
+    **How it works:** Connects to Open and Partner Models-as-a-Service (MaaS) on **Agent Platform** OpenAI-compatible endpoints (`endpoints/openapi/chat/completions`) using your gateway's GCP Service Account (`roles/aiplatform.user`)—no API keys needed. Simply set `publisher` (`meta`, `deepseek`, `mistralai`, `qwen`, etc.), `target: "gemini-openai-compat"`, and `format: "openai"`:
 
     ```yaml
     models:
-      # Meta Llama 4 Maverick (17B 128E)
+      # Meta Llama 4 Maverick (17B 128E — Agent Platform MaaS)
       - name: "llama-4-maverick-17b-128e-instruct-maas"
-        displayName: "Meta Llama 4 Maverick"
+        displayName: "Llama 4 Maverick 17B 128E (Agent Platform MaaS)"
         publisher: "meta"
         target: "gemini-openai-compat"
         format: "openai"
@@ -175,42 +272,50 @@ Select a provider recipe below to copy its `values.yaml` configuration:
           input_rate: 0.350               # $0.35 / 1M input tokens
           output_rate: 1.150              # $1.15 / 1M output tokens
 
-      # Meta Llama 3.3 70B Instruct
-      - name: "llama-3.3-70b-instruct-maas"
-        displayName: "Meta Llama 3.3 70B Instruct"
-        publisher: "meta"
+      # DeepSeek V4.1 Flash (Agent Platform MaaS)
+      - name: "deepseek-v4.1-flash-maas"
+        displayName: "DeepSeek V4.1 Flash (Agent Platform MaaS)"
+        publisher: "deepseek"
         target: "gemini-openai-compat"
         format: "openai"
-        region: "us-central1"
+        region: "global"
         pricing:
-          input_rate: 0.720               # $0.72 / 1M input tokens
-          output_rate: 0.720              # $0.72 / 1M output tokens
-
-      # Mistral Small 3.1 (25.03)
-      - name: "mistral-small-2503@001"
-        displayName: "Mistral Small 3.1"
-        publisher: "mistralai"
-        target: "gemini-openai-compat"
-        format: "openai"
-        region: "us-central1"
-        pricing:
-          input_rate: 0.100               # $0.10 / 1M input tokens
-          output_rate: 0.300              # $0.30 / 1M output tokens
+          input_rate: 0.200               # $0.20 / 1M input tokens
+          output_rate: 0.600              # $0.60 / 1M output tokens
     ```
 
-=== "6. Self-Hosted (vLLM / Ollama) & Azure OpenAI"
-    **How it works:** Point `custom_url` to any self-hosted cluster (vLLM, Ollama, TGI, Cloud Run, GKE) or third-party OpenAI-compatible provider (Azure OpenAI, DeepSeek, Groq). Use `upstream_model` if the model identifier expected by your backend differs from the catalog name exposed to clients:
+=== "6. Microsoft Foundry & Self-Hosted (vLLM / Ollama)"
+    **How it works:** Point `custom_url` to **Microsoft Foundry** (formerly Azure OpenAI)—supporting both unified `services.ai.azure.com/models/chat/completions` endpoints and classic `openai.azure.com` deployment URLs—or to any self-hosted inference cluster (**vLLM**, **Ollama**, TGI, Cloud Run, GKE). Use `upstream_model` when the model identifier expected by your backend differs from the catalog name exposed to clients:
 
     ```yaml
     models:
-      # 1. Self-Hosted vLLM / Ollama Cluster (Bearer Token Reference)
-      - name: "llama-3-70b-internal"
-        displayName: "Llama 3 70B (Internal vLLM)"
+      # 1. Microsoft Foundry Unified Model Inference Endpoint (services.ai.azure.com)
+      - name: "foundry-gpt-6.2-sol"
+        displayName: "GPT-6.2 Sol (Microsoft Foundry)"
+        publisher: "azure"
+        target: "openai-custom"
+        format: "openai"
+        custom_url: "https://my-foundry-resource.services.ai.azure.com/models/chat/completions"
+        # Classic openai.azure.com deployment URLs are also fully supported:
+        # custom_url: "https://my-resource.openai.azure.com/openai/deployments/gpt-6.2-sol/chat/completions?api-version=2024-10-21"
+        upstream_model: "gpt-6.2-sol"
+        auth:
+          type: "header"
+          header_name: "api-key"
+          token_ref: "propertyset.provider_keys.foundry_api_key"
+        pricing:
+          input_rate: 2.000
+          output_rate: 10.000
+          cache_read_rate: 0.100
+
+      # 2. Self-Hosted vLLM Cluster — Llama 4 Maverick (Bearer Token Reference)
+      - name: "custom-llama-4"
+        displayName: "Llama 4 Maverick (Internal vLLM)"
         publisher: "custom"
         target: "openai-custom"
         format: "openai"
         custom_url: "https://vllm.internal.corp/v1/chat/completions"
-        upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
+        upstream_model: "meta-llama/Llama-4-Maverick-17B-128E-Instruct"
         auth:
           type: "bearer"
           token_ref: "propertyset.provider_keys.vllm_api_key"
@@ -218,37 +323,33 @@ Select a provider recipe below to copy its `values.yaml` configuration:
           input_rate: 0.050
           output_rate: 0.150
 
-      # 2. Azure OpenAI Deployment (Custom "api-key" Header Reference)
-      - name: "azure-gpt-4o"
-        displayName: "GPT-4o (Azure OpenAI)"
-        publisher: "azure"
+      # 3. Self-Hosted Ollama Instance
+      - name: "ollama-llama4"
+        displayName: "Llama 4 Scout (Internal Ollama)"
+        publisher: "custom"
         target: "openai-custom"
         format: "openai"
-        custom_url: "https://my-resource.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-08-01-preview"
-        auth:
-          type: "header"
-          header_name: "api-key"
-          token_ref: "propertyset.provider_keys.azure_api_key"
+        custom_url: "https://ollama.internal.corp/v1/chat/completions"
+        upstream_model: "llama4:scout"
         pricing:
-          input_rate: 2.500
-          output_rate: 10.000
-          cache_read_rate: 1.250
+          input_rate: 0.020
+          output_rate: 0.060
     ```
 
 === "7. Vector Embeddings (`/v1/embeddings`)"
-    **How it works:** Exposes a single OpenAI-compatible `POST /v1/embeddings` endpoint across both **Google Vertex AI** (automatically translated to/from Vertex `:predict` `{instances: [{content}]}`) and **OpenAI** (`/v1/embeddings`):
+    **How it works:** Exposes a single OpenAI-compatible `POST /v1/embeddings` endpoint across both **Agent Platform** (automatically translated to/from `:predict` `{instances: [{content}]}`; `gemini-embedding-001` replaces retired `text-embedding-005`) and **OpenAI** (`/v1/embeddings`):
 
     ```yaml
     models:
-      # 1. Google Vertex AI Text Embeddings (Translated to/from Vertex :predict)
-      - name: "text-embedding-005"
-        displayName: "Vertex AI Text Embedding 005"
+      # 1. Google Gemini Embedding 001 on Agent Platform (Translated to/from :predict)
+      - name: "gemini-embedding-001"
+        displayName: "Gemini Embedding 001"
         publisher: "google"
         target: "gemini-openai-compat"
-        format: "gemini"
+        format: "openai"
         region: "us-central1"
         pricing:
-          input_rate: 0.025               # $0.025 / 1M input tokens
+          input_rate: 0.150               # $0.15 / 1M input tokens
           output_rate: 0.000
 
       # 2. Direct OpenAI Embeddings
@@ -270,7 +371,7 @@ Select a provider recipe below to copy its `values.yaml` configuration:
 
 ## 2. Storing Provider API Keys in an Apigee PropertySet
 
-For external providers (`api.openai.com`, `api.anthropic.com`, Azure OpenAI, vLLM), keep your provider keys out of Git by storing them in an **Apigee Environment-Scoped PropertySet** (for example, `provider_keys`) and referencing them via `auth.token_ref`.
+For external providers (`api.openai.com`, **Claude Platform (`api.anthropic.com`)**, **Microsoft Foundry**, vLLM), keep your provider keys out of Git by storing them in an **Apigee Environment-Scoped PropertySet** (for example, `provider_keys`) and referencing them via `auth.token_ref`.
 
 ### Step 1: Create a local `provider_keys.properties` file (do not commit to Git)
 
@@ -278,7 +379,7 @@ For external providers (`api.openai.com`, `api.anthropic.com`, Azure OpenAI, vLL
 openai_api_key=sk-proj-your-openai-key
 anthropic_api_key=sk-ant-api03-your-anthropic-key
 vllm_api_key=your-internal-vllm-token
-azure_api_key=your-azure-openai-key
+foundry_api_key=your-microsoft-foundry-key
 ```
 
 ### Step 2: Upload the PropertySet to your Apigee Environment
@@ -302,7 +403,7 @@ rm ./provider_keys.properties
 
 ```yaml
 models:
-  - name: "gpt-5.4"
+  - name: "gpt-6.2-sol"
     publisher: "openai"
     target: "openai-custom"
     format: "openai"
@@ -314,7 +415,7 @@ models:
 
 > [!NOTE]
 > **Runtime Security Guarantees for External Provider Credentials:**
-> * **`token_ref` Namespace Allowlisting:** `auth.token_ref` only resolves variables from trusted credential namespaces (`propertyset.*`, `private.*`, `verifyapikey.*`, `apiproduct.*`, `kvm.*`). Arbitrary flow variable namespaces (`request.*`, `message.*`, `client.*`, `system.*`) are rejected.
+> * **`token_ref` Namespace Allowlisting:** `auth.token_ref` only resolves variables from trusted credential namespaces (`propertyset.*`, `private.*`, `verifyapikey.*`, `apiproduct.*`). Arbitrary flow variable namespaces (`request.*`, `message.*`, `client.*`, `system.*`) are rejected.
 > * **Header Injection & Internal Header Protection:** Custom `auth.header_name` values are validated against RFC 7230 token characters and cannot overwrite internal gateway or hop-by-hop headers (`X-Internal-*`, `X-Gateway-*`, `Host`, `Content-Length`, `Transfer-Encoding`).
 > * **Inbound `Authorization` Stripping & Trace Masking:** When routing to external `custom_url` endpoints using custom headers (`x-api-key`, `api-key`) or `auth.type: "none"`, the gateway automatically strips the caller's inbound Apigee `Authorization` header so gateway tokens never leak upstream, and isolates resolved fallback credentials in `private.*` variables so Apigee Debug/Trace masks them automatically.
 
@@ -324,10 +425,11 @@ models:
 
 Regardless of which provider hosts a model, developers can call it from their preferred SDK or CLI tool:
 
-| Client Endpoint | Google Gemini & Embeddings | Anthropic Claude (Vertex & Direct) | OpenAI, MaaS & vLLM |
+| Client Endpoint | Google Gemini & Embeddings (Agent Platform) | Anthropic Claude (Agent Platform & Claude Platform) | OpenAI, MaaS, Microsoft Foundry & vLLM |
 | :--- | :---: | :---: | :---: |
 | **`POST /v1/messages`**<br>*(Claude Code, Anthropic SDK)* | Automatic translation | Native format | Automatic translation |
-| **`POST /v1/chat/completions`**<br>*(Codex, OpenAI SDK)* | Automatic translation | Automatic translation | Native format |
+| **`POST /v1/chat/completions`**<br>*(Antigravity, Copilot, OpenAI SDK)* | Automatic translation | Automatic translation | Native format |
 | **`POST /v1/embeddings`**<br>*(OpenAI Embeddings SDK)* | Automatic translation (`:predict`) | N/A | Native format (`/embeddings`) |
-| **`POST /ai-gateway`**<br>*(Vertex AI / Google GenAI SDK)* | Native format | Native format (`:rawPredict`) | Use `/v1/chat/completions` |
+| **`POST /ai-gateway`**<br>*(Agent Platform / Google GenAI SDK)* | Native format | Native format (`:rawPredict`) | Use `/v1/chat/completions` |
+
 

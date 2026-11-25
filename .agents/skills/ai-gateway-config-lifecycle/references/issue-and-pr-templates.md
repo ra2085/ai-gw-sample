@@ -71,7 +71,7 @@ Use with `gh issue create --title "fix(<area>): <concise symptom>" --body-file <
 curl -i https://ai-gateway.example.com/v1/chat/completions \
   -H "x-api-key: <REDACTED_KEY>" \
   -H "Content-Type: application/json" \
-  -d '{"model":"gemini-3.5-flash","messages":[{"role":"user","content":"ping"}]}'
+  -d '{"model":"gemini-4-hydrogen","messages":[{"role":"user","content":"ping"}]}'
 ```
 
 ## Root Cause Notes (If Known)

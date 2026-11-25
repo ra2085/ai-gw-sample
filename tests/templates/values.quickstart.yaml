@@ -21,20 +21,20 @@ gateway:
   project_id: "my-gcp-project"
 
 models:
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
+  - name: "gemini-4-hydrogen"
+    displayName: "Gemini 4 Hydrogen"
     publisher: "google"
     format: "gemini"
     region: "global"
     is_default: true
 
-  - name: "claude-haiku-4-5"
-    displayName: "Claude 4.5 Haiku"
+  - name: "claude-haiku-5-5"
+    displayName: "Claude Haiku 5.5"
     publisher: "anthropic"
     format: "anthropic"
-    region: "us-east5"
+    region: "global"
 
   - name: "my-vllm-model"
-    displayName: "Llama 3 (Self-Hosted)"
+    displayName: "Llama 4 (Self-Hosted)"
     format: "openai"
     custom_url: "https://34.107.220.83.nip.io/custom/v1/chat/completions"

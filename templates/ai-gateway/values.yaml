@@ -64,7 +64,7 @@ features:
 
   llm_judge:
     enabled: true
-    classifier_model: "gemini-3.1-flash-lite"
+    classifier_model: "gemini-3.5-flash-lite"
   circuit_breaker:
     enabled: true
     shared_name: "llm-circuit-breaker"
@@ -123,9 +123,9 @@ features:
     apigee_oauth:
       enabled: true                        # Option 2: Native Apigee OAuth 2.0 Token verification (<1ms L1 cache)
     agent_identity:
-      enabled: false                       # Option 3: Google Cloud Agents (SPIFFE Agent Identity & Service Accounts)
+      enabled: false                       # Option 3: Google Cloud Agents (Agent Platform SPIFFE Agent Identity & Service Accounts)
       tokeninfo_url: "https://oauth2.googleapis.com/tokeninfo"
-      # allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Vertex Agent Engine SPIFFE tokens (comma-separated or glob)
+      # allowed_trust_domain: "agents.global.org-123456789012.system.id.goog" # Required to accept Agent Platform Agent Engine SPIFFE tokens (comma-separated or glob)
       # allowed_email_suffix: "@your-gcp-project-id.iam.gserviceaccount.com"  # Defaults to "@<gateway.project_id>.iam.gserviceaccount.com" (same-project SAs only)
       # expected_audience: ""              # Optional comma-separated allowed 'aud' values on tokeninfo responses
       # required_scopes: ""                # Optional comma/space-separated required OAuth2 'scope' values (e.g. "https://www.googleapis.com/auth/cloud-platform")
@@ -156,8 +156,8 @@ features:
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business"]
         client_id: ""                      # Apigee Developer App client_id (or run: bash scripts/sync-personas.sh)
-        # project_id: ""                   # Optional: Route this persona's Vertex AI calls to a dedicated GCP project (overrides unpinned model project_id)
-        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        # project_id: ""                   # Optional: Route this persona's Agent Platform calls to a dedicated GCP project (overrides unpinned model project_id)
+        # models: ["gemini-3.5-flash-lite", "gemini-4-hydrogen"]
         # quota:
         #   limit: 50000                   # Token budget (or use limit_usd: 5.00 for a $5.00 Virtual USD Spend Wallet)
         #   interval: 4
@@ -175,13 +175,13 @@ features:
       developer:
         match_claims: ["developer", "engineering", "swe", "data-science"]
         client_id: ""                      # Apigee Developer App client_id bound to the Developer API Product
-        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
+        # models: ["gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemini-4-argon", "claude-sonnet-5-5", "claude-opus-5-5"]
         # quota:
-        #   limit: 250000                  # Or use limit_usd: 25.00 (and per_model_usd: { claude-sonnet-4-6: 10.00 })
+        #   limit: 250000                  # Or use limit_usd: 25.00 (and per_model_usd: { claude-opus-5-5: 10.00 })
         #   interval: 4
         #   unit: "hour"
         #   per_model:
-        #     claude-sonnet-4-6: 50000
+        #     claude-opus-5-5: 50000
         # team_budget:
         #   limit: 10000000                # Or use limit_usd: 500.00
         #   interval: 7
@@ -197,7 +197,7 @@ features:
       agent:
         match_claims: ["agent", "service-account", "automation"]
         client_id: ""                      # Apigee Developer App client_id bound to the Autonomous Agent API Product
-        # models: ["gemini-3.1-flash-lite", "gemini-3.5-flash", "text-embedding-005"]
+        # models: ["gemini-3.5-flash-lite", "gemini-4-hydrogen", "gemini-embedding-001"]
         # quota:
         #   limit: 1000000
         #   interval: 1
@@ -247,8 +247,8 @@ endpoints:
 # Global Defaults
 # ------------------------------------------------------------------------------
 defaults:
-  model: "gemini-3.5-flash"
-  fallback: "gemini-3.1-flash-lite"
+  model: "gemini-4-hydrogen"
+  fallback: "gemini-3.5-flash-lite"
   target: "gemini"
   publisher: "google"
   format: "gemini"
@@ -259,134 +259,205 @@ defaults:
 # ------------------------------------------------------------------------------
 routing:
   tiers:
-    low: "gemini-3.1-flash-lite"
-    medium: "gemini-3.5-flash"
-    high: "gemini-3.1-pro-preview"
-    max: "claude-sonnet-4-6"
+    low: "gemini-3.5-flash-lite"
+    medium: "gemini-4-hydrogen"
+    high: "gemini-4-argon"
+    max: "claude-opus-5-5"
   tasks:
-    coding: "gemini-3.1-pro-preview"
-    reasoning: "gemini-3.1-pro-preview"
-    creative_writing: "claude-sonnet-4-6"
-    summarization: "gemini-3.1-flash-lite"
-    extraction: "gemini-3.1-flash-lite"
-    simple_chat: "gemini-3.5-flash"
+    coding: "gemini-4-argon"
+    reasoning: "gemini-4-argon"
+    creative_writing: "claude-sonnet-5-5"
+    summarization: "gemini-3.5-flash-lite"
+    extraction: "gemini-3.5-flash-lite"
+    simple_chat: "gemini-4-hydrogen"
   aliases:
-    # Legacy Gemini Aliases
-    "gemini-1.5-flash": "gemini-3.5-flash"
-    "gemini-1.5-flash-001": "gemini-3.5-flash"
-    "gemini-1.5-pro": "gemini-3.1-pro-preview"
-    "gemini-1.5-pro-001": "gemini-3.1-pro-preview"
-    "gemini-3.1-pro": "gemini-3.1-pro-preview"
-    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
-    # Claude Aliases
-    "claude-3-5-sonnet": "claude-sonnet-4-6"
-    "claude-3-5-haiku": "claude-haiku-4-5"
-    # OpenAI & Embedding Aliases
-    "gpt-4o": "gemini-3.1-pro-preview"
-    "gpt-4o-mini": "gemini-3.1-flash-lite"
-    "text-embedding-3-small": "text-embedding-005"
-    "text-embedding-3-large": "text-embedding-005"
-    "text-embedding-ada-002": "text-embedding-005"
-    "auto": "gemini-3.5-flash"
-    "gateway/auto": "gemini-3.5-flash"
-    "auto:judge": "gemini-3.5-flash"
-    "gateway/judge": "gemini-3.5-flash"
+    # Previous & Retired Gemini Generation Aliases
+    "gemini-1.5-flash": "gemini-4-hydrogen"
+    "gemini-1.5-flash-001": "gemini-4-hydrogen"
+    "gemini-2.5-flash": "gemini-4-hydrogen"
+    "gemini-2.5-flash-lite": "gemini-3.5-flash-lite"
+    "gemini-3.1-flash-lite": "gemini-3.5-flash-lite"
+    "gemini-3.5-flash": "gemini-4-hydrogen"
+    "gemini-3.8-flash": "gemini-4-hydrogen"
+    "gemini-1.5-pro": "gemini-4-argon"
+    "gemini-1.5-pro-001": "gemini-4-argon"
+    "gemini-2.5-pro": "gemini-4-argon"
+    "gemini-3.1-pro": "gemini-4-argon"
+    "gemini-3.1-pro-preview": "gemini-4-argon"
+    "gemini-3.8-pro-preview": "gemini-4-argon"
+    # Previous Claude Generation Aliases
+    "claude-3-5-sonnet": "claude-sonnet-5-5"
+    "claude-sonnet-4-6": "claude-sonnet-5-5"
+    "claude-opus-4-6": "claude-opus-5-5"
+    "claude-3-5-haiku": "claude-haiku-5-5"
+    "claude-haiku-4-5": "claude-haiku-5-5"
+    # OpenAI, Embedding & Smart Router Aliases
+    "gpt-4o": "gemini-4-argon"
+    "gpt-4o-mini": "gemini-3.5-flash-lite"
+    "text-embedding-005": "gemini-embedding-001"
+    "text-embedding-3-small": "gemini-embedding-001"
+    "text-embedding-3-large": "gemini-embedding-001"
+    "text-embedding-ada-002": "gemini-embedding-001"
+    "auto": "gemini-4-hydrogen"
+    "gateway/auto": "gemini-4-hydrogen"
+    "auto:judge": "gemini-4-hydrogen"
+    "gateway/judge": "gemini-4-hydrogen"
 
 # ------------------------------------------------------------------------------
-# Model Catalog Definitions & Pricing Matrix
+# Model Catalog Definitions & Pricing Matrix (Gemini Enterprise Agent Platform)
 # ------------------------------------------------------------------------------
 models:
-  # --- Gemini 3.x Series ---
-  - name: "gemini-3.5-flash"
-    displayName: "Gemini 3.5 Flash"
+  # --- Google Gemini 4 & 3.5 Flash-Lite Series (Agent Platform) ---
+  - name: "gemini-4-hydrogen"
+    displayName: "Gemini 4 Hydrogen"
     publisher: "google"
     target: "gemini"
     format: "gemini"
-    region: "global"
+    region: "global"                       # Supports "global", multi-region "us" / "eu", or regional endpoints
     # project_id: ""                       # Optional: Route this model to a specific GCP project (set pin_project: true to prevent persona project_id override)
-    created_at: "2026-03-01T00:00:00Z"
+    created_at: "2026-11-12T00:00:00Z"
     pricing:
       input_rate: 1.500
-      output_rate: 9.000
+      output_rate: 7.500
       cache_read_rate: 0.150
 
-  - name: "gemini-3.1-pro-preview"
-    displayName: "Gemini 3.1 Pro Preview"
+  - name: "gemini-4-argon"
+    displayName: "Gemini 4 Argon"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2026-05-01T00:00:00Z"
+    created_at: "2026-10-13T00:00:00Z"
     pricing:
-      input_rate: 2.000
-      output_rate: 12.000
+      input_rate: 4.000
+      output_rate: 20.000
       cache_read_rate: 0.200
 
-  - name: "gemini-3.1-flash-lite"
-    displayName: "Gemini 3.1 Flash-Lite"
+  - name: "gemini-3.5-flash-lite"
+    displayName: "Gemini 3.5 Flash-Lite"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2026-05-07T00:00:00Z"
+    created_at: "2026-07-21T00:00:00Z"
     pricing:
-      input_rate: 0.250
-      output_rate: 1.500
-      cache_read_rate: 0.025
+      input_rate: 0.300
+      output_rate: 2.500
+      cache_read_rate: 0.030
 
-  # --- Anthropic Claude Models ---
-  - name: "claude-sonnet-4-6"
-    displayName: "Claude Sonnet 4.6"
+  # --- Anthropic Claude 5.5 Models on Google Cloud (Agent Platform) ---
+  - name: "claude-opus-5-5"
+    displayName: "Claude Opus 5.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"                       # Supports "global", "us", or "eu" on Agent Platform
+    created_at: "2026-10-01T00:00:00Z"
+    pricing:
+      input_rate: 4.000
+      output_rate: 20.000
+      cache_read_rate: 0.200
+      cache_write_rate: 5.000
+
+  - name: "claude-sonnet-5-5"
+    displayName: "Claude Sonnet 5.5"
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
     region: "global"
-    created_at: "2026-04-01T00:00:00Z"
+    created_at: "2026-10-01T00:00:00Z"
     pricing:
-      input_rate: 3.000
-      output_rate: 15.000
-      cache_read_rate: 0.300
-      cache_write_rate: 3.750
-
-  - name: "claude-haiku-4-5"
-    displayName: "Claude Haiku 4.5"
-    publisher: "anthropic"
-    target: "claude"
-    format: "anthropic"
-    region: "global"
-    created_at: "2025-10-01T00:00:00Z"
-    pricing:
-      input_rate: 1.000
-      output_rate: 5.000
+      input_rate: 2.000
+      output_rate: 10.000
       cache_read_rate: 0.100
-      cache_write_rate: 1.250
+      cache_write_rate: 2.500
 
-  # --- Vertex AI Text Embedding Models (No Prompt Caching) ---
-  - name: "text-embedding-005"
-    displayName: "Vertex Text Embedding 005"
+  - name: "claude-haiku-5-5"
+    displayName: "Claude Haiku 5.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"
+    created_at: "2026-10-01T00:00:00Z"
+    pricing:
+      input_rate: 0.100
+      output_rate: 0.500
+      cache_read_rate: 0.010
+      cache_write_rate: 0.125
+
+  # --- Google Cloud Embedding Models (Agent Platform :predict) ---
+  - name: "gemini-embedding-001"
+    displayName: "Gemini Embedding 001"
     publisher: "google"
     target: "gemini-openai-compat"
     format: "openai"
     region: "us-central1"
-    created_at: "2024-11-01T00:00:00Z"
+    created_at: "2025-07-14T00:00:00Z"
     pricing:
-      input_rate: 0.025
+      input_rate: 0.150
       output_rate: 0.000
 
-  # --- Recipe 1: Vertex AI Model Garden (MaaS - OpenAI Format, GCP IAM Auth) ---
-  # - name: "llama-3.3-70b-instruct-maas"
-  #   displayName: "Llama 3.3 70B Instruct (Vertex MaaS)"
+  # --- Optional Frontier Enterprise & Apex Reasoning Recipes (Agent Platform) ---
+  # - name: "gemini-4-neon"
+  #   displayName: "Gemini 4 Neon"
+  #   publisher: "google"
+  #   target: "gemini"
+  #   format: "gemini"
+  #   region: "global"
+  #   pricing:
+  #     input_rate: 10.000
+  #     output_rate: 50.000
+  #     cache_read_rate: 1.000
+  #
+  # - name: "gemini-4-carbon"
+  #   displayName: "Gemini 4 Carbon (Verified Enterprise)"
+  #   publisher: "google"
+  #   target: "gemini"
+  #   format: "gemini"
+  #   region: "global"
+  #   pricing:
+  #     input_rate: 2.000
+  #     output_rate: 10.000
+  #     cache_read_rate: 0.100
+  #
+  # - name: "claude-fable-5-2"
+  #   displayName: "Claude Fable 5.2"
+  #   publisher: "anthropic"
+  #   target: "claude"
+  #   format: "anthropic"
+  #   region: "global"
+  #   pricing:
+  #     input_rate: 8.000
+  #     output_rate: 40.000
+  #     cache_read_rate: 0.200
+  #     cache_write_rate: 10.000
+  #
+  # - name: "claude-mythos-preview"
+  #   displayName: "Claude Mythos Preview"
+  #   publisher: "anthropic"
+  #   target: "claude"
+  #   format: "anthropic"
+  #   region: "global"
+  #   pricing:
+  #     input_rate: 25.000
+  #     output_rate: 125.000
+  #     cache_read_rate: 2.500
+  #     cache_write_rate: 31.250
+
+  # --- Recipe 1: Agent Platform Open & Partner MaaS (OpenAI Format, GCP IAM Auth) ---
+  # - name: "llama-4-maverick-17b-128e-instruct-maas"
+  #   displayName: "Llama 4 Maverick 17B 128E (Agent Platform MaaS)"
   #   publisher: "meta"
   #   target: "gemini-openai-compat"
   #   format: "openai"
-  #   region: "us-central1"
+  #   region: "us-east5"
   #   pricing:
-  #     input_rate: 0.720
-  #     output_rate: 0.720
+  #     input_rate: 0.350
+  #     output_rate: 1.150
 
-  # --- Recipe 2: Direct OpenAI (api.openai.com - Bearer Token Reference) ---
-  # - name: "gpt-5.4"
-  #   displayName: "OpenAI GPT-5.4"
+  # --- Recipe 2: Direct OpenAI (api.openai.com - GPT-6 Series, Bearer Token Reference) ---
+  # - name: "gpt-6.2-sol"
+  #   displayName: "OpenAI GPT-6.2 Sol"
   #   publisher: "openai"
   #   target: "openai-custom"
   #   format: "openai"
@@ -398,38 +469,38 @@ models:
   #     type: "bearer"
   #     token_ref: "propertyset.provider_keys.openai_api_key"
   #   pricing:
-  #     input_rate: 2.500
-  #     output_rate: 15.000
-  #     cache_read_rate: 0.250
+  #     input_rate: 2.000
+  #     output_rate: 10.000
+  #     cache_read_rate: 0.100
+  #     cache_write_rate: 2.500
 
-  # --- Recipe 3: Direct Anthropic (api.anthropic.com - x-api-key Header Reference) ---
+  # --- Recipe 3: Claude Platform Direct API (api.anthropic.com - x-api-key Header Reference) ---
   # - name: "claude-direct-sonnet"
-  #   displayName: "Claude Sonnet 4.6 (Direct Anthropic)"
+  #   displayName: "Claude Sonnet 5.5 (Claude Platform)"
   #   publisher: "anthropic"
   #   target: "claude"
   #   format: "anthropic"
   #   custom_url: "https://api.anthropic.com/v1/messages"
-  #   upstream_model: "claude-sonnet-4-6"
+  #   upstream_model: "claude-sonnet-5-5"
   #   anthropic_version: "2023-06-01"
-  #   anthropic_beta: "prompt-caching-2024-07-31"
   #   auth:
   #     type: "header"
   #     header_name: "x-api-key"
   #     token_ref: "propertyset.provider_keys.anthropic_api_key"
   #   pricing:
-  #     input_rate: 3.000
-  #     output_rate: 15.000
-  #     cache_read_rate: 0.300
-  #     cache_write_rate: 3.750
+  #     input_rate: 2.000
+  #     output_rate: 10.000
+  #     cache_read_rate: 0.100
+  #     cache_write_rate: 2.500
 
-  # --- Recipe 4: Self-Hosted / External Model (vLLM, Ollama, Azure OpenAI, LiteLLM) ---
-  # - name: "custom-llama-3"
-  #   displayName: "Llama 3 70B (vLLM)"
+  # --- Recipe 4: Self-Hosted / Microsoft Foundry (vLLM, Ollama, Microsoft Foundry, LiteLLM) ---
+  # - name: "custom-llama-4"
+  #   displayName: "Llama 4 Maverick (vLLM / Microsoft Foundry)"
   #   publisher: "custom"
   #   target: "openai-custom"
   #   format: "openai"
   #   custom_url: "https://vllm.internal.corp/v1/chat/completions"
-  #   upstream_model: "meta-llama/Meta-Llama-3-70B-Instruct"
+  #   upstream_model: "meta-llama/Llama-4-Maverick-17B-128E-Instruct"
   #   auth:
   #     type: "bearer"
   #     token_ref: "propertyset.provider_keys.vllm_api_key"

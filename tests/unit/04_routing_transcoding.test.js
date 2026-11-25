@@ -1886,6 +1886,282 @@ suite('Smart Routing, Multi-Provider Transcoding, Streaming & Circuit Breaker Su
         assertEqual(runScript('extract_vars_gemini.js', spoofVars), 'ABORT');
         assertEqual(spoofVars['auth_error_status'], '403');
     });
+
+    test('ROUTE-TRANSCODE-18: Gemini 4 thinkingLevel, Claude 5.5 Adaptive Thinking + output_config, GPT-6 Reasoning, gemini-embedding-001 & Agent Platform us/eu Multi-Region Hosts', () => {
+        // 1. Claude /v1/messages with output_config.effort + adaptive thinking -> Gemini 4 Argon on Agent Platform 'us' multi-region
+        const claudeToGem4Vars = {
+            'propertyset.config.project_id': 'my-gcp-project',
+            'propertyset.model_locations.gemini-4-argon.publisher': 'google',
+            'propertyset.model_locations.gemini-4-argon.target': 'gemini',
+            'propertyset.model_locations.gemini-4-argon.endpoint': 'us',
+            'propertyset.model_locations.gemini-4-argon.model': 'us',
+            'propertyset.model_locations.gemini-4-argon.format': 'gemini',
+            'model': 'gemini-4-argon',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gemini-4-argon',
+                max_tokens: 4096,
+                thinking: { type: 'adaptive' },
+                output_config: { effort: 'high' },
+                messages: [{ role: 'user', content: 'Prove safety of consensus quorum.' }]
+            })
+        };
+        assertEqual(runScript('resolve_model_location.js', claudeToGem4Vars), 'CONTINUE');
+        assertEqual(claudeToGem4Vars['endpoint_host'], 'aiplatform.us.rep.googleapis.com');
+        assertEqual(claudeToGem4Vars['model_location'], 'us');
+        assertEqual(runScript('anthropic_to_gemini.js', claudeToGem4Vars), 'CONTINUE');
+        const gem4Req = JSON.parse(claudeToGem4Vars['request.content']);
+        assertEqual(gem4Req.generationConfig.thinkingConfig.thinkingLevel, 'HIGH');
+        assertEqual(gem4Req.generationConfig.thinkingConfig.thinkingBudget, undefined);
+        assertEqual(gem4Req.generationConfig.thinkingConfig.includeThoughts, true);
+
+        // 2. OpenAI /v1/chat/completions reasoning_effort: 'xhigh' -> Claude Opus 5.5 on Agent Platform 'eu' multi-region (adaptive thinking + effort: 'max', zero budget_tokens)
+        const oaiToClaude55Vars = {
+            'request_format': 'openai',
+            'propertyset.config.project_id': 'my-gcp-project',
+            'propertyset.model_locations.claude-opus-5-5.publisher': 'anthropic',
+            'propertyset.model_locations.claude-opus-5-5.target': 'claude',
+            'propertyset.model_locations.claude-opus-5-5.endpoint': 'eu',
+            'propertyset.model_locations.claude-opus-5-5.model': 'eu',
+            'propertyset.model_locations.claude-opus-5-5.format': 'anthropic',
+            'model': 'claude-opus-5-5',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'claude-opus-5-5',
+                max_completion_tokens: 8192,
+                reasoning_effort: 'xhigh',
+                messages: [{ role: 'user', content: 'Design multi-region Paxos.' }]
+            })
+        };
+        assertEqual(runScript('resolve_model_location.js', oaiToClaude55Vars), 'CONTINUE');
+        assertEqual(oaiToClaude55Vars['endpoint_host'], 'aiplatform.eu.rep.googleapis.com');
+        assertEqual(oaiToClaude55Vars['model_location'], 'eu');
+        assertEqual(runScript('inject_anthropic_version.js', oaiToClaude55Vars), 'CONTINUE');
+        const claude55Req = JSON.parse(oaiToClaude55Vars['request.content']);
+        assertEqual(claude55Req.thinking.type, 'adaptive');
+        assertEqual(claude55Req.thinking.budget_tokens, undefined);
+        assertEqual(claude55Req.output_config.effort, 'xhigh');
+
+        // Verify claude-opus-4-6 maps 'xhigh' -> 'max', while claude-sonnet-4-6 clamps 'xhigh' -> 'high'
+        const oaiToOpus46Vars = Object.assign({}, oaiToClaude55Vars, {
+            'model': 'claude-opus-4-6',
+            'request.content': JSON.stringify({
+                model: 'claude-opus-4-6',
+                max_completion_tokens: 8192,
+                reasoning_effort: 'xhigh',
+                messages: [{ role: 'user', content: 'Design multi-region Paxos.' }]
+            })
+        });
+        assertEqual(runScript('inject_anthropic_version.js', oaiToOpus46Vars), 'CONTINUE');
+        assertEqual(JSON.parse(oaiToOpus46Vars['request.content']).output_config.effort, 'max');
+
+        // 3. Direct OpenAI GPT-6.2 Sol normalizes max_tokens -> max_completion_tokens and strips temperature when reasoning_effort is active
+        const gpt6Vars = {
+            'request_format': 'openai',
+            'propertyset.config.project_id': 'my-gcp-project',
+            'propertyset.model_locations.gpt-6.2-sol.publisher': 'openai',
+            'propertyset.model_locations.gpt-6.2-sol.target': 'openai-custom',
+            'propertyset.model_locations.gpt-6.2-sol.format': 'openai',
+            'propertyset.model_locations.gpt-6.2-sol.url': 'https://api.openai.com/v1/chat/completions',
+            'propertyset.model_locations.gpt-6.2-sol.auth_type': 'bearer',
+            'propertyset.model_locations.gpt-6.2-sol.auth_token': 'sk-proj-mock',
+            'model': 'gpt-6.2-sol',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gpt-6.2-sol',
+                max_tokens: 2048,
+                temperature: 0.5,
+                reasoning_effort: 'high',
+                messages: [{ role: 'user', content: 'Analyze race condition.' }]
+            })
+        };
+        assertEqual(runScript('resolve_model_location.js', gpt6Vars), 'CONTINUE');
+        assertEqual(runScript('restore_model_openai.js', gpt6Vars), 'CONTINUE');
+        const gpt6Body = JSON.parse(gpt6Vars['request.content']);
+        assertEqual(gpt6Body.max_completion_tokens, 2048);
+        assertEqual(gpt6Body.max_tokens, undefined);
+        assertEqual(gpt6Body.temperature, undefined);
+        assertEqual(gpt6Body.reasoning_effort, 'high');
+
+        // 4. Backward-compatible alias text-embedding-005 -> gemini-embedding-001 on /v1/embeddings (:predict)
+        const embAliasVars = {
+            'propertyset.config.project_id': 'my-gcp-project',
+            'propertyset.model_locations.alias.text-embedding-005': 'gemini-embedding-001',
+            'propertyset.model_locations.gemini-embedding-001.publisher': 'google',
+            'propertyset.model_locations.gemini-embedding-001.target': 'gemini-openai-compat',
+            'propertyset.model_locations.gemini-embedding-001.endpoint': 'us-central1',
+            'propertyset.model_locations.gemini-embedding-001.model': 'us-central1',
+            'propertyset.model_locations.gemini-embedding-001.format': 'openai',
+            'proxy.pathsuffix': '',
+            'proxy.basepath': '/ai-gateway/v1/embeddings',
+            'request.header.content-type': 'application/json',
+            'request.content': JSON.stringify({ model: 'text-embedding-005', input: 'Agent Platform RAG vector' })
+        };
+        assertEqual(runScript('extract_vars_openai.js', embAliasVars), 'CONTINUE');
+        assertEqual(runScript('resolve_model_location.js', embAliasVars), 'CONTINUE');
+        assertEqual(embAliasVars['model'], 'gemini-embedding-001');
+        assertEqual(runScript('restore_model_openai.js', embAliasVars), 'CONTINUE');
+        assert(embAliasVars['target.url'].endsWith('/locations/us-central1/publishers/google/models/gemini-embedding-001:predict'));
+
+        // 5. Gemini 4 Hydrogen supports both MINIMAL and XHIGH thinkingLevel
+        const gem4HydMinVars = {
+            'request_format': 'openai',
+            'model': 'gemini-4-hydrogen',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gemini-4-hydrogen',
+                reasoning_effort: 'minimal',
+                messages: [{ role: 'user', content: 'Fast ping' }]
+            })
+        };
+        assertEqual(runScript('anthropic_to_gemini.js', gem4HydMinVars), 'CONTINUE');
+        assertEqual(JSON.parse(gem4HydMinVars['request.content']).generationConfig.thinkingConfig.thinkingLevel, 'MINIMAL');
+
+        const gem4HydXHighVars = {
+            'request_format': 'openai',
+            'model': 'gemini-4-hydrogen',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gemini-4-hydrogen',
+                reasoning_effort: 'xhigh',
+                messages: [{ role: 'user', content: 'Deep reasoning' }]
+            })
+        };
+        assertEqual(runScript('anthropic_to_gemini.js', gem4HydXHighVars), 'CONTINUE');
+        assertEqual(JSON.parse(gem4HydXHighVars['request.content']).generationConfig.thinkingConfig.thinkingLevel, 'XHIGH');
+
+        // 6. Anthropic stop_reason 'model_context_window_exceeded' maps to OpenAI finish_reason 'length' (non-streaming & SSE)
+        const ctxWindowRespVars = {
+            'request_format': 'openai',
+            'model': 'claude-opus-5-5',
+            'response.content': JSON.stringify({
+                id: 'msg_ctx_1',
+                type: 'message',
+                role: 'assistant',
+                model: 'claude-opus-5-5',
+                content: [{ type: 'text', text: 'Partial output before window limit' }],
+                stop_reason: 'model_context_window_exceeded',
+                usage: { input_tokens: 999000, output_tokens: 1000 }
+            })
+        };
+        assertEqual(runScript('anthropic_to_openai_resp.js', ctxWindowRespVars), 'CONTINUE');
+        assertEqual(JSON.parse(ctxWindowRespVars['response.content']).choices[0].finish_reason, 'length');
+
+        const ctxWindowSseVars = {
+            'request_format': 'openai',
+            'route_target': 'claude',
+            'route_format': 'anthropic',
+            'model': 'claude-opus-5-5',
+            'response.event.current.count': 1,
+            'response.event.current.content':
+                'data: {"type":"message_start","message":{"id":"msg_sse_ctx","model":"claude-opus-5-5","usage":{"input_tokens":100}}}\n\n'
+                + 'data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n'
+                + 'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Clipped"}}\n\n'
+                + 'data: {"type":"message_delta","delta":{"stop_reason":"model_context_window_exceeded"},"usage":{"output_tokens":5}}\n\n'
+                + 'data: {"type":"message_stop"}\n\n'
+        };
+        runScript('combine_resp.js', ctxWindowSseVars);
+        assert(ctxWindowSseVars['response.event.current.content'].includes('"finish_reason":"length"'));
+    });
+
+    test('ROUTE-TRANSCODE-19: Gemini 4 Neon Thinking, Native /ai-gateway Embeddings Security/Billing & Judge gemini-3.5-flash-lite SSE Cost', () => {
+        // 1. Gemini 4 Neon uses thinkingLevel (XHIGH supported, MINIMAL clamped to LOW) without legacy thinkingBudget
+        const neonXHighVars = {
+            'request_format': 'openai',
+            'model': 'gemini-4-neon',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gemini-4-neon',
+                reasoning_effort: 'xhigh',
+                messages: [{ role: 'user', content: 'Prove theorem.' }]
+            })
+        };
+        assertEqual(runScript('anthropic_to_gemini.js', neonXHighVars), 'CONTINUE');
+        const neonCfg = JSON.parse(neonXHighVars['request.content']).generationConfig.thinkingConfig;
+        assertEqual(neonCfg.thinkingLevel, 'XHIGH');
+        assertEqual(neonCfg.thinkingBudget, undefined);
+
+        const neonMinVars = {
+            'request_format': 'openai',
+            'model': 'gemini-4-neon',
+            'payload_strict_validated': 'true',
+            'request.content': JSON.stringify({
+                model: 'gemini-4-neon',
+                reasoning_effort: 'minimal',
+                messages: [{ role: 'user', content: 'Quick check.' }]
+            })
+        };
+        assertEqual(runScript('anthropic_to_gemini.js', neonMinVars), 'CONTINUE');
+        assertEqual(JSON.parse(neonMinVars['request.content']).generationConfig.thinkingConfig.thinkingLevel, 'LOW');
+
+        // 2. Native /ai-gateway :embedContent blocks SSRF fileUri & extracts prompt + exact statistics.token_count billing
+        const ssrfEmbVars = {
+            'gcp_project_id': 'my-gcp-project',
+            'proxy.pathsuffix': '/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models/gemini-embedding-2-preview:embedContent',
+            'request.header.content-type': 'application/json',
+            'request.content': JSON.stringify({
+                content: {
+                    parts: [{ fileData: { mimeType: 'image/png', fileUri: 'http://169.254.169.254/latest/meta-data/' } }]
+                }
+            })
+        };
+        assertEqual(runScript('extract_vars_gemini.js', ssrfEmbVars), 'ABORT');
+        assertEqual(ssrfEmbVars['auth_error_status'], '400');
+
+        const validBatchEmbVars = {
+            'gcp_project_id': 'my-gcp-project',
+            'propertyset.config.model_armor_enabled': 'true',
+            'proxy.pathsuffix': '/v1/projects/my-gcp-project/locations/us-central1/publishers/google/models/gemini-embedding-001:batchEmbedContents',
+            'request.header.content-type': 'application/json',
+            'request.content': JSON.stringify({
+                requests: [
+                    { model: 'models/gemini-embedding-001', content: { parts: [{ text: 'First document chunk' }] } },
+                    { model: 'models/gemini-embedding-001', content: { parts: [{ text: 'Second document chunk' }] } }
+                ]
+            }),
+            'response.content': JSON.stringify({
+                embeddings: [
+                    { values: [0.11, 0.22], statistics: { token_count: 100 } },
+                    { values: [0.33, 0.44], statistics: { token_count: 150 } }
+                ]
+            }),
+            'propertyset.monetization_rates.gemini-embedding-001.input_rate_per_m': '0.15',
+            'propertyset.monetization_rates.gemini-embedding-001.output_rate_per_m': '0.00'
+        };
+        assertEqual(runScript('extract_vars_gemini.js', validBatchEmbVars), 'CONTINUE');
+        assert(validBatchEmbVars['extracted_prompt'].includes('First document chunk'));
+        assert(validBatchEmbVars['extracted_prompt'].includes('Second document chunk'));
+        assertEqual(runScript('calculate_tokens_non_streaming.js', validBatchEmbVars), 'CONTINUE');
+        assertEqual(validBatchEmbVars['prompt_tokens'], '250');
+        assertEqual(validBatchEmbVars['completion_tokens'], '0');
+        assertEqual(validBatchEmbVars['usage_total_tokens'], '250');
+        assertEqual(runScript('calculate_monetization_cost.js', validBatchEmbVars), 'CONTINUE');
+        assert(Number(validBatchEmbVars['tx_cost_usd']) > 0);
+
+        // 3. combine_resp.js uses gemini-3.5-flash-lite as default Judge model when judge_model is unset
+        const judgeSseVars = {
+            'request_format': 'gemini',
+            'route_target': 'gemini',
+            'route_format': 'gemini',
+            'model': 'gemini-4-hydrogen',
+            'judge_total_tokens': '1000',
+            'judge_prompt_tokens': '800',
+            'judge_completion_tokens': '200',
+            'propertyset.monetization_rates.gemini-3.5-flash-lite.input_rate_per_m': '0.25',
+            'propertyset.monetization_rates.gemini-3.5-flash-lite.output_rate_per_m': '1.50',
+            'propertyset.monetization_rates.gemini-4-hydrogen.input_rate_per_m': '0.50',
+            'propertyset.monetization_rates.gemini-4-hydrogen.output_rate_per_m': '3.00',
+            'request.queryparam.alt': 'sse',
+            'response.event.current.count': 1,
+            'response.event.current.content':
+                'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Routed!"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":100,"candidatesTokenCount":50,"totalTokenCount":150}}\n\n'
+        };
+        runScript('combine_resp.js', judgeSseVars);
+        assertEqual(String(judgeSseVars['usage_total_tokens']), '150');
+        assertEqual(String(judgeSseVars['primary_quota_usage']), '1150');
+        // 800 * 0.25/1M + 200 * 1.50/1M = 0.0002 + 0.0003 = 0.000500
+        assertEqual(Number(judgeSseVars['tx_judge_cost_usd']).toFixed(6), '0.000500');
+    });
 });
 
 

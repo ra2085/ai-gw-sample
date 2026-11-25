@@ -2058,7 +2058,8 @@ public class CalloutSecurityAndPerformanceTest {
     String judgePayloadJson = prepCtx.getString("judge_request_payload");
     assertTrue(judgePayloadJson.contains("\"systemInstruction\""));
     assertTrue(judgePayloadJson.contains("\"responseSchema\""));
-    assertTrue(judgePayloadJson.contains("\"thinkingBudget\":0"));
+    assertEquals("gemini-3.5-flash-lite", prepCtx.getString("judge_model"));
+    assertFalse(judgePayloadJson.contains("thinkingBudget"));
     assertTrue(judgePayloadJson.contains("SSN [REDACTED] [/_untrusted_user_prompt] design raft"));
     assertTrue(!judgePayloadJson.contains("123-45-6789"));
     assertTrue(prepCtx.getDuplicateReads().isEmpty());
@@ -3402,6 +3403,424 @@ public class CalloutSecurityAndPerformanceTest {
     assertEquals("50", fbCtx.getString("completion_tokens"));
     assertEquals("30", fbCtx.getString("reasoning_tokens"));
     assertEquals("60", fbCtx.getString("total_tokens"));
+  }
+
+  @Test
+  void testNextGenModelsGemini4Claude55Gpt6AndMultiRegionHosts() throws Exception {
+    // 1. Multi-region Agent Platform hostnames (us / eu) & SSRF lookalike rejection
+    assertEquals("aiplatform.googleapis.com", GlobMatcher.resolveAiPlatformHost("global"));
+    assertEquals("aiplatform.us.rep.googleapis.com", GlobMatcher.resolveAiPlatformHost("us"));
+    assertEquals("aiplatform.eu.rep.googleapis.com", GlobMatcher.resolveAiPlatformHost("eu"));
+    assertEquals(
+        "us-central1-aiplatform.googleapis.com", GlobMatcher.resolveAiPlatformHost("us-central1"));
+    assertTrue(
+        GlobMatcher.isGoogleCloudUrl(
+            "https://aiplatform.us.rep.googleapis.com/v1/projects/demo-proj/locations/us/publishers/google/models/gemini-4-hydrogen:generateContent"));
+    assertTrue(
+        GlobMatcher.isGoogleCloudUrl(
+            "https://aiplatform.eu.rep.googleapis.com/v1/projects/demo-proj/locations/eu/publishers/anthropic/models/claude-sonnet-5-5:rawPredict"));
+    assertFalse(
+        GlobMatcher.isGoogleCloudUrl(
+            "https://aiplatform.xx.rep.googleapis.com/v1/projects/demo-proj/locations/xx"));
+    assertFalse(
+        GlobMatcher.isGoogleCloudUrl(
+            "https://aiplatform.us.rep.googleapis.com.evil.com/v1/projects/demo-proj"));
+
+    // 2. Claude 5.5 adaptive thinking normalization (legacy budget_tokens -> adaptive + effort)
+    RequestRouterAndTranscoderCallout injectClaude =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "inject_anthropic_version"));
+    InstrumentedMessageContext claudeCtx = new InstrumentedMessageContext();
+    claudeCtx.putVar("request_format", "claude");
+    claudeCtx.putVar("model", "claude-opus-5-5");
+    claudeCtx.putVar(
+        "request.content",
+        "{\"model\":\"claude-opus-5-5\",\"max_tokens\":32000,\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":16000},\"messages\":[{\"role\":\"user\",\"content\":\"Design distributed consensus\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        injectClaude.execute(claudeCtx.getMessageContext(), claudeCtx.getExecutionContext()));
+    String claudeOut = claudeCtx.getString("request.content");
+    assertTrue(claudeOut.contains("\"type\":\"adaptive\""));
+    assertFalse(claudeOut.contains("budget_tokens"));
+    assertTrue(claudeOut.contains("\"effort\":\"high\""));
+    assertTrue(claudeCtx.getDuplicateReads().isEmpty());
+
+    // OpenAI reasoning_effort -> Claude 5.5 adaptive + effort=max & non-1.0 temperature stripped
+    InstrumentedMessageContext oaiToClaude55 = new InstrumentedMessageContext();
+    oaiToClaude55.putVar("request_format", "openai");
+    oaiToClaude55.putVar("model", "claude-sonnet-5-5");
+    oaiToClaude55.putVar(
+        "request.content",
+        "{\"model\":\"claude-sonnet-5-5\",\"max_tokens\":8192,\"temperature\":0.4,\"reasoning_effort\":\"max\",\"messages\":[{\"role\":\"user\",\"content\":\"Prove theorem\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        injectClaude.execute(oaiToClaude55.getMessageContext(), oaiToClaude55.getExecutionContext()));
+    String oaiClaudeOut = oaiToClaude55.getString("request.content");
+    assertTrue(oaiClaudeOut.contains("\"type\":\"adaptive\""));
+    assertTrue(oaiClaudeOut.contains("\"effort\":\"max\""));
+    assertFalse(oaiClaudeOut.contains("\"temperature\""));
+    assertFalse(oaiClaudeOut.contains("\"reasoning_effort\""));
+
+    // 3. Gemini 4 thinkingBudget -> thinkingLevel & Gemini 3.5 Flash-Lite penalty stripping
+    RequestRouterAndTranscoderCallout toGemini =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "anthropic_to_gemini"));
+    InstrumentedMessageContext gem4Ctx = new InstrumentedMessageContext();
+    gem4Ctx.putVar("request_format", "gemini");
+    gem4Ctx.putVar("model", "gemini-4-argon");
+    gem4Ctx.putVar("payload_strict_validated", "true");
+    gem4Ctx.putVar(
+        "request.content",
+        "{\"contents\":[{\"role\":\"user\",\"parts\":[{\"text\":\"Solve\"}]}],\"generationConfig\":{\"thinkingConfig\":{\"thinkingBudget\":0,\"includeThoughts\":true}}}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        toGemini.execute(gem4Ctx.getMessageContext(), gem4Ctx.getExecutionContext()));
+    String gem4Out = gem4Ctx.getString("request.content");
+    assertFalse(gem4Out.contains("thinkingBudget"));
+    assertTrue(gem4Out.contains("\"thinkingLevel\":\"LOW\""));
+
+    InstrumentedMessageContext flashLiteCtx = new InstrumentedMessageContext();
+    flashLiteCtx.putVar("request_format", "openai");
+    flashLiteCtx.putVar("model", "gemini-3.5-flash-lite");
+    flashLiteCtx.putVar("payload_strict_validated", "true");
+    flashLiteCtx.putVar(
+        "request.content",
+        "{\"model\":\"gemini-3.5-flash-lite\",\"frequency_penalty\":0.5,\"presence_penalty\":0.3,\"messages\":[{\"role\":\"user\",\"content\":\"Classify\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        toGemini.execute(flashLiteCtx.getMessageContext(), flashLiteCtx.getExecutionContext()));
+    String flashLiteOut = flashLiteCtx.getString("request.content");
+    assertFalse(flashLiteOut.contains("frequencyPenalty"));
+    assertFalse(flashLiteOut.contains("presencePenalty"));
+
+    // 4. Direct OpenAI GPT-6 reasoning normalization (gpt-6.2-sol vs gpt-6-chat)
+    assertTrue(RequestRouterAndTranscoderCallout.isOpenAiReasoningModel("gpt-6.2-sol"));
+    assertTrue(RequestRouterAndTranscoderCallout.isOpenAiReasoningModel("openai/gpt-6.2-astra"));
+    assertTrue(RequestRouterAndTranscoderCallout.isOpenAiReasoningModel("gpt-6-luna"));
+    assertFalse(RequestRouterAndTranscoderCallout.isOpenAiReasoningModel("gpt-6-chat-latest"));
+
+    RequestRouterAndTranscoderCallout restoreOai =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "restore_model_openai"));
+    InstrumentedMessageContext gpt6Ctx = new InstrumentedMessageContext();
+    gpt6Ctx.putVar("request_format", "openai");
+    gpt6Ctx.putVar("model", "gpt-6.2-sol");
+    gpt6Ctx.putVar("model_publisher", "openai");
+    gpt6Ctx.putVar("route_target", "openai-custom");
+    gpt6Ctx.putVar("model_custom_url", "https://api.openai.com/v1/chat/completions");
+    gpt6Ctx.putVar("payload_strict_validated", "true");
+    gpt6Ctx.putVar(
+        "request.content",
+        "{\"model\":\"gpt-6.2-sol\",\"max_tokens\":4096,\"temperature\":0.2,\"top_p\":0.9,\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        restoreOai.execute(gpt6Ctx.getMessageContext(), gpt6Ctx.getExecutionContext()));
+    String gpt6Out = gpt6Ctx.getString("request.content");
+    assertTrue(gpt6Out.contains("\"max_completion_tokens\":4096"));
+    assertFalse(gpt6Out.contains("\"max_tokens\""));
+    assertFalse(gpt6Out.contains("\"temperature\""));
+    assertFalse(gpt6Out.contains("\"top_p\""));
+
+    // 5. GPT-6 reasoning_effort='none' preserves temperature & top_p, while o3 clamps 'xhigh' -> 'high' and drops 'none'
+    InstrumentedMessageContext gpt6NoneCtx = new InstrumentedMessageContext();
+    gpt6NoneCtx.putVar("request_format", "openai");
+    gpt6NoneCtx.putVar("model", "gpt-6");
+    gpt6NoneCtx.putVar("model_publisher", "openai");
+    gpt6NoneCtx.putVar("route_target", "openai-custom");
+    gpt6NoneCtx.putVar("model_custom_url", "https://api.openai.com/v1/chat/completions");
+    gpt6NoneCtx.putVar("payload_strict_validated", "true");
+    gpt6NoneCtx.putVar(
+        "request.content",
+        "{\"model\":\"gpt-6\",\"max_tokens\":1024,\"reasoning_effort\":\"none\",\"temperature\":0.7,\"top_p\":0.95,\"messages\":[{\"role\":\"user\",\"content\":\"Fast reply\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        restoreOai.execute(gpt6NoneCtx.getMessageContext(), gpt6NoneCtx.getExecutionContext()));
+    String gpt6NoneOut = gpt6NoneCtx.getString("request.content");
+    assertTrue(gpt6NoneOut.contains("\"reasoning_effort\":\"none\""));
+    assertTrue(gpt6NoneOut.contains("\"temperature\":0.7"));
+    assertTrue(gpt6NoneOut.contains("\"top_p\":0.95"));
+
+    InstrumentedMessageContext o3Ctx = new InstrumentedMessageContext();
+    o3Ctx.putVar("request_format", "openai");
+    o3Ctx.putVar("model", "o3");
+    o3Ctx.putVar("model_publisher", "openai");
+    o3Ctx.putVar("route_target", "openai-custom");
+    o3Ctx.putVar("model_custom_url", "https://api.openai.com/v1/chat/completions");
+    o3Ctx.putVar("payload_strict_validated", "true");
+    o3Ctx.putVar(
+        "request.content",
+        "{\"model\":\"o3\",\"max_tokens\":2048,\"reasoning_effort\":\"xhigh\",\"temperature\":0.4,\"messages\":[{\"role\":\"user\",\"content\":\"Solve\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        restoreOai.execute(o3Ctx.getMessageContext(), o3Ctx.getExecutionContext()));
+    String o3Out = o3Ctx.getString("request.content");
+    assertTrue(o3Out.contains("\"reasoning_effort\":\"high\""));
+    assertFalse(o3Out.contains("\"temperature\""));
+
+    // 6. Gemini 4 Neon & Hydrogen XHIGH support vs Argon HIGH clamp & Neon MINIMAL -> LOW clamp
+    InstrumentedMessageContext neonCtx = new InstrumentedMessageContext();
+    neonCtx.putVar("request_format", "claude");
+    neonCtx.putVar("model", "gemini-4-neon");
+    neonCtx.putVar("payload_strict_validated", "true");
+    neonCtx.putVar(
+        "request.content",
+        "{\"model\":\"gemini-4-neon\",\"max_tokens\":8192,\"thinking\":{\"type\":\"adaptive\"},\"output_config\":{\"effort\":\"max\"},\"messages\":[{\"role\":\"user\",\"content\":\"Deep proof\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        toGemini.execute(neonCtx.getMessageContext(), neonCtx.getExecutionContext()));
+    assertTrue(neonCtx.getString("request.content").contains("\"thinkingLevel\":\"XHIGH\""));
+
+    InstrumentedMessageContext neonMinCtx = new InstrumentedMessageContext();
+    neonMinCtx.putVar("request_format", "openai");
+    neonMinCtx.putVar("model", "gemini-4-neon");
+    neonMinCtx.putVar("payload_strict_validated", "true");
+    neonMinCtx.putVar(
+        "request.content",
+        "{\"model\":\"gemini-4-neon\",\"reasoning_effort\":\"minimal\",\"messages\":[{\"role\":\"user\",\"content\":\"Quick check\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        toGemini.execute(neonMinCtx.getMessageContext(), neonMinCtx.getExecutionContext()));
+    assertTrue(neonMinCtx.getString("request.content").contains("\"thinkingLevel\":\"LOW\""));
+
+    // 7. Claude Haiku 5.5, Opus 4.7 & Mythos Preview adaptive thinking + effort clamping
+    InstrumentedMessageContext haiku55Ctx = new InstrumentedMessageContext();
+    haiku55Ctx.putVar("request_format", "openai");
+    haiku55Ctx.putVar("model", "claude-haiku-5-5");
+    haiku55Ctx.putVar("model_location", "global");
+    haiku55Ctx.putVar("endpoint_host", "aiplatform.googleapis.com");
+    haiku55Ctx.putVar("gcp_project_id", "demo-proj");
+    haiku55Ctx.putVar("payload_strict_validated", "true");
+    haiku55Ctx.putVar(
+        "request.content",
+        "{\"model\":\"claude-haiku-5-5\",\"max_completion_tokens\":4096,\"reasoning_effort\":\"max\",\"messages\":[{\"role\":\"user\",\"content\":\"Summarize\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        injectClaude.execute(haiku55Ctx.getMessageContext(), haiku55Ctx.getExecutionContext()));
+    String haiku55Out = haiku55Ctx.getString("request.content");
+    assertTrue(haiku55Out.contains("\"type\":\"adaptive\""));
+    assertFalse(haiku55Out.contains("budget_tokens"));
+    assertTrue(haiku55Out.contains("\"effort\":\"high\""));
+
+    InstrumentedMessageContext mythosCtx = new InstrumentedMessageContext();
+    mythosCtx.putVar("request_format", "claude");
+    mythosCtx.putVar("model", "claude-mythos-preview");
+    mythosCtx.putVar("model_location", "global");
+    mythosCtx.putVar("endpoint_host", "aiplatform.googleapis.com");
+    mythosCtx.putVar("gcp_project_id", "demo-proj");
+    mythosCtx.putVar("payload_strict_validated", "true");
+    mythosCtx.putVar(
+        "request.content",
+        "{\"model\":\"claude-mythos-preview\",\"max_tokens\":8192,\"thinking\":{\"type\":\"adaptive\"},\"output_config\":{\"effort\":\"xhigh\"},\"messages\":[{\"role\":\"user\",\"content\":\"Verify theorem\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        injectClaude.execute(mythosCtx.getMessageContext(), mythosCtx.getExecutionContext()));
+    String mythosOut = mythosCtx.getString("request.content");
+    assertTrue(mythosOut.contains("\"type\":\"adaptive\""));
+    assertTrue(mythosOut.contains("\"effort\":\"xhigh\""));
+
+    InstrumentedMessageContext opus47Ctx = new InstrumentedMessageContext();
+    opus47Ctx.putVar("request_format", "claude");
+    opus47Ctx.putVar("model", "claude-opus-4-7");
+    opus47Ctx.putVar("model_location", "global");
+    opus47Ctx.putVar("endpoint_host", "aiplatform.googleapis.com");
+    opus47Ctx.putVar("gcp_project_id", "demo-proj");
+    opus47Ctx.putVar("payload_strict_validated", "true");
+    opus47Ctx.putVar(
+        "request.content",
+        "{\"model\":\"claude-opus-4-7\",\"max_tokens\":16000,\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":8000},\"messages\":[{\"role\":\"user\",\"content\":\"Audit\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        injectClaude.execute(opus47Ctx.getMessageContext(), opus47Ctx.getExecutionContext()));
+    String opus47Out = opus47Ctx.getString("request.content");
+    assertTrue(opus47Out.contains("\"type\":\"adaptive\""));
+    assertFalse(opus47Out.contains("budget_tokens"));
+    assertTrue(opus47Out.contains("\"effort\":\"medium\""));
+
+    // 8. Native /ai-gateway Gemini prompt extraction captures systemInstruction + functionCall/functionResponse and skips thought:true
+    RequestRouterAndTranscoderCallout extractGemini =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "extract_vars_gemini"));
+    InstrumentedMessageContext gemExtractCtx = new InstrumentedMessageContext();
+    gemExtractCtx.putVar("propertyset.config.model_armor_enabled", "true");
+    gemExtractCtx.putVar("gcp_project_id", "p1");
+    gemExtractCtx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/p1/locations/global/publishers/google/models/gemini-4-hydrogen:generateContent");
+    gemExtractCtx.putVar("request.header.content-type", "application/json");
+    gemExtractCtx.putVar(
+        "request.content",
+        "{\"systemInstruction\":{\"parts\":[{\"text\":\"HIDDEN_SYS_PROMPT\"}]},\"contents\":[{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"INTERNAL_THOUGHT\"},{\"functionCall\":{\"name\":\"exec_sql\",\"args\":{\"q\":\"DROP TABLE users\"}}}]},{\"role\":\"user\",\"parts\":[{\"functionResponse\":{\"name\":\"exec_sql\",\"response\":{\"out\":\"TOOL_INJECTION_PAYLOAD\"}}},{\"text\":\"Continue\"}]}],\"generationConfig\":{\"thinkingConfig\":{\"thinkingLevel\":\"XHIGH\"}}}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemini.execute(gemExtractCtx.getMessageContext(), gemExtractCtx.getExecutionContext()));
+    String extractedGemPrompt = gemExtractCtx.getString("extracted_prompt");
+    assertNotNull(extractedGemPrompt);
+    assertTrue(extractedGemPrompt.contains("HIDDEN_SYS_PROMPT"));
+    assertTrue(extractedGemPrompt.contains("DROP TABLE users"));
+    assertTrue(extractedGemPrompt.contains("TOOL_INJECTION_PAYLOAD"));
+    assertFalse(extractedGemPrompt.contains("INTERNAL_THOUGHT"));
+    assertTrue(gemExtractCtx.getString("request.content").contains("\"thinkingLevel\":\"XHIGH\""));
+
+    // 9. GPT-6 / GPT-5.4 reasoning_effort="none" preserves temperature/top_p while converting max_tokens -> max_completion_tokens
+    Map<String, Object> gpt6NoneBody = new java.util.LinkedHashMap<>();
+    gpt6NoneBody.put("model", "gpt-6");
+    gpt6NoneBody.put("max_tokens", 2048L);
+    gpt6NoneBody.put("temperature", 0.2);
+    gpt6NoneBody.put("top_p", 0.9);
+    gpt6NoneBody.put("reasoning_effort", "none");
+    RequestRouterAndTranscoderCallout.normalizeOpenAiReasoningPayload(gpt6NoneBody, "gpt-6", null);
+    assertEquals("none", gpt6NoneBody.get("reasoning_effort"));
+    assertEquals(2048L, gpt6NoneBody.get("max_completion_tokens"));
+    assertNull(gpt6NoneBody.get("max_tokens"));
+    assertEquals(0.2, gpt6NoneBody.get("temperature"));
+    assertEquals(0.9, gpt6NoneBody.get("top_p"));
+  }
+
+  @Test
+  public void testGeminiEmbeddingsSecurityCountTokensBillingAndOpus47Effort() {
+    RequestRouterAndTranscoderCallout extractGemini =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "extract_vars_gemini"));
+
+    // 1. embedContent SSRF fileUri block
+    InstrumentedMessageContext ssrfEmbedCtx = new InstrumentedMessageContext();
+    ssrfEmbedCtx.putVar("gcp_project_id", "demo-proj");
+    ssrfEmbedCtx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/demo-proj/locations/us-central1/publishers/google/models/gemini-embedding-001:embedContent");
+    ssrfEmbedCtx.putVar("request.header.content-type", "application/json");
+    ssrfEmbedCtx.putVar(
+        "request.content",
+        "{\"content\":{\"parts\":[{\"fileData\":{\"mimeType\":\"image/png\",\"fileUri\":\"http://169.254.169.254/computeMetadata/v1/\"}}]}}");
+    assertEquals(
+        ExecutionResult.ABORT,
+        extractGemini.execute(ssrfEmbedCtx.getMessageContext(), ssrfEmbedCtx.getExecutionContext()));
+    assertEquals("400", ssrfEmbedCtx.getString("auth_error_status"));
+
+    // 2. batchEmbedContents cross-project sub-request model block
+    InstrumentedMessageContext crossProjBatchCtx = new InstrumentedMessageContext();
+    crossProjBatchCtx.putVar("gcp_project_id", "demo-proj");
+    crossProjBatchCtx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/demo-proj/locations/us-central1/publishers/google/models/gemini-embedding-001:batchEmbedContents");
+    crossProjBatchCtx.putVar("request.header.content-type", "application/json");
+    crossProjBatchCtx.putVar(
+        "request.content",
+        "{\"requests\":[{\"model\":\"projects/other-tenant/locations/us-central1/publishers/google/models/gemini-embedding-001\",\"content\":{\"parts\":[{\"text\":\"probe\"}]}}]}");
+    assertEquals(
+        ExecutionResult.ABORT,
+        extractGemini.execute(
+            crossProjBatchCtx.getMessageContext(), crossProjBatchCtx.getExecutionContext()));
+    assertEquals("403", crossProjBatchCtx.getString("auth_error_status"));
+
+    // 3. batchEmbedContents same-project model + prompt extraction succeeds
+    InstrumentedMessageContext validBatchCtx = new InstrumentedMessageContext();
+    validBatchCtx.putVar("gcp_project_id", "demo-proj");
+    validBatchCtx.putVar("propertyset.config.model_armor_enabled", "true");
+    validBatchCtx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/demo-proj/locations/us-central1/publishers/google/models/gemini-embedding-001:batchEmbedContents");
+    validBatchCtx.putVar("request.header.content-type", "application/json");
+    validBatchCtx.putVar(
+        "request.content",
+        "{\"requests\":[{\"model\":\"projects/demo-proj/locations/us-central1/publishers/google/models/gemini-embedding-001\",\"content\":{\"parts\":[{\"text\":\"SAFE_BATCH_TEXT\"}]}}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemini.execute(validBatchCtx.getMessageContext(), validBatchCtx.getExecutionContext()));
+    assertEquals("true", validBatchCtx.getString("is_embeddings"));
+    assertTrue(validBatchCtx.getString("extracted_prompt").contains("SAFE_BATCH_TEXT"));
+
+    // 4. Native /v1/embeddings token-ID array sets non-zero prompt_char_len for preflight_prompt_guard
+    RequestRouterAndTranscoderCallout extractOai =
+        new RequestRouterAndTranscoderCallout(Map.of("action", "extract_vars_openai"));
+    InstrumentedMessageContext tokArrCtx = new InstrumentedMessageContext();
+    tokArrCtx.putVar("proxy.basepath", "/ai-gateway/v1/embeddings");
+    tokArrCtx.putVar("proxy.pathsuffix", "");
+    tokArrCtx.putVar("request.header.content-type", "application/json");
+    tokArrCtx.putVar(
+        "request.content",
+        "{\"model\":\"gemini-embedding-001\",\"input\":[[101,102,103],[201,202,203]]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractOai.execute(tokArrCtx.getMessageContext(), tokArrCtx.getExecutionContext()));
+    assertEquals("24", tokArrCtx.getString("prompt_char_len"));
+
+    // 5. Native /ai-gateway :embedContent and :batchEmbedContents extract token_count (or prompt_char_len floor) with 0 completion tokens
+    ResponseTranscoderAndCostCallout extractGemResp =
+        new ResponseTranscoderAndCostCallout(Map.of("action", "calculate_tokens_non_streaming"));
+    InstrumentedMessageContext nativeEmbRespCtx = new InstrumentedMessageContext();
+    nativeEmbRespCtx.putVar("request_format", "gemini");
+    nativeEmbRespCtx.putVar("is_embeddings", "true");
+    nativeEmbRespCtx.putVar("stream", Boolean.FALSE);
+    nativeEmbRespCtx.putVar(
+        "response.content",
+        "{\"embedding\":{\"values\":[0.12,-0.34],\"statistics\":{\"truncated\":false,\"token_count\":14}}}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemResp.execute(
+            nativeEmbRespCtx.getMessageContext(), nativeEmbRespCtx.getExecutionContext()));
+    assertEquals("14", nativeEmbRespCtx.getString("prompt_tokens"));
+    assertEquals("0", nativeEmbRespCtx.getString("completion_tokens"));
+    assertEquals("14", nativeEmbRespCtx.getString("usage_total_tokens"));
+    assertTrue(nativeEmbRespCtx.getDuplicateReads().isEmpty());
+
+    InstrumentedMessageContext batchEmbRespCtx = new InstrumentedMessageContext();
+    batchEmbRespCtx.putVar("request_format", "gemini");
+    batchEmbRespCtx.putVar("is_embeddings", "true");
+    batchEmbRespCtx.putVar("stream", Boolean.FALSE);
+    batchEmbRespCtx.putVar(
+        "response.content",
+        "{\"embeddings\":[{\"values\":[0.1],\"statistics\":{\"token_count\":10}},{\"values\":[0.2],\"statistics\":{\"token_count\":15}}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemResp.execute(
+            batchEmbRespCtx.getMessageContext(), batchEmbRespCtx.getExecutionContext()));
+    assertEquals("25", batchEmbRespCtx.getString("prompt_tokens"));
+    assertEquals("0", batchEmbRespCtx.getString("completion_tokens"));
+    assertEquals("25", batchEmbRespCtx.getString("usage_total_tokens"));
+
+    InstrumentedMessageContext noStatsEmbRespCtx = new InstrumentedMessageContext();
+    noStatsEmbRespCtx.putVar("request_format", "gemini");
+    noStatsEmbRespCtx.putVar("is_embeddings", "true");
+    noStatsEmbRespCtx.putVar("prompt_char_len", "40");
+    noStatsEmbRespCtx.putVar("stream", Boolean.FALSE);
+    noStatsEmbRespCtx.putVar("response.content", "{\"embedding\":{\"values\":[0.1,0.2,0.3]}}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemResp.execute(
+            noStatsEmbRespCtx.getMessageContext(), noStatsEmbRespCtx.getExecutionContext()));
+    assertEquals("10", noStatsEmbRespCtx.getString("prompt_tokens"));
+    assertEquals("0", noStatsEmbRespCtx.getString("completion_tokens"));
+    assertEquals("10", noStatsEmbRespCtx.getString("usage_total_tokens"));
+
+    // 6. Native Vertex Anthropic claude-opus-4-7 preserves reasoning_effort="xhigh" -> output_config.effort="xhigh"
+    // while claude-sonnet-4-6 clamps output_config.effort="xhigh" -> "high" even without a thinking block
+    InstrumentedMessageContext nativeOpus47Ctx = new InstrumentedMessageContext();
+    nativeOpus47Ctx.putVar("gcp_project_id", "demo-proj");
+    nativeOpus47Ctx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/demo-proj/locations/global/publishers/anthropic/models/claude-opus-4-7:rawPredict");
+    nativeOpus47Ctx.putVar("request.header.content-type", "application/json");
+    nativeOpus47Ctx.putVar(
+        "request.content",
+        "{\"anthropic_version\":\"vertex-2023-10-16\",\"max_tokens\":8192,\"reasoning_effort\":\"xhigh\",\"messages\":[{\"role\":\"user\",\"content\":\"Verify\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemini.execute(
+            nativeOpus47Ctx.getMessageContext(), nativeOpus47Ctx.getExecutionContext()));
+    String nativeOpus47Out = nativeOpus47Ctx.getString("request.content");
+    assertTrue(nativeOpus47Out.contains("\"type\":\"adaptive\""));
+    assertTrue(nativeOpus47Out.contains("\"effort\":\"xhigh\""));
+
+    InstrumentedMessageContext nativeSonnet46Ctx = new InstrumentedMessageContext();
+    nativeSonnet46Ctx.putVar("gcp_project_id", "demo-proj");
+    nativeSonnet46Ctx.putVar(
+        "proxy.pathsuffix",
+        "/v1/projects/demo-proj/locations/global/publishers/anthropic/models/claude-sonnet-4-6:rawPredict");
+    nativeSonnet46Ctx.putVar("request.header.content-type", "application/json");
+    nativeSonnet46Ctx.putVar(
+        "request.content",
+        "{\"anthropic_version\":\"vertex-2023-10-16\",\"max_tokens\":4096,\"output_config\":{\"effort\":\"xhigh\"},\"messages\":[{\"role\":\"user\",\"content\":\"Check\"}]}");
+    assertEquals(
+        ExecutionResult.SUCCESS,
+        extractGemini.execute(
+            nativeSonnet46Ctx.getMessageContext(), nativeSonnet46Ctx.getExecutionContext()));
+    assertTrue(nativeSonnet46Ctx.getString("request.content").contains("\"effort\":\"high\""));
   }
 }
 

@@ -650,7 +650,8 @@ public final class ResponseTranscoderAndCostCallout extends BaseCallout {
     String stopReason = GlobMatcher.asString(claudeResp.get("stop_reason"));
     if ("tool_use".equals(stopReason) || !toolCalls.isEmpty()) {
       finishReason = "tool_calls";
-    } else if ("max_tokens".equals(stopReason)) {
+    } else if ("max_tokens".equals(stopReason)
+        || "model_context_window_exceeded".equals(stopReason)) {
       finishReason = "length";
     } else if ("refusal".equals(stopReason)) {
       finishReason = "content_filter";
@@ -763,7 +764,7 @@ public final class ResponseTranscoderAndCostCallout extends BaseCallout {
               item.put("index", Long.valueOf(i));
               data.add(item);
             }
-            String modelName = vars.getOrDefault("model", "text-embedding-005");
+            String modelName = vars.getOrDefault("model", "gemini-embedding-001");
             Map<String, Object> usage = new LinkedHashMap<>();
             usage.put("prompt_tokens", totalEmbTokens);
             usage.put("total_tokens", totalEmbTokens);
@@ -906,6 +907,99 @@ public final class ResponseTranscoderAndCostCallout extends BaseCallout {
 
     boolean isEmbeddings = "true".equals(vars.getString("is_embeddings"));
     boolean isVertexPredict = "true".equals(vars.getString("vertex_predict_embeddings"));
+    if ((isEmbeddings || isVertexPredict) && promptTokens <= 0L) {
+      if (rawRespContent == null) {
+        rawRespContent = vars.getNonEmpty("response.content");
+      }
+      long extractedEmbTokens = 0L;
+      if (rawRespContent != null && !isVertexPredict) {
+        try {
+          Map<String, Object> embResp = StrictJson.parseObject(rawRespContent, false);
+          Map<String, Object> usageMeta = GlobMatcher.asMap(embResp.get("usageMetadata"));
+          if (usageMeta != null) {
+            extractedEmbTokens =
+                Math.max(
+                    GlobMatcher.asLong(usageMeta.get("promptTokenCount"), 0L),
+                    GlobMatcher.asLong(usageMeta.get("totalTokenCount"), 0L));
+          }
+          if (extractedEmbTokens <= 0L) {
+            Map<String, Object> singleEmb = GlobMatcher.asMap(embResp.get("embedding"));
+            if (singleEmb != null) {
+              Map<String, Object> stats = GlobMatcher.asMap(singleEmb.get("statistics"));
+              if (stats != null) {
+                extractedEmbTokens =
+                    Math.max(
+                        GlobMatcher.asLong(stats.get("token_count"), 0L),
+                        GlobMatcher.asLong(stats.get("tokenCount"), 0L));
+              }
+            }
+          }
+          if (extractedEmbTokens <= 0L) {
+            List<Object> batchEmbs = GlobMatcher.asList(embResp.get("embeddings"));
+            if (batchEmbs != null) {
+              for (Object itemObj : batchEmbs) {
+                Map<String, Object> item = GlobMatcher.asMap(itemObj);
+                Map<String, Object> stats =
+                    item != null ? GlobMatcher.asMap(item.get("statistics")) : null;
+                if (stats != null) {
+                  extractedEmbTokens +=
+                      Math.max(
+                          GlobMatcher.asLong(stats.get("token_count"), 0L),
+                          GlobMatcher.asLong(stats.get("tokenCount"), 0L));
+                }
+              }
+            }
+          }
+          if (extractedEmbTokens <= 0L) {
+            List<Object> preds = GlobMatcher.asList(embResp.get("predictions"));
+            if (preds != null) {
+              for (Object predObj : preds) {
+                Map<String, Object> pred = GlobMatcher.asMap(predObj);
+                Map<String, Object> embObj =
+                    pred != null ? GlobMatcher.asMap(pred.get("embeddings")) : null;
+                if (embObj == null) {
+                  embObj = pred;
+                }
+                Map<String, Object> stats =
+                    embObj != null ? GlobMatcher.asMap(embObj.get("statistics")) : null;
+                if (stats != null) {
+                  extractedEmbTokens +=
+                      Math.max(
+                          GlobMatcher.asLong(stats.get("token_count"), 0L),
+                          GlobMatcher.asLong(stats.get("tokenCount"), 0L));
+                }
+              }
+            }
+          }
+          if (extractedEmbTokens <= 0L) {
+            Map<String, Object> meta = GlobMatcher.asMap(embResp.get("metadata"));
+            if (meta != null && meta.get("billableCharacterCount") != null) {
+              long billableChars = GlobMatcher.asLong(meta.get("billableCharacterCount"), 0L);
+              if (billableChars > 0L) {
+                extractedEmbTokens = (billableChars + 3L) / 4L;
+              }
+            }
+          }
+        } catch (Exception ignored) {
+          // Fall back to deterministic prompt_char_len floor below
+        }
+      }
+      if (extractedEmbTokens <= 0L && rawRespContent != null && !rawRespContent.trim().isEmpty()) {
+        long promptChars = GlobMatcher.asLong(vars.get("prompt_char_len"), 0L);
+        if (promptChars <= 0L) {
+          String extP = vars.getNonEmpty("extracted_prompt");
+          if (extP != null) {
+            promptChars = extP.length();
+          }
+        }
+        extractedEmbTokens = Math.max(1L, (promptChars + 3L) / 4L);
+      }
+      if (extractedEmbTokens > 0L) {
+        uncachedPromptTokens = extractedEmbTokens;
+        promptTokens = extractedEmbTokens;
+        completionTokens = 0L;
+      }
+    }
     long totalTokens = promptTokens + completionTokens;
     if (totalTokens == 0L && !isEmbeddings && !isVertexPredict) {
       if (rawRespContent == null) {
@@ -1176,7 +1270,7 @@ public final class ResponseTranscoderAndCostCallout extends BaseCallout {
     long judgeTotalTokens = GlobMatcher.asLong(vars.getString("judge_total_tokens"), 0L);
     double judgeCost = 0.0;
     if (judgeTotalTokens > 0L) {
-      String judgeModel = vars.getOrDefault("judge_model", "gemini-2.5-flash-lite");
+      String judgeModel = vars.getOrDefault("judge_model", "gemini-3.5-flash-lite");
       boolean isDefaultJudge = "default".equals(judgeModel);
       String bareJudge =
           judgeModel.indexOf('/') != -1

@@ -8,7 +8,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
 | Feature Toggle | Default | Purpose | Guide |
 | :--- | :---: | :--- | :--- |
-| **`features.auth.enabled`** | `true` | Authenticates callers (API Keys, Corporate SSO, GCP Agents, OAuth) and maps them to **AI Products**. | [AI Products & Auth](../architecture/security.md) |
+| **`features.auth.enabled`** | `true` | Authenticates callers (API Keys, Corporate SSO, Google Cloud Agents on **Gemini Enterprise Agent Platform** — formerly Vertex AI, OAuth) and maps them to **AI Products**. | [AI Products & Auth](../architecture/security.md) |
 | **`features.auth.apigee_oauth.enabled`** | `true` | Enables native Apigee OAuth 2.0 bearer token verification (`OA-VerifyAccessToken`). | [AI Products & Auth](../architecture/security.md) |
 | **`features.quotas.enabled`** | `true` | Enforces rolling token or Virtual USD Spend Wallet allowances defined on your **AI Products**. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.quotas.synchronous`** | `true` | Controls cross-pod CPS sync on primary individual quotas (`true` for immediate cross-pod accuracy; `false` for async L1 batching via `QuotaAsyncBatchUpdater`). | [Quotas & Budgets](../architecture/monetization.md) |
@@ -20,11 +20,12 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 | **`features.rate_limits.concurrency.enabled`** | `false` | Caps the maximum number of simultaneous open streaming connections per caller. | [Quotas & Budgets](../architecture/monetization.md) |
 | **`features.monetization.enabled`** | `true` | Enables **Invoice-Accurate Cost Attribution** (including cached & reasoning tokens) and cost telemetry headers. | [Quotas & Cost Control](../architecture/monetization.md) |
 | **`features.monetization.enforce_apigee_wallet`** | `false` | Opt-in: enforces native Apigee Monetization Add-on developer billing wallets (`MLC-EnforceMonetizationLimits`). | [Quotas & Cost Control](../architecture/monetization.md) |
-| **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based and task-based model selection. | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.llm_judge.enabled`** | `true` | Enables `"model": "auto:judge"` complexity-based and task-based model selection via an Agent Platform classifier (`gemini-3.5-flash-lite`). | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.circuit_breaker.enabled`** | `true` | Enables automatic upstream failover (`429`/`5xx`) and a rolling-window Circuit Breaker (`LTQ-CircuitBreakerCount` + `LTQ-CircuitBreakerCheck`). | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.streaming.dedicated_sse_targets`** | `false` | Opt-in (Apigee Known Issue `#449012244`): renders dedicated `*-sse` `TargetEndpoint`s (`stream = true` `RouteRule`s) separated from non-SSE `PostFlow` targets. | [Smart Routing & Safety](../architecture/routing.md) |
 | **`features.security.sanitize_upstream_errors`** | `false` | Opt-in: scrubs GCP project IDs/numbers, SA emails, quota IDs, and internal URLs from unrecovered upstream `4xx`/`5xx` error strings and normalizes non-JSON/cross-protocol errors while preserving SDK error schemas. | [AI Products & Auth](../architecture/security.md) |
 | **`features.model_armor.enabled`** | `false` | Opt-in: screens prompts and responses for PII, secrets, and prompt injection via regional GCP Model Armor templates. | [Smart Routing & Safety](../architecture/routing.md) |
+| **`features.model_armor.strict_stream_sync`** | `false` | Opt-in: holds SSE batches until `SMR-SanitizeModelResponse` passes before flushing bytes to the client socket. | [Smart Routing & Safety](../architecture/routing.md) |
 
 ---
 
@@ -48,7 +49,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
     ```
 
 === "Full Enterprise Governance"
-    Enables Corporate SSO Persona mapping, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, Fallback Chains with Rolling-Window Circuit Breaker, and regional Model Armor:
+    Enables Corporate SSO Persona mapping, Agent Platform SPIFFE identity verification, Shared Team Budgets, Burst & Concurrency protection, Invoice-Accurate Cost Attribution, Fallback Chains with Rolling-Window Circuit Breaker, and regional Model Armor:
 
     ```yaml
     features:
@@ -126,7 +127,7 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
 
       llm_judge:
         enabled: true
-        classifier_model: "gemini-3.1-flash-lite"
+        classifier_model: "gemini-3.5-flash-lite"
 
       circuit_breaker:
         enabled: true
@@ -134,5 +135,6 @@ Every capability in `values.yaml` under `features:` is modular. When a feature i
         window_interval: 1
         window_unit: "minute"
     ```
+
 
 

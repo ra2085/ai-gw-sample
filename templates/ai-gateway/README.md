@@ -67,13 +67,13 @@ apigeecli apis create bundle \
 
 ## ⚙️ Custom URLs & API Formats per Model
 
-To add self-hosted LLMs (e.g., vLLM, Ollama) or regional endpoints, specify `custom_url`, `format`, and optional `auth` settings directly in `values.yaml`:
+To add self-hosted LLMs (e.g., vLLM, Ollama), multi-region (`us` / `eu`), or regional endpoints on **Gemini Enterprise Agent Platform**, specify `custom_url`, `format`, `region`, and optional `auth` settings directly in `values.yaml`:
 
 ```yaml
 models:
   # Self-hosted OpenAI-compatible LLM (vLLM / Ollama)
-  - name: "custom-llama-3"
-    displayName: "Llama 3 70B (vLLM)"
+  - name: "custom-llama-4"
+    displayName: "Llama 4 Maverick (vLLM)"
     publisher: "custom"
     target: "openai-custom"
     format: "openai"                            # openai | anthropic | gemini
@@ -85,17 +85,18 @@ models:
       input_rate: 0.050
       output_rate: 0.150
 
-  # Regional Vertex AI Model
-  - name: "gemini-3.1-pro-eu"
-    displayName: "Gemini 3.1 Pro (Europe)"
+  # Multi-Region / Regional Agent Platform Model
+  - name: "gemini-4-argon-eu"
+    displayName: "Gemini 4 Argon (Europe Multi-Region)"
     publisher: "google"
     target: "gemini"
     format: "gemini"
-    region: "europe-west1"                      # Automatically routes to europe-west1-aiplatform.googleapis.com
-    # project_id: "eu-vertex-spoke"             # Optional: Route this model to a dedicated GCP project (Persona > Model > Gateway)
+    region: "eu"                                # Routes to aiplatform.eu.rep.googleapis.com (or e.g. europe-west1-aiplatform.googleapis.com)
+    upstream_model: "gemini-4-argon"
+    # project_id: "eu-agent-platform-spoke"     # Optional: Route this model to a dedicated GCP project (Persona > Model > Gateway)
     pricing:
-      input_rate: 2.000
-      output_rate: 12.000
+      input_rate: 4.000
+      output_rate: 20.000
       cache_read_rate: 0.200
 ```
 
@@ -123,8 +124,8 @@ features:
     personas:
       knowledge-worker:
         match_claims: ["knowledge-worker", "general", "business-*"]
-        # project_id: "biz-vertex-prod"         # Optional: Route this persona's Vertex AI calls to a dedicated GCP project
-        models: ["gemini-3.1-flash-lite", "gemini-3.5-flash"]
+        # project_id: "biz-agent-platform-prod" # Optional: Route this persona's Agent Platform calls to a dedicated GCP project
+        models: ["gemini-3.5-flash-lite", "gemini-4-hydrogen"]
         quota:
           limit: 50000
           interval: 4
@@ -137,7 +138,7 @@ features:
           interval: 4
           unit: "hour"
           per_model:
-            claude-sonnet-4-6: 50000
+            claude-opus-5-5: 50000
     exceptions:
       - match: ["alice@company.com"]
         quota_limit: 500000

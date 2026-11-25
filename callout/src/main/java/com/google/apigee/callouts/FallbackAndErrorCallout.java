@@ -444,9 +444,7 @@ public final class FallbackAndErrorCallout extends BaseCallout {
     if (!GlobMatcher.isSafeLocation(modelLocation)) {
       modelLocation = defaultLoc;
     }
-    String endpointHost = (!endpointLocation.isEmpty() && !"global".equals(endpointLocation))
-        ? (endpointLocation + "-aiplatform.googleapis.com")
-        : "aiplatform.googleapis.com";
+    String endpointHost = GlobMatcher.resolveAiPlatformHost(endpointLocation);
 
     String clientAuthType = vars.getNonEmpty("verifyapikey.VA-ApiKey." + fallbackModel + "_auth_type");
     if (clientAuthType != null && "google_iam".equalsIgnoreCase(clientAuthType.trim())) {
@@ -494,7 +492,7 @@ public final class FallbackAndErrorCallout extends BaseCallout {
       if (isEmbeddings) {
         String embLoc = (!modelLocation.isEmpty() && !"global".equals(modelLocation)) ? modelLocation : "us-central1";
         String predictHost = "aiplatform.googleapis.com".equals(endpointHost)
-            ? (embLoc + "-aiplatform.googleapis.com")
+            ? GlobMatcher.resolveAiPlatformHost(embLoc)
             : endpointHost;
         targetUrl = "https://" + predictHost + "/v1/projects/" + projectId + "/locations/" + embLoc
             + "/publishers/google/models/" + nativeFallbackModel + ":predict";
@@ -693,17 +691,15 @@ public final class FallbackAndErrorCallout extends BaseCallout {
       if (!isEmbeddings
           && ("openai".equalsIgnoreCase(publisher) || targetUrl.contains("api.openai.com"))
           && RequestRouterAndTranscoderCallout.isOpenAiReasoningModel(oaiModelName)) {
-        if (fallbackPayload.get("max_tokens") != null) {
-          if (fallbackPayload.get("max_completion_tokens") == null) {
-            fallbackPayload.put("max_completion_tokens", fallbackPayload.get("max_tokens"));
-          }
-          fallbackPayload.remove("max_tokens");
-        }
-        Object tempVal = fallbackPayload.get("temperature");
-        if (tempVal != null && GlobMatcher.asDouble(tempVal, 1.0) != 1.0) {
-          fallbackPayload.remove("temperature");
-        }
-        fallbackPayload.remove("top_p");
+        RequestRouterAndTranscoderCallout.normalizeOpenAiReasoningPayload(
+            fallbackPayload,
+            oaiModelName,
+            RequestRouterAndTranscoderCallout.extractTranscodedOpenAiReasoningEffort(rawBody));
+      } else if (!isEmbeddings
+          && isVertexOpenApi
+          && oaiModelName.toLowerCase(Locale.ROOT).contains("gemini-3.5-flash-lite")) {
+        fallbackPayload.remove("frequency_penalty");
+        fallbackPayload.remove("presence_penalty");
       }
     } else if ("anthropic".equals(fallbackFormat)) {
       String configuredAnthropicVersion =
@@ -713,6 +709,8 @@ public final class FallbackAndErrorCallout extends BaseCallout {
       fallbackPayload =
           RequestRouterAndTranscoderCallout.transcodeRequestToAnthropicAst(
               rawBody, requestFormat, configuredAnthropicVersion, false, vars);
+      RequestRouterAndTranscoderCallout.normalizeAnthropicThinkingForModel(
+          fallbackPayload, firstNonEmpty(upstreamModel, fallbackModel));
       boolean isVertexRawPredict = useGoogleIam || targetUrl.contains(":rawPredict");
       if (isVertexRawPredict) {
         fallbackPayload.put(
@@ -785,7 +783,9 @@ public final class FallbackAndErrorCallout extends BaseCallout {
       } else {
         fallbackPayload =
             RequestRouterAndTranscoderCallout.transcodeRequestToGeminiAst(
-                rawBody, fallbackModel, vars);
+                rawBody, nativeFallbackModel, vars);
+        RequestRouterAndTranscoderCallout.sanitizeGeminiRequestForModel(
+            fallbackPayload, nativeFallbackModel);
       }
     }
 
@@ -853,7 +853,7 @@ public final class FallbackAndErrorCallout extends BaseCallout {
     }
 
     String fbModel =
-        vars.firstNonEmptyKeyOrDefault("gemini-3.5-flash", "fallback_model", "model");
+        vars.firstNonEmptyKeyOrDefault("gemini-4-hydrogen", "fallback_model", "model");
     String fbFormat = vars.getOrDefault("fallback_format", "gemini").toLowerCase(Locale.ROOT);
     String fbPublisher = vars.getOrDefault("fallback_publisher", "google");
     String reqFormat = vars.getOrDefault("request_format", "claude").toLowerCase(Locale.ROOT);
@@ -970,7 +970,8 @@ public final class FallbackAndErrorCallout extends BaseCallout {
       String antStop = GlobMatcher.asString(fbBody.get("stop_reason"));
       if ("tool_use".equals(antStop) || !normToolCalls.isEmpty()) {
         normFinishCategory = "tool_calls";
-      } else if ("max_tokens".equals(antStop)) {
+      } else if ("max_tokens".equals(antStop)
+          || "model_context_window_exceeded".equals(antStop)) {
         normFinishCategory = "length";
       } else if ("refusal".equals(antStop)) {
         normFinishCategory = "safety";

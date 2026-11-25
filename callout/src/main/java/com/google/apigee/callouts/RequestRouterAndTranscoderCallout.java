@@ -59,6 +59,8 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
   private static final Pattern JUDGE_COMPLEXITY_REGEX =
       Pattern.compile("\"complexity\"\\s*:\\s*\"(LOW|MEDIUM|HIGH)\"", Pattern.CASE_INSENSITIVE);
 
+  private static final String[] GEMINI_SYSTEM_KEYS = {"systemInstruction", "system_instruction"};
+
   private final boolean requireJsonContentType;
 
   public RequestRouterAndTranscoderCallout(Map properties) {
@@ -705,10 +707,9 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       if ("claude".equals(requestFormat)) {
         promptText = extractPromptFromParsedBody(body, totalPromptLen, materializePrompt);
       } else {
-        String allowedGcsBuckets = null;
-        boolean gcsBucketsResolved = false;
+        String allowedGcsBuckets = "\0";
         StringBuilder sb = materializePrompt ? new StringBuilder() : null;
-        for (String sysKey : new String[] { "systemInstruction", "system_instruction" }) {
+        for (String sysKey : GEMINI_SYSTEM_KEYS) {
           Object rawSys = body.get(sysKey);
           if (rawSys instanceof String) {
             appendBoundedPromptLine(sb, totalPromptLen, (String) rawSys);
@@ -732,51 +733,56 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
         List<Object> contents = GlobMatcher.asList(body.get("contents"));
         if (contents != null) {
           for (Object cObj : contents) {
-            Map<String, Object> c = GlobMatcher.asMap(cObj);
-            if (c == null) {
+            allowedGcsBuckets =
+                scanGeminiContentMapForPromptAndMedia(
+                    GlobMatcher.asMap(cObj), sb, totalPromptLen, vars, allowedGcsBuckets);
+          }
+        }
+        Map<String, Object> singleContent = GlobMatcher.asMap(body.get("content"));
+        if (singleContent != null) {
+          if (contents == null) {
+            isEmbeddings = true;
+          }
+          allowedGcsBuckets =
+              scanGeminiContentMapForPromptAndMedia(
+                  singleContent, sb, totalPromptLen, vars, allowedGcsBuckets);
+        }
+        List<Object> batchRequests = GlobMatcher.asList(body.get("requests"));
+        if (batchRequests != null) {
+          isEmbeddings = true;
+          String batchExpectedProj = null;
+          String[] batchCallerProj = null;
+          for (Object brObj : batchRequests) {
+            Map<String, Object> br = GlobMatcher.asMap(brObj);
+            if (br == null) {
               continue;
             }
-            List<Object> parts = GlobMatcher.asList(c.get("parts"));
-            if (parts != null) {
-              for (Object ptObj : parts) {
-                Map<String, Object> pt = GlobMatcher.asMap(ptObj);
-                if (pt == null || Boolean.TRUE.equals(pt.get("thought"))) {
-                  continue;
+            if (br.get("model") instanceof String) {
+              String brModel = ((String) br.get("model")).trim();
+              String lowerBrModel = brModel.toLowerCase(Locale.ROOT);
+              if (lowerBrModel.contains("..") || lowerBrModel.contains("%2e")) {
+                throw new InvalidRequestViolationException("Invalid batch request model resource identifier.");
+              }
+              String brProj = GlobMatcher.extractPathProject(brModel);
+              if (brProj != null) {
+                if (batchExpectedProj == null) {
+                  batchExpectedProj = resolveGcpProjectId(vars, false);
+                  batchCallerProj = new String[1];
                 }
-                if (pt.get("text") != null) {
-                  appendBoundedPromptLine(sb, totalPromptLen, String.valueOf(pt.get("text")));
-                }
-                if (pt.get("fileData") instanceof Map) {
-                  Map<String, Object> fd = GlobMatcher.asMap(pt.get("fileData"));
-                  String fUri = fd != null ? GlobMatcher.asString(fd.get("fileUri")) : null;
-                  if (fUri != null && !fUri.isEmpty()) {
-                    if (!gcsBucketsResolved) {
-                      allowedGcsBuckets =
-                          vars.firstNonEmptyKey(
-                              "apiproduct.allowed_gcs_buckets",
-                              "verifyapikey.VA-ApiKey.apiproduct.allowed_gcs_buckets",
-                              "propertyset.config.allowed_gcs_buckets");
-                      gcsBucketsResolved = true;
-                    }
-                    validateMediaUriForGemini(fUri, allowedGcsBuckets);
-                  }
-                }
-                if (pt.get("functionResponse") instanceof Map) {
-                  if (sb != null && sb.length() < MAX_ARMOR_SCAN_CHARS) {
-                    appendBoundedPromptLine(sb, totalPromptLen, StrictJson.stringify(pt.get("functionResponse")));
-                  } else {
-                    totalPromptLen[0] = (totalPromptLen[0] < 0L ? 32L : totalPromptLen[0] + 32L);
-                  }
-                }
-                if (pt.get("functionCall") instanceof Map) {
-                  if (sb != null && sb.length() < MAX_ARMOR_SCAN_CHARS) {
-                    appendBoundedPromptLine(sb, totalPromptLen, StrictJson.stringify(pt.get("functionCall")));
-                  } else {
-                    totalPromptLen[0] = (totalPromptLen[0] < 0L ? 32L : totalPromptLen[0] + 32L);
-                  }
+                if (!isAllowedPreResolveGeminiProject(
+                    brProj, batchExpectedProj, model, vars, batchCallerProj)) {
+                  throw new SecurityAccessDeniedException(
+                      "Cross-project Vertex AI resource access ('" + brProj + "') is not permitted.");
                 }
               }
             }
+            allowedGcsBuckets =
+                scanGeminiContentMapForPromptAndMedia(
+                    GlobMatcher.asMap(br.get("content")),
+                    sb,
+                    totalPromptLen,
+                    vars,
+                    allowedGcsBuckets);
           }
         }
         List<Object> instances = GlobMatcher.asList(body.get("instances"));
@@ -801,7 +807,17 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
         vars.set("raw_client_payload", reqContent);
       }
       boolean hasRoutingFeatures = hasRoutingFeaturesInParsedBody(body, model);
-      if (body.containsKey("plugins") || body.containsKey("models") || body.containsKey("provider")) {
+      boolean mutatedNativeBody = sanitizeGeminiRequestForModel(body, model);
+      if (pathSuffix.contains("/publishers/anthropic/")
+          && (body.get("thinking") instanceof Map
+              || body.get("output_config") instanceof Map
+              || body.get("reasoning_effort") != null)) {
+        mutatedNativeBody |= normalizeAnthropicThinkingForModel(body, model);
+      }
+      if (mutatedNativeBody
+          || body.containsKey("plugins")
+          || body.containsKey("models")
+          || body.containsKey("provider")) {
         body.remove("plugins");
         body.remove("models");
         body.remove("provider");
@@ -825,6 +841,59 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     }
     vars.set("prompt_already_extracted", "true");
     vars.set("request_format", requestFormat);
+  }
+
+  private String scanGeminiContentMapForPromptAndMedia(
+      Map<String, Object> c,
+      StringBuilder sb,
+      long[] totalPromptLen,
+      VarCache vars,
+      String allowedGcsBuckets) {
+    if (c == null) {
+      return allowedGcsBuckets;
+    }
+    List<Object> parts = GlobMatcher.asList(c.get("parts"));
+    if (parts == null) {
+      return allowedGcsBuckets;
+    }
+    for (Object ptObj : parts) {
+      Map<String, Object> pt = GlobMatcher.asMap(ptObj);
+      if (pt == null || Boolean.TRUE.equals(pt.get("thought"))) {
+        continue;
+      }
+      if (pt.get("text") != null) {
+        appendBoundedPromptLine(sb, totalPromptLen, String.valueOf(pt.get("text")));
+      }
+      if (pt.get("fileData") instanceof Map) {
+        Map<String, Object> fd = GlobMatcher.asMap(pt.get("fileData"));
+        String fUri = fd != null ? GlobMatcher.asString(fd.get("fileUri")) : null;
+        if (fUri != null && !fUri.isEmpty()) {
+          if ("\0".equals(allowedGcsBuckets)) {
+            allowedGcsBuckets =
+                vars.firstNonEmptyKey(
+                    "apiproduct.allowed_gcs_buckets",
+                    "verifyapikey.VA-ApiKey.apiproduct.allowed_gcs_buckets",
+                    "propertyset.config.allowed_gcs_buckets");
+          }
+          validateMediaUriForGemini(fUri, allowedGcsBuckets);
+        }
+      }
+      if (pt.get("functionResponse") instanceof Map) {
+        if (sb != null && sb.length() < MAX_ARMOR_SCAN_CHARS) {
+          appendBoundedPromptLine(sb, totalPromptLen, StrictJson.stringify(pt.get("functionResponse")));
+        } else {
+          totalPromptLen[0] = (totalPromptLen[0] < 0L ? 32L : totalPromptLen[0] + 32L);
+        }
+      }
+      if (pt.get("functionCall") instanceof Map) {
+        if (sb != null && sb.length() < MAX_ARMOR_SCAN_CHARS) {
+          appendBoundedPromptLine(sb, totalPromptLen, StrictJson.stringify(pt.get("functionCall")));
+        } else {
+          totalPromptLen[0] = (totalPromptLen[0] < 0L ? 32L : totalPromptLen[0] + 32L);
+        }
+      }
+    }
+    return allowedGcsBuckets;
   }
 
   // =========================================================================
@@ -936,6 +1005,16 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
           for (Object inp : (List<?>) inputObj) {
             if (inp instanceof String) {
               appendBoundedPromptLine(sb, totalPromptLen, (String) inp);
+            } else if (inp instanceof Number) {
+              totalPromptLen[0] = (totalPromptLen[0] < 0L ? 4L : totalPromptLen[0] + 4L);
+            } else if (inp instanceof List) {
+              for (Object subInp : (List<?>) inp) {
+                if (subInp instanceof Number) {
+                  totalPromptLen[0] = (totalPromptLen[0] < 0L ? 4L : totalPromptLen[0] + 4L);
+                } else if (subInp instanceof String) {
+                  appendBoundedPromptLine(sb, totalPromptLen, (String) subInp);
+                }
+              }
             }
           }
         }
@@ -1312,7 +1391,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
 
       String judgeModel =
           vars.firstNonEmptyKeyOrDefault(
-              "gemini-2.5-flash-lite",
+              "gemini-3.5-flash-lite",
               "propertyset.model_locations.judge.model",
               "propertyset.model_locations.task.classifier_model");
       String judgeLocation =
@@ -1323,9 +1402,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       if (!GlobMatcher.isSafeLocation(judgeLocation)) {
         judgeLocation = "global";
       }
-      String judgeHost = (!judgeLocation.isEmpty() && !"global".equals(judgeLocation))
-          ? (judgeLocation + "-aiplatform.googleapis.com")
-          : "aiplatform.googleapis.com";
+      String judgeHost = GlobMatcher.resolveAiPlatformHost(judgeLocation);
 
       String userEnvelope =
           "<untrusted_user_prompt>\n" + safeDelimitedPrompt + "\n</untrusted_user_prompt>";
@@ -1752,13 +1829,13 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     String defaultModel = pickCatalogModel(
         catalogModels,
         vars.getNonEmpty("propertyset.model_locations.default.model"),
-        "gemini-3.5-flash");
+        "gemini-4-hydrogen");
     String configuredDefaultFallback = vars.getNonEmpty("propertyset.model_locations.default.fallback");
     String defaultFallback = pickCatalogModel(
         catalogModels,
         configuredDefaultFallback,
         defaultModel,
-        "gemini-3.1-flash-lite");
+        "gemini-3.5-flash-lite");
     String defaultPublisher = vars.getOrDefault("propertyset.model_locations.default.publisher", "google");
     String defaultTarget = vars.getOrDefault("propertyset.model_locations.default.target", "gemini");
     String defaultFormat = vars.getOrDefault("propertyset.model_locations.default.format", "gemini");
@@ -2304,9 +2381,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       targetName = "gemini-openai-compat";
     }
 
-    String endpointHost = (!endpointLocation.isEmpty() && !"global".equals(endpointLocation))
-        ? (endpointLocation + "-aiplatform.googleapis.com")
-        : "aiplatform.googleapis.com";
+    String endpointHost = GlobMatcher.resolveAiPlatformHost(endpointLocation);
 
     String cleanReqModel =
         requestedModel != null ? GlobMatcher.stripControlChars(requestedModel) : "default";
@@ -2689,10 +2764,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
         if (!GlobMatcher.isSafeLocation(pathLoc)) {
           pathLoc = endpointLocation;
         }
-        String embHost =
-            (pathLoc != null && !pathLoc.isEmpty() && !"global".equals(pathLoc))
-                ? (pathLoc + "-aiplatform.googleapis.com")
-                : "aiplatform.googleapis.com";
+        String embHost = GlobMatcher.resolveAiPlatformHost(pathLoc);
         vars.set("endpoint_host", embHost);
         String configuredUpstreamModel =
             vars.getNonEmpty("propertyset.model_locations." + primaryModel + ".upstream_model");
@@ -3626,6 +3698,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     body =
         transcodeRequestToAnthropicAst(
             body, requestFormat, configuredAnthropicVersion, isStream, vars);
+    normalizeAnthropicThinkingForModel(body, firstNonEmpty(upstreamModel, activeModel));
 
     if (customUrl == null) {
       applyVertexAnthropicTargetUrl(vars, activeModel, upstreamModel, isStream);
@@ -4048,6 +4121,15 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       if (includeStreamFlag) {
         claudeBody.put("stream", Boolean.TRUE);
       }
+      if (body.get("thinking") instanceof Map) {
+        claudeBody.put("thinking", new LinkedHashMap<String, Object>(GlobMatcher.asMap(body.get("thinking"))));
+      }
+      if (body.get("output_config") instanceof Map) {
+        claudeBody.put("output_config", new LinkedHashMap<String, Object>(GlobMatcher.asMap(body.get("output_config"))));
+      }
+      if (body.get("reasoning_effort") instanceof String) {
+        claudeBody.put("reasoning_effort", body.get("reasoning_effort"));
+      }
       Object rawToolChoice = body.get("tool_choice");
       boolean disableTools =
           "none".equals(rawToolChoice)
@@ -4122,9 +4204,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     if (!isStream || (upstreamModel != null && !upstreamModel.isEmpty())) {
       String project = resolveActiveVertexProjectId(vars, activeModel);
       String modelLocation = vars.getOrDefault("model_location", "us-east5");
-      String defaultHost = !"global".equals(modelLocation) && !modelLocation.isEmpty()
-          ? (modelLocation + "-aiplatform.googleapis.com")
-          : "aiplatform.googleapis.com";
+      String defaultHost = GlobMatcher.resolveAiPlatformHost(modelLocation);
       String endpointHost = vars.getOrDefault("endpoint_host", defaultHost);
       String targetModel = firstNonEmpty(upstreamModel, activeModel);
       String rpcAction = isStream ? "streamRawPredict" : "rawPredict";
@@ -4143,6 +4223,34 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       vars.set("target.copy.pathsuffix", "false");
       vars.set("target.copy.queryparams", "false");
       vars.set("target.url", nativeRewrittenUrl);
+      String rawNativeContent = vars.getNonEmpty("request.content");
+      if (rawNativeContent != null
+          && (rawNativeContent.contains("thinking")
+              || rawNativeContent.contains("output_config")
+              || rawNativeContent.contains("reasoning_effort")
+              || rawNativeContent.contains("Penalty")
+              || rawNativeContent.contains("penalty"))) {
+        String rewrittenModel = vars.firstNonEmptyKey("primary_model", "model");
+        if (rewrittenModel != null) {
+          String upRw = vars.getNonEmpty("propertyset.model_locations." + rewrittenModel + ".upstream_model");
+          String effRw = firstNonEmpty(upRw, rewrittenModel);
+          boolean isAnthropicRewrite = nativeRewrittenUrl.contains("/publishers/anthropic/");
+          if (isAnthropicRewrite || !effRw.equals(vars.getString("original_model"))) {
+            Map<String, Object> rwBody =
+                StrictJson.parseObject(rawNativeContent, !"true".equals(vars.getString("payload_strict_validated")));
+            boolean mutatedRw = sanitizeGeminiRequestForModel(rwBody, effRw);
+            if (isAnthropicRewrite
+                && (rwBody.get("thinking") instanceof Map
+                    || rwBody.get("output_config") instanceof Map
+                    || rwBody.get("reasoning_effort") != null)) {
+              mutatedRw |= normalizeAnthropicThinkingForModel(rwBody, effRw);
+            }
+            if (mutatedRw) {
+              vars.set("request.content", StrictJson.stringify(rwBody));
+            }
+          }
+        }
+      }
       return;
     }
     String reqContent = vars.getNonEmpty("request.content");
@@ -4153,14 +4261,13 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     boolean checkDuplicateKeys = !"true".equals(vars.getString("payload_strict_validated"));
     Map<String, Object> anthropicReq = StrictJson.parseObject(reqContent, checkDuplicateKeys);
 
-    String defaultModel = vars.getOrDefault("propertyset.model_locations.default.model", "gemini-3.5-flash");
+    String defaultModel = vars.getOrDefault("propertyset.model_locations.default.model", "gemini-4-hydrogen");
     String model = vars.firstNonEmptyKeyOrDefault(defaultModel, "primary_model", "model");
     if (model.startsWith("auto") || model.startsWith("gateway")) {
       model = defaultModel;
     }
 
     Map<String, Object> geminiReq = transcodeRequestToGeminiAst(anthropicReq, model, vars);
-    vars.set("request.content", StrictJson.stringify(geminiReq));
 
     boolean stream = Boolean.TRUE.equals(anthropicReq.get("stream"))
         || "true".equals(String.valueOf(anthropicReq.get("stream")))
@@ -4176,7 +4283,14 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     String customUrl =
         vars.firstNonEmptyKey("model_custom_url", "propertyset.model_locations." + model + ".url");
     if (customUrl != null) {
-      if (!isAllowedCallerVertexUrl(customUrl, gatewayProj, project, vars)) {
+      sanitizeGeminiRequestForModel(geminiReq, model);
+      vars.set("request.content", StrictJson.stringify(geminiReq));
+      String routeTarget = vars.getString("route_target");
+      if ("openai-custom".equals(routeTarget)) {
+        if (!GlobMatcher.isSafeUpstreamHttpsUrl(customUrl, null)) {
+          throw new InvalidRequestViolationException("Invalid or unsafe custom Gemini target URL.");
+        }
+      } else if (!isAllowedCallerVertexUrl(customUrl, gatewayProj, project, vars)) {
         throw new SecurityAccessDeniedException(
             "Non-Google or cross-project custom URL cannot be routed through a Google IAM Vertex target.");
       }
@@ -4188,6 +4302,8 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       if (slashIdx != -1) {
         targetGeminiModel = targetGeminiModel.substring(slashIdx + 1);
       }
+      sanitizeGeminiRequestForModel(geminiReq, targetGeminiModel);
+      vars.set("request.content", StrictJson.stringify(geminiReq));
       if (!GlobMatcher.isSafeSegment(targetGeminiModel)) {
         throw new InvalidRequestViolationException("Invalid Vertex AI model identifier.");
       }
@@ -4599,24 +4715,88 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     }
     applyOpenAiResponseFormatToGeminiConfig(anthropicReq.get("response_format"), genConfig);
     Map<String, Object> thinkingSpec = GlobMatcher.asMap(anthropicReq.get("thinking"));
+    Map<String, Object> outCfgMap = GlobMatcher.asMap(anthropicReq.get("output_config"));
+    String outputConfigEffort =
+        outCfgMap != null && outCfgMap.get("effort") instanceof String
+            ? ((String) outCfgMap.get("effort")).trim().toLowerCase(Locale.ROOT)
+            : null;
+    String openAiEffort =
+        anthropicReq.get("reasoning_effort") instanceof String
+            ? ((String) anthropicReq.get("reasoning_effort")).trim().toLowerCase(Locale.ROOT)
+            : null;
+    String effEffort = firstNonEmpty(outputConfigEffort, openAiEffort);
+    boolean hasEffort = effEffort != null && !effEffort.isEmpty() && !"none".equals(effEffort);
+    boolean hasThinkingBlock = false;
+    long budget = 0L;
     if (thinkingSpec != null) {
       String thinkType = GlobMatcher.asString(thinkingSpec.get("type"));
       if ("enabled".equals(thinkType) || "adaptive".equals(thinkType)) {
-        if (vars != null) {
-          vars.set("anthropic_thinking_requested", "true");
-        }
-        String effModel = model != null ? model : "";
-        if (effModel.contains("2.5")
-            || effModel.contains("gemini-3")
-            || effModel.contains("gemini-4")) {
-          Map<String, Object> gemThinkCfg = new LinkedHashMap<>();
-          gemThinkCfg.put("includeThoughts", Boolean.TRUE);
-          long budget = GlobMatcher.asLong(thinkingSpec.get("budget_tokens"), 0L);
-          if (budget > 0L && effModel.contains("2.5")) {
-            gemThinkCfg.put("thinkingBudget", Long.valueOf(budget));
+        hasThinkingBlock = true;
+        budget = GlobMatcher.asLong(thinkingSpec.get("budget_tokens"), 0L);
+      }
+    }
+    if (hasThinkingBlock || hasEffort) {
+      if (vars != null && (hasThinkingBlock || outputConfigEffort != null)) {
+        vars.set("anthropic_thinking_requested", "true");
+      }
+      int mSlash = model != null ? model.indexOf('/') : -1;
+      String effModel =
+          model != null
+              ? (mSlash != -1 ? model.substring(mSlash + 1) : model).toLowerCase(Locale.ROOT)
+              : "";
+      if (effModel.contains("2.5")
+          || effModel.contains("gemini-3")
+          || effModel.contains("gemini-4")) {
+        boolean allowMinimal = supportsGeminiMinimalThinking(effModel);
+        boolean allowXHigh = supportsGeminiXHighThinking(effModel);
+        Map<String, Object> gemThinkCfg = new LinkedHashMap<>();
+        gemThinkCfg.put("includeThoughts", Boolean.TRUE);
+        String mappedLevel = null;
+        if (hasEffort) {
+          if ("minimal".equals(effEffort)) {
+            mappedLevel = allowMinimal ? "MINIMAL" : "LOW";
+          } else if ("low".equals(effEffort)) {
+            mappedLevel = "LOW";
+          } else if ("xhigh".equals(effEffort) || "max".equals(effEffort)) {
+            mappedLevel = allowXHigh ? "XHIGH" : "HIGH";
+          } else if ("high".equals(effEffort)) {
+            mappedLevel = "HIGH";
+          } else {
+            mappedLevel = "MEDIUM";
           }
-          genConfig.put("thinkingConfig", gemThinkCfg);
         }
+        if (effModel.contains("2.5")) {
+          if (budget > 0L) {
+            gemThinkCfg.put("thinkingBudget", Long.valueOf(budget));
+          } else if (mappedLevel != null) {
+            long mappedBudget =
+                "MINIMAL".equals(mappedLevel)
+                    ? 0L
+                    : ("LOW".equals(mappedLevel)
+                        ? 1024L
+                        : ("HIGH".equals(mappedLevel) || "XHIGH".equals(mappedLevel) ? 16384L : 4096L));
+            gemThinkCfg.put("thinkingBudget", Long.valueOf(mappedBudget));
+          }
+        } else if (mappedLevel != null) {
+          gemThinkCfg.put("thinkingLevel", mappedLevel);
+        } else if (effModel.contains("gemini-4") || effModel.contains("gemini-3")) {
+          if (budget > 0L) {
+            String budgetLevel;
+            if (budget <= 2048L) {
+              budgetLevel = "LOW";
+            } else if (budget <= 8192L) {
+              budgetLevel = "MEDIUM";
+            } else if (budget > 24576L && allowXHigh) {
+              budgetLevel = "XHIGH";
+            } else {
+              budgetLevel = "HIGH";
+            }
+            gemThinkCfg.put("thinkingLevel", budgetLevel);
+          } else if (effModel.contains("gemini-4")) {
+            gemThinkCfg.put("thinkingLevel", "MEDIUM");
+          }
+        }
+        genConfig.put("thinkingConfig", gemThinkCfg);
       }
     }
     if (!genConfig.isEmpty()) {
@@ -4880,7 +5060,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
             : new LinkedHashMap<>();
     String requestFormat = vars.getOrDefault("request_format", "claude");
     String routedModel =
-        vars.firstNonEmptyKeyOrDefault("gemini-2.5-flash", "model", "primary_model");
+        vars.firstNonEmptyKeyOrDefault("gemini-4-hydrogen", "model", "primary_model");
     String publisher = vars.getOrDefault("model_publisher", "google");
     String customUrl = vars.getNonEmpty("model_custom_url");
     boolean isEmbeddings = "true".equals(vars.getString("is_embeddings")) || routedModel.contains("embedding");
@@ -4890,7 +5070,9 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
     String endpointHost = vars.getOrDefault("endpoint_host", "aiplatform.googleapis.com");
     String modelLocation = vars.getOrDefault("model_location", "global");
 
+    String transcodedReasoningEffort = null;
     if (!isEmbeddings && !"openai".equals(requestFormat) && reqContent != null) {
+      transcodedReasoningEffort = extractTranscodedOpenAiReasoningEffort(body);
       boolean wantStream =
           Boolean.TRUE.equals(body.get("stream"))
               || "true".equals(String.valueOf(body.get("stream")))
@@ -4934,7 +5116,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
       } else if ("google".equals(publisher)) {
         String loc = (!modelLocation.isEmpty() && !"global".equals(modelLocation)) ? modelLocation : "us-central1";
         String predictHost = "aiplatform.googleapis.com".equals(endpointHost)
-            ? (loc + "-aiplatform.googleapis.com")
+            ? GlobMatcher.resolveAiPlatformHost(loc)
             : endpointHost;
         String effectiveEmbModel = firstNonEmpty(upstreamModel, routedModel);
         int embSlashIdx = effectiveEmbModel.indexOf('/');
@@ -5030,17 +5212,11 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
 
       if (("openai".equalsIgnoreCase(publisher) || (customUrl != null && customUrl.contains("api.openai.com")))
           && isOpenAiReasoningModel(finalOpenAiModel)) {
-        if (body.get("max_tokens") != null) {
-          if (body.get("max_completion_tokens") == null) {
-            body.put("max_completion_tokens", body.get("max_tokens"));
-          }
-          body.remove("max_tokens");
-        }
-        Object tempVal = body.get("temperature");
-        if (tempVal != null && GlobMatcher.asDouble(tempVal, 1.0) != 1.0) {
-          body.remove("temperature");
-        }
-        body.remove("top_p");
+        normalizeOpenAiReasoningPayload(body, finalOpenAiModel, transcodedReasoningEffort);
+      } else if (finalOpenAiModel != null
+          && finalOpenAiModel.toLowerCase(Locale.ROOT).contains("gemini-3.5-flash-lite")) {
+        body.remove("frequency_penalty");
+        body.remove("presence_penalty");
       }
 
       if (Boolean.TRUE.equals(body.get("stream")) || "true".equals(String.valueOf(body.get("stream")))) {
@@ -5073,6 +5249,141 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
         vars.set("request.content", StrictJson.stringify(body));
       }
     }
+  }
+
+  static void normalizeOpenAiReasoningPayload(
+      Map<String, Object> body, String modelName, String transcodedReasoningEffort) {
+    if (body == null) {
+      return;
+    }
+    if (body.get("max_tokens") != null) {
+      if (body.get("max_completion_tokens") == null) {
+        body.put("max_completion_tokens", body.get("max_tokens"));
+      }
+      body.remove("max_tokens");
+    }
+    String lowerModel = modelName != null ? modelName.toLowerCase(Locale.ROOT) : "";
+    boolean isOSeries =
+        lowerModel.equals("o1")
+            || lowerModel.startsWith("o1-")
+            || lowerModel.contains("/o1")
+            || lowerModel.equals("o3")
+            || lowerModel.startsWith("o3-")
+            || lowerModel.contains("/o3")
+            || lowerModel.equals("o4")
+            || lowerModel.startsWith("o4-")
+            || lowerModel.contains("/o4");
+    boolean isProTier = lowerModel.endsWith("-pro") || lowerModel.contains("-pro-");
+    boolean supportsNoneEffort =
+        !isOSeries
+            && !isProTier
+            && (lowerModel.contains("gpt-6")
+                || lowerModel.contains("gpt-5.1")
+                || lowerModel.contains("gpt-5.2")
+                || lowerModel.contains("gpt-5.4"));
+    boolean supportsXHigh =
+        lowerModel.contains("gpt-6") || lowerModel.contains("gpt-5.2") || lowerModel.contains("gpt-5.4");
+    if (body.get("reasoning_effort") == null && transcodedReasoningEffort != null) {
+      String mappedOaiEffort = transcodedReasoningEffort;
+      if ("xhigh".equals(mappedOaiEffort) && !supportsXHigh) {
+        mappedOaiEffort = "high";
+      } else if ("minimal".equals(mappedOaiEffort) && (isOSeries || isProTier)) {
+        mappedOaiEffort = isProTier ? "medium" : "low";
+      }
+      body.put("reasoning_effort", mappedOaiEffort);
+    } else if (body.get("reasoning_effort") instanceof String) {
+      String explicitEffort = ((String) body.get("reasoning_effort")).trim().toLowerCase(Locale.ROOT);
+      if ("none".equals(explicitEffort)) {
+        if (supportsNoneEffort) {
+          body.put("reasoning_effort", "none");
+          return;
+        } else if (isOSeries || isProTier) {
+          body.remove("reasoning_effort");
+        } else {
+          body.put("reasoning_effort", "minimal");
+        }
+      } else if ("minimal".equals(explicitEffort) && (isOSeries || isProTier)) {
+        body.put("reasoning_effort", isProTier ? "medium" : "low");
+      } else if ("max".equals(explicitEffort)) {
+        body.put("reasoning_effort", supportsXHigh ? "xhigh" : "high");
+      } else if ("xhigh".equals(explicitEffort) && !supportsXHigh) {
+        body.put("reasoning_effort", "high");
+      }
+    }
+    stripNonOneTemperatureAndTopP(body);
+  }
+
+  static String extractTranscodedOpenAiReasoningEffort(Map<String, Object> rawBody) {
+    if (rawBody == null) {
+      return null;
+    }
+    if (rawBody.get("reasoning_effort") instanceof String) {
+      String re = ((String) rawBody.get("reasoning_effort")).trim().toLowerCase(Locale.ROOT);
+      if (!re.isEmpty() && !"none".equals(re)) {
+        return "max".equals(re) ? "xhigh" : re;
+      }
+    }
+    Map<String, Object> outCfg = GlobMatcher.asMap(rawBody.get("output_config"));
+    if (outCfg != null && outCfg.get("effort") instanceof String) {
+      String eff = ((String) outCfg.get("effort")).trim().toLowerCase(Locale.ROOT);
+      if ("low".equals(eff) || "minimal".equals(eff)) {
+        return "low";
+      }
+      if ("medium".equals(eff)) {
+        return "medium";
+      }
+      if ("high".equals(eff)) {
+        return "high";
+      }
+      if ("max".equals(eff) || "xhigh".equals(eff)) {
+        return "xhigh";
+      }
+    }
+    Map<String, Object> thinking = GlobMatcher.asMap(rawBody.get("thinking"));
+    if (thinking != null) {
+      String tType = GlobMatcher.asString(thinking.get("type"));
+      if ("adaptive".equals(tType)) {
+        return "medium";
+      }
+      if ("enabled".equals(tType)) {
+        long budget = GlobMatcher.asLong(thinking.get("budget_tokens"), 0L);
+        return budget <= 2048L
+            ? "low"
+            : (budget <= 8192L ? "medium" : (budget > 24576L ? "xhigh" : "high"));
+      }
+    }
+    Map<String, Object> genCfg = GlobMatcher.asMap(rawBody.get("generationConfig"));
+    if (genCfg == null) {
+      genCfg = GlobMatcher.asMap(rawBody.get("generation_config"));
+    }
+    if (genCfg != null) {
+      Map<String, Object> tCfg = GlobMatcher.asMap(genCfg.get("thinkingConfig"));
+      if (tCfg == null) {
+        tCfg = GlobMatcher.asMap(genCfg.get("thinking_config"));
+      }
+      if (tCfg != null) {
+        Object rawLvl = tCfg.get("thinkingLevel");
+        if (rawLvl == null) {
+          rawLvl = tCfg.get("thinking_level");
+        }
+        if (rawLvl instanceof String) {
+          String lvl = ((String) rawLvl).trim().toUpperCase(Locale.ROOT);
+          if ("MINIMAL".equals(lvl) || "LOW".equals(lvl)) {
+            return "low";
+          }
+          if ("MEDIUM".equals(lvl)) {
+            return "medium";
+          }
+          if ("HIGH".equals(lvl)) {
+            return "high";
+          }
+          if ("XHIGH".equals(lvl)) {
+            return "xhigh";
+          }
+        }
+      }
+    }
+    return null;
   }
 
   static Map<String, Object> transcodeRequestToOpenAiAst(
@@ -5528,8 +5839,363 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
         || bare.startsWith("o4-")) {
       return true;
     }
-    return ("gpt-5".equals(bare) || bare.startsWith("gpt-5-") || bare.startsWith("gpt-5."))
-        && !bare.startsWith("gpt-5-chat");
+    if (("gpt-5".equals(bare) || bare.startsWith("gpt-5-") || bare.startsWith("gpt-5."))
+        && !bare.startsWith("gpt-5-chat")) {
+      return true;
+    }
+    return ("gpt-6".equals(bare) || bare.startsWith("gpt-6-") || bare.startsWith("gpt-6."))
+        && !bare.startsWith("gpt-6-chat");
+  }
+
+  static boolean isClaudeAdaptiveOnlyModel(String modelId) {
+    if (modelId == null || modelId.isEmpty()) {
+      return false;
+    }
+    int slashIdx = modelId.indexOf('/');
+    String bare = (slashIdx != -1 ? modelId.substring(slashIdx + 1) : modelId).toLowerCase(Locale.ROOT);
+    return bare.startsWith("claude-opus-4-7")
+        || bare.startsWith("claude-opus-4.7")
+        || bare.startsWith("claude-opus-5")
+        || bare.startsWith("claude-sonnet-5")
+        || bare.startsWith("claude-haiku-5")
+        || bare.startsWith("claude-fable-5")
+        || bare.startsWith("claude-mythos")
+        || bare.startsWith("claude-5");
+  }
+
+  private static boolean supportsClaudeMaxEffort(String bare) {
+    if (bare == null || bare.isEmpty() || bare.contains("haiku")) {
+      return false;
+    }
+    return bare.startsWith("claude-opus-4-6")
+        || bare.startsWith("claude-opus-4.6")
+        || bare.startsWith("claude-opus-4-7")
+        || bare.startsWith("claude-opus-4.7")
+        || bare.startsWith("claude-opus-5")
+        || bare.startsWith("claude-sonnet-5")
+        || bare.startsWith("claude-fable-5")
+        || bare.startsWith("claude-mythos")
+        || bare.startsWith("claude-5");
+  }
+
+  private static boolean supportsClaudeXHighEffort(String bare) {
+    if (bare == null || bare.isEmpty() || bare.contains("haiku")) {
+      return false;
+    }
+    return bare.startsWith("claude-opus-4-7")
+        || bare.startsWith("claude-opus-4.7")
+        || bare.startsWith("claude-opus-5")
+        || bare.startsWith("claude-sonnet-5")
+        || bare.startsWith("claude-fable-5")
+        || bare.startsWith("claude-mythos")
+        || bare.startsWith("claude-5");
+  }
+
+  static boolean supportsGeminiMinimalThinking(String bare) {
+    if (bare == null || bare.isEmpty()) {
+      return false;
+    }
+    if (bare.startsWith("gemini-4-hydrogen")) {
+      return true;
+    }
+    if (bare.startsWith("gemini-4")
+        || bare.startsWith("gemini-3.8")
+        || bare.startsWith("gemini-3.7")
+        || bare.startsWith("gemini-3.1-pro")
+        || bare.startsWith("gemini-3-pro")) {
+      return false;
+    }
+    return bare.startsWith("gemini-3") || bare.startsWith("gemini-robotics") || bare.startsWith("gemini-nano-banana");
+  }
+
+  static boolean supportsGeminiXHighThinking(String bare) {
+    if (bare == null || bare.isEmpty()) {
+      return false;
+    }
+    return bare.startsWith("gemini-4-hydrogen")
+        || bare.startsWith("gemini-4-neon")
+        || bare.startsWith("gemini-4-carbon");
+  }
+
+  private static boolean stripNonOneTemperatureAndTopP(Map<String, Object> body) {
+    boolean changed = false;
+    Object tempVal = body.get("temperature");
+    if (tempVal != null && GlobMatcher.asDouble(tempVal, 1.0) != 1.0) {
+      body.remove("temperature");
+      changed = true;
+    }
+    if (body.remove("top_p") != null) {
+      changed = true;
+    }
+    return changed;
+  }
+
+  static boolean normalizeAnthropicThinkingForModel(Map<String, Object> body, String modelId) {
+    if (body == null) {
+      return false;
+    }
+    boolean mutated = false;
+    String reasoningEffort = null;
+    Object rawReasoningEffort = body.remove("reasoning_effort");
+    if (rawReasoningEffort != null) {
+      mutated = true;
+      if (rawReasoningEffort instanceof String) {
+        reasoningEffort = ((String) rawReasoningEffort).trim().toLowerCase(Locale.ROOT);
+      }
+    }
+
+    int slashIdx = modelId != null ? modelId.indexOf('/') : -1;
+    String bare =
+        modelId == null
+            ? ""
+            : (slashIdx != -1 ? modelId.substring(slashIdx + 1) : modelId).toLowerCase(Locale.ROOT);
+    boolean adaptiveOnly = isClaudeAdaptiveOnlyModel(bare);
+    boolean allowMax = supportsClaudeMaxEffort(bare);
+    boolean allowXHigh = supportsClaudeXHighEffort(bare);
+
+    Map<String, Object> thinking = GlobMatcher.asMap(body.get("thinking"));
+    if (adaptiveOnly) {
+      if (thinking != null) {
+        String tType = GlobMatcher.asString(thinking.get("type"));
+        if ("enabled".equals(tType) || thinking.containsKey("budget_tokens")) {
+          long budget = GlobMatcher.asLong(thinking.get("budget_tokens"), 0L);
+          Map<String, Object> newThinking = new LinkedHashMap<>(thinking);
+          newThinking.put("type", "adaptive");
+          newThinking.remove("budget_tokens");
+          body.put("thinking", newThinking);
+          if (budget > 0L) {
+            String mappedEffort =
+                budget <= 2048L
+                    ? "low"
+                    : (budget <= 8192L
+                        ? "medium"
+                        : (budget <= 24576L ? "high" : (allowMax ? "max" : "high")));
+            Map<String, Object> outCfg = GlobMatcher.asMap(body.get("output_config"));
+            Map<String, Object> nextOutCfg =
+                outCfg != null ? new LinkedHashMap<>(outCfg) : new LinkedHashMap<>();
+            if (nextOutCfg.get("effort") == null) {
+              nextOutCfg.put("effort", mappedEffort);
+              body.put("output_config", nextOutCfg);
+            }
+          }
+          stripNonOneTemperatureAndTopP(body);
+          mutated = true;
+        } else if ("disabled".equals(tType)
+            && (bare.startsWith("claude-opus-5")
+                || bare.startsWith("claude-fable-5")
+                || bare.startsWith("claude-mythos"))) {
+          Map<String, Object> newThinking = new LinkedHashMap<>(thinking);
+          newThinking.put("type", "adaptive");
+          body.put("thinking", newThinking);
+          Map<String, Object> outCfg = GlobMatcher.asMap(body.get("output_config"));
+          Map<String, Object> nextOutCfg =
+              outCfg != null ? new LinkedHashMap<>(outCfg) : new LinkedHashMap<>();
+          if (nextOutCfg.get("effort") == null) {
+            nextOutCfg.put("effort", "low");
+            body.put("output_config", nextOutCfg);
+          }
+          stripNonOneTemperatureAndTopP(body);
+          mutated = true;
+        } else if ("adaptive".equals(tType)) {
+          mutated |= stripNonOneTemperatureAndTopP(body);
+        }
+      } else if (reasoningEffort != null
+          && !reasoningEffort.isEmpty()
+          && !"none".equals(reasoningEffort)) {
+        Map<String, Object> newThinking = new LinkedHashMap<>();
+        newThinking.put("type", "adaptive");
+        body.put("thinking", newThinking);
+        String mappedEffort =
+            ("minimal".equals(reasoningEffort) || "low".equals(reasoningEffort))
+                ? "low"
+                : ("medium".equals(reasoningEffort)
+                    ? "medium"
+                    : ("xhigh".equals(reasoningEffort) && allowXHigh
+                        ? "xhigh"
+                        : (("xhigh".equals(reasoningEffort) || "max".equals(reasoningEffort)) && allowMax
+                            ? "max"
+                            : "high")));
+        Map<String, Object> outCfg = GlobMatcher.asMap(body.get("output_config"));
+        Map<String, Object> nextOutCfg =
+            outCfg != null ? new LinkedHashMap<>(outCfg) : new LinkedHashMap<>();
+        if (nextOutCfg.get("effort") == null) {
+          nextOutCfg.put("effort", mappedEffort);
+          body.put("output_config", nextOutCfg);
+        }
+        stripNonOneTemperatureAndTopP(body);
+        mutated = true;
+      }
+    } else if (thinking == null
+        && reasoningEffort != null
+        && !reasoningEffort.isEmpty()
+        && !"none".equals(reasoningEffort)) {
+      if (bare.contains("-4-6") || bare.contains("-4.6")) {
+        Map<String, Object> newThinking = new LinkedHashMap<>();
+        newThinking.put("type", "adaptive");
+        body.put("thinking", newThinking);
+        String mappedEffort =
+            ("minimal".equals(reasoningEffort) || "low".equals(reasoningEffort))
+                ? "low"
+                : ("medium".equals(reasoningEffort)
+                    ? "medium"
+                    : ("xhigh".equals(reasoningEffort) && allowXHigh
+                        ? "xhigh"
+                        : (("xhigh".equals(reasoningEffort) || "max".equals(reasoningEffort)) && allowMax
+                            ? "max"
+                            : "high")));
+        Map<String, Object> outCfg = GlobMatcher.asMap(body.get("output_config"));
+        Map<String, Object> nextOutCfg =
+            outCfg != null ? new LinkedHashMap<>(outCfg) : new LinkedHashMap<>();
+        if (nextOutCfg.get("effort") == null) {
+          nextOutCfg.put("effort", mappedEffort);
+          body.put("output_config", nextOutCfg);
+        }
+      } else {
+        long maxTok = GlobMatcher.asLong(body.get("max_tokens"), 4096L);
+        long desiredBudget =
+            ("minimal".equals(reasoningEffort) || "low".equals(reasoningEffort))
+                ? 1024L
+                : ("medium".equals(reasoningEffort) ? 2048L : 4096L);
+        if (maxTok <= desiredBudget) {
+          maxTok = desiredBudget + 1024L;
+          body.put("max_tokens", Long.valueOf(maxTok));
+        }
+        Map<String, Object> newThinking = new LinkedHashMap<>();
+        newThinking.put("type", "enabled");
+        newThinking.put("budget_tokens", Long.valueOf(desiredBudget));
+        body.put("thinking", newThinking);
+      }
+      stripNonOneTemperatureAndTopP(body);
+      mutated = true;
+    }
+
+    Map<String, Object> finalOutCfg = GlobMatcher.asMap(body.get("output_config"));
+    if (finalOutCfg != null && finalOutCfg.get("effort") instanceof String) {
+      String rawEff = ((String) finalOutCfg.get("effort")).trim().toLowerCase(Locale.ROOT);
+      String clampedEff = rawEff;
+      if ("minimal".equals(rawEff)) {
+        clampedEff = "low";
+      } else if ("xhigh".equals(rawEff) && !allowXHigh) {
+        clampedEff = allowMax ? "max" : "high";
+      } else if ("max".equals(rawEff) && !allowMax) {
+        clampedEff = "high";
+      }
+      if (!clampedEff.equals(finalOutCfg.get("effort"))) {
+        Map<String, Object> updatedOutCfg = new LinkedHashMap<>(finalOutCfg);
+        updatedOutCfg.put("effort", clampedEff);
+        body.put("output_config", updatedOutCfg);
+        mutated = true;
+      }
+    }
+    return mutated;
+  }
+
+  static boolean sanitizeGeminiRequestForModel(Map<String, Object> geminiReq, String modelId) {
+    if (geminiReq == null || modelId == null || modelId.isEmpty()) {
+      return false;
+    }
+    String genConfigKey = "generationConfig";
+    Map<String, Object> genConfig = GlobMatcher.asMap(geminiReq.get("generationConfig"));
+    if (genConfig == null) {
+      genConfig = GlobMatcher.asMap(geminiReq.get("generation_config"));
+      if (genConfig == null) {
+        return false;
+      }
+      genConfigKey = "generation_config";
+    }
+    int slashIdx = modelId.indexOf('/');
+    String bare = (slashIdx != -1 ? modelId.substring(slashIdx + 1) : modelId).toLowerCase(Locale.ROOT);
+    boolean mutated = false;
+
+    if (bare.startsWith("gemini-3.5-flash-lite")) {
+      if (genConfig.remove("frequencyPenalty") != null) {
+        mutated = true;
+      }
+      if (genConfig.remove("presencePenalty") != null) {
+        mutated = true;
+      }
+      if (genConfig.remove("frequency_penalty") != null) {
+        mutated = true;
+      }
+      if (genConfig.remove("presence_penalty") != null) {
+        mutated = true;
+      }
+    }
+
+    Map<String, Object> thinkingCfg = GlobMatcher.asMap(genConfig.get("thinkingConfig"));
+    if (thinkingCfg == null) {
+      thinkingCfg = GlobMatcher.asMap(genConfig.get("thinking_config"));
+    }
+    if (thinkingCfg != null) {
+      if (bare.startsWith("gemini-4") || bare.startsWith("gemini-3")) {
+        boolean allowMinimal = supportsGeminiMinimalThinking(bare);
+        boolean allowXHigh = supportsGeminiXHighThinking(bare);
+        Object rawBudget = thinkingCfg.remove("thinkingBudget");
+        Object rawSnakeBudget = thinkingCfg.remove("thinking_budget");
+        if (rawBudget != null || rawSnakeBudget != null) {
+          mutated = true;
+          long budget =
+              GlobMatcher.asLong(rawBudget != null ? rawBudget : rawSnakeBudget, 0L);
+          if (thinkingCfg.get("thinkingLevel") == null && thinkingCfg.get("thinking_level") == null) {
+            String level;
+            if (budget <= 0L) {
+              level = allowMinimal ? "MINIMAL" : "LOW";
+            } else if (budget <= 2048L) {
+              level = "LOW";
+            } else if (budget <= 8192L) {
+              level = "MEDIUM";
+            } else if (budget > 24576L && allowXHigh) {
+              level = "XHIGH";
+            } else {
+              level = "HIGH";
+            }
+            thinkingCfg.put("thinkingLevel", level);
+          }
+        }
+        Object rawSnakeLevel = thinkingCfg.remove("thinking_level");
+        if (rawSnakeLevel != null && thinkingCfg.get("thinkingLevel") == null) {
+          thinkingCfg.put("thinkingLevel", rawSnakeLevel);
+          mutated = true;
+        }
+        Object rawLevel = thinkingCfg.get("thinkingLevel");
+        if (rawLevel instanceof String) {
+          String normLevel = ((String) rawLevel).trim().toUpperCase(Locale.ROOT);
+          if ("MINIMAL".equals(normLevel) && !allowMinimal) {
+            normLevel = "LOW";
+          } else if ("XHIGH".equals(normLevel) && !allowXHigh) {
+            normLevel = "HIGH";
+          }
+          if (!normLevel.equals(rawLevel)) {
+            thinkingCfg.put("thinkingLevel", normLevel);
+            mutated = true;
+          }
+        }
+      } else if (bare.contains("2.5")) {
+        Object rawLevel = thinkingCfg.remove("thinkingLevel");
+        Object rawSnakeLevel = thinkingCfg.remove("thinking_level");
+        Object effRawLevel = rawLevel != null ? rawLevel : rawSnakeLevel;
+        if (rawLevel != null || rawSnakeLevel != null) {
+          mutated = true;
+          if (thinkingCfg.get("thinkingBudget") == null
+              && thinkingCfg.get("thinking_budget") == null) {
+            String normLevel = String.valueOf(effRawLevel).trim().toUpperCase(Locale.ROOT);
+            long budget =
+                "MINIMAL".equals(normLevel)
+                    ? 0L
+                    : ("LOW".equals(normLevel)
+                        ? 1024L
+                        : ("HIGH".equals(normLevel) || "XHIGH".equals(normLevel) ? 16384L : 4096L));
+            thinkingCfg.put("thinkingBudget", Long.valueOf(budget));
+          }
+        }
+      }
+    }
+
+    if (genConfig.isEmpty()) {
+      geminiReq.remove(genConfigKey);
+      mutated = true;
+    }
+    return mutated;
   }
 
   static String buildJsonConstraintInstruction(
@@ -6077,7 +6743,7 @@ public final class RequestRouterAndTranscoderCallout extends BaseCallout {
 
     String catalogCsv = vars.getOrDefault(
         "propertyset.model_locations.models.catalog",
-        "gemini-2.5-flash,gemini-2.5-pro,gemini-2.5-flash-lite,claude-sonnet-4-6,claude-haiku-4-5");
+        "gemini-4-hydrogen,gemini-4-neon,gemini-4-argon,gemini-3.5-flash-lite,claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5,gemini-embedding-001");
     String[] modelIds = catalogCsv.split(",");
 
     String oauthUser =

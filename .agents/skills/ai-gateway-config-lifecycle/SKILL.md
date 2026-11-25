@@ -45,9 +45,13 @@ Follow `docs/template-guide/` and enforce these rules whenever authoring or revi
   - Every model ID referenced in `defaults.model`, `defaults.fallback`, `routing.tiers.*`, `routing.tasks.*`, and `routing.aliases.*` **must** exist under `models[].name`.
   - Valid `models[].target` values: `gemini`, `claude`, `gemini-openai-compat`, `openai-custom` (external/non-Vertex `custom_url` endpoints must use `openai-custom` or `claude`—never attach Google IAM tokens to third-party hosts).
   - Valid `models[].format` values: `gemini`, `anthropic`, `openai`.
+  - Valid Agent Platform `models[].region` values: `"global"`, multi-region `"us"` or `"eu"` (`aiplatform.us.rep.googleapis.com` / `aiplatform.eu.rep.googleapis.com`), or a regional GCP location such as `"us-central1"` or `"europe-west4"`.
+- **Multi-Project Vertex AI Routing**:
+  - Optional `project_id` overrides can be set at `features.auth.personas.<persona>.project_id`, `models[].project_id`, and `features.auth.exceptions[].project_id`.
+  - Default resolution order is **`Persona > Model > Gateway`** (`personas.<persona>.project_id` $>$ `models[].project_id` $>$ `gateway.project_id`); set `models[].pin_project: true` only when a centralized model hosting project must override persona projects. Keep `features.model_armor.project_id` (or `gateway.project_id`) for Model Armor templates.
 - **Pricing & Quotas / Virtual Wallets**:
   - `pricing.*_rate` (`input_rate`, `output_rate`, `cache_read_rate`, `cache_write_rate`) must be **non-negative numbers per 1M tokens** (e.g., `1.500`, never `"$1.50"`).
-  - Setting `quota.limit: 0` or `quota.limit_usd: 0` intentionally enforces an **immediate `429` hard block** (`zero_primary_quota`); omit the `quota:` block if you want the persona to inherit API Product defaults instead.
+  - Setting `quota.limit: 0` or `quota.limit_usd: 0` intentionally enforces an **immediate `429` hard block** (`zero_primary_quota`); omit the `quota:` block if you want the persona to inherit API Product defaults instead. Every model key in `quota.per_model` / `quota.per_model_usd` should match a configured `models[].name` entry.
 - **Model Armor & Authentication**:
   - `features.model_armor.location` **must** be a regional GCP location (e.g., `us-central1`, `europe-west4`)—**never** `"global"`.
   - When `features.auth.idp_jwt.enabled: true`, explicitly set `jwks_uri`, `issuer`, `audience`, and an asymmetric `algorithm` (`RS256`..`PS512` / `ES256`..`ES512`—never `none` or `HS*`).

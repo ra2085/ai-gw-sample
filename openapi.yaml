@@ -17,7 +17,7 @@ info:
   title: AI Gateway API
   description: |
     Unified Gateway API for accessing Anthropic Claude, Google Gemini, OpenAI, and BYO LLM/Embedding models.
-    Supports Anthropic Claude Messages API, OpenAI Chat Completions & Embeddings, Vertex AI Anthropic (:rawPredict/:streamRawPredict), and native Google Gemini Vertex AI (:generateContent/:streamGenerateContent/:predict/:embedContent/:batchEmbedContents), across both standard JSON and Server-Sent Events (SSE) streaming traffic.
+    Supports Anthropic Claude Messages API, OpenAI Chat Completions & Embeddings, Gemini Enterprise Agent Platform Anthropic (:rawPredict/:streamRawPredict), and native Google Gemini on Agent Platform (:generateContent/:streamGenerateContent/:predict/:embedContent/:batchEmbedContents), across both standard JSON and Server-Sent Events (SSE) streaming traffic.
   version: 1.0.0
 servers:
   - url: https://workshop.iloveapi.management
@@ -62,7 +62,7 @@ paths:
               safe_request:
                 summary: Standard non-streaming prompt
                 value:
-                  model: claude-haiku-4-5
+                  model: claude-haiku-5-5
                   max_tokens: 100
                   messages:
                     - role: user
@@ -70,7 +70,7 @@ paths:
               streaming_request:
                 summary: Streaming prompt
                 value:
-                  model: claude-haiku-4-5
+                  model: claude-haiku-5-5
                   max_tokens: 100
                   stream: true
                   messages:
@@ -90,7 +90,7 @@ paths:
                     id: msg_12345
                     type: message
                     role: assistant
-                    model: claude-haiku-4-5-20251001
+                    model: claude-haiku-5-5
                     content:
                       - type: text
                         text: Gravity is the force that pulls objects toward each other due to their mass.
@@ -152,14 +152,14 @@ paths:
               safe_request:
                 summary: Standard non-streaming prompt
                 value:
-                  model: gemini-3.1-flash-lite
+                  model: gemini-4-hydrogen
                   messages:
                     - role: user
                       content: Explain gravity in one sentence.
               streaming_request:
                 summary: Streaming prompt
                 value:
-                  model: gemini-3.1-flash-lite
+                  model: gemini-4-hydrogen
                   stream: true
                   messages:
                     - role: user
@@ -175,7 +175,7 @@ paths:
                 id: chatcmpl-12345
                 object: chat.completion
                 created: 1783446781
-                model: google/gemini-3.1-flash-lite
+                model: google/gemini-4-hydrogen
                 choices:
                   - index: 0
                     message:
@@ -213,7 +213,7 @@ paths:
       tags:
         - OpenAI Completions Format
       summary: Create embeddings (OpenAI format)
-      description: Creates an embedding vector representing the input text using Vertex AI or OpenAI-compatible embedding models.
+      description: Creates an embedding vector representing the input text using Agent Platform or OpenAI-compatible embedding models.
       parameters:
         - name: key
           in: query
@@ -237,7 +237,7 @@ paths:
             schema:
               $ref: '#/components/schemas/EmbeddingRequest'
             example:
-              model: text-embedding-005
+              model: gemini-embedding-001
               input: "Explain gravity in one sentence."
       responses:
         '200':
@@ -282,17 +282,17 @@ paths:
         - name: locationId
           in: path
           required: true
-          description: Vertex AI region location.
+          description: Agent Platform region or multi-region location (e.g., global, us, eu, us-central1).
           schema:
             type: string
             example: global
         - name: modelId
           in: path
           required: true
-          description: Model ID (e.g., gemini-2.5-flash, gemini-3.1-flash-lite).
+          description: Model ID (e.g., gemini-4-hydrogen, gemini-4-argon, gemini-3.5-flash-lite).
           schema:
             type: string
-            example: gemini-2.5-flash
+            example: gemini-4-hydrogen
         - name: alt
           in: query
           required: false
@@ -362,17 +362,17 @@ paths:
         - name: locationId
           in: path
           required: true
-          description: Vertex AI region location.
+          description: Agent Platform region or multi-region location (e.g., global, us, eu, us-central1).
           schema:
             type: string
             example: global
         - name: modelId
           in: path
           required: true
-          description: Model ID (e.g., gemini-2.5-flash, gemini-3.1-flash-lite).
+          description: Model ID (e.g., gemini-4-hydrogen, gemini-4-argon, gemini-3.5-flash-lite).
           schema:
             type: string
-            example: gemini-2.5-flash
+            example: gemini-4-hydrogen
         - name: alt
           in: query
           required: false
@@ -442,17 +442,17 @@ paths:
         - name: locationId
           in: path
           required: true
-          description: Vertex AI region location.
+          description: Agent Platform region or multi-region location (e.g., global, us, eu, us-central1).
           schema:
             type: string
             example: global
         - name: modelId
           in: path
           required: true
-          description: Model ID (e.g., gemini-2.5-flash, gemini-3.1-flash-lite).
+          description: Model ID (e.g., gemini-4-hydrogen, gemini-4-argon, gemini-3.5-flash-lite).
           schema:
             type: string
-            example: gemini-2.5-flash
+            example: gemini-4-hydrogen
         - name: alt
           in: query
           required: false
@@ -511,17 +511,17 @@ paths:
         - name: locationId
           in: path
           required: true
-          description: Vertex AI region location.
+          description: Agent Platform region or multi-region location (e.g., global, us, eu, us-central1).
           schema:
             type: string
             example: global
         - name: modelId
           in: path
           required: true
-          description: Model ID (e.g., gemini-2.5-flash, gemini-3.1-flash-lite).
+          description: Model ID (e.g., gemini-4-hydrogen, gemini-4-argon, gemini-3.5-flash-lite).
           schema:
             type: string
-            example: gemini-2.5-flash
+            example: gemini-4-hydrogen
         - name: alt
           in: query
           required: false
@@ -800,7 +800,7 @@ paths:
       tags:
         - Vertex Embeddings Format
       summary: Generate text embeddings (:predict)
-      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      description: Generates vector embeddings using Agent Platform embedding models (e.g. gemini-embedding-001).
       parameters:
         - name: projectId
           in: path
@@ -858,7 +858,7 @@ paths:
       tags:
         - Vertex Embeddings Format
       summary: Generate text embeddings (:predict)
-      description: Generates vector embeddings using Vertex AI text embedding models (e.g. text-embedding-005).
+      description: Generates vector embeddings using Agent Platform embedding models (e.g. gemini-embedding-001).
       parameters:
         - name: projectId
           in: path
@@ -1295,7 +1295,7 @@ components:
         model:
           type: string
           description: Target model identifier.
-          example: claude-haiku-4-5
+          example: claude-haiku-5-5
         models:
           type: array
           description: Optional fallback model array.
@@ -1343,6 +1343,9 @@ components:
         thinking:
           type: object
           additionalProperties: true
+        output_config:
+          type: object
+          additionalProperties: true
         metadata:
           type: object
           additionalProperties: true
@@ -1364,8 +1367,8 @@ components:
       properties:
         model:
           type: string
-          description: Target model identifier (optional when passed in Vertex URL path).
-          example: claude-haiku-4-5
+          description: Target model identifier (optional when passed in Agent Platform URL path).
+          example: claude-haiku-5-5
         anthropic_version:
           type: string
           example: vertex-2023-10-16
@@ -1403,6 +1406,9 @@ components:
           type: object
           additionalProperties: true
         thinking:
+          type: object
+          additionalProperties: true
+        output_config:
           type: object
           additionalProperties: true
         metadata:
@@ -1589,7 +1595,7 @@ components:
         model:
           type: string
           description: Target model identifier.
-          example: gemini-3.1-flash-lite
+          example: gemini-4-hydrogen
         models:
           type: array
           description: Optional fallback model array (OpenRouter / AI Gateway convention).
@@ -1729,8 +1735,8 @@ components:
       properties:
         model:
           type: string
-          description: Embedding model identifier (e.g. text-embedding-005, text-embedding-3-small).
-          example: text-embedding-005
+          description: Embedding model identifier (e.g. gemini-embedding-001, text-embedding-3-small).
+          example: gemini-embedding-001
         input:
           description: Input text or array of strings to embed.
           oneOf:
@@ -1747,7 +1753,7 @@ components:
           enum: [float, base64]
         task_type:
           type: string
-          description: Optional Vertex AI embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
+          description: Optional Agent Platform embedding task_type (e.g. RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY).
         user:
           type: string
 

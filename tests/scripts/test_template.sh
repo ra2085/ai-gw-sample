@@ -140,27 +140,33 @@ echo -e "\n${YELLOW}Step 4: Validating Dynamic PropertySets Content...${NC}"
 MODEL_LOC_FILE="$MVP_OUT/apiproxy/resources/properties/model_locations.properties"
 MONET_FILE="$MVP_OUT/apiproxy/resources/properties/monetization_rates.properties"
 
-if grep -q "models.catalog=gemini-3.5-flash,gemini-3.1-pro-preview,gemini-3.1-flash-lite,claude-sonnet-4-6,claude-haiku-4-5,text-embedding-005" "$MODEL_LOC_FILE"; then
-    echo -e "${GREEN}✓ model_locations.properties: Dynamic models catalog (including Gemini 3.x, Claude 4.x, and text-embedding-005) generated correctly.${NC}"
+if grep -q "models.catalog=gemini-4-hydrogen,gemini-4-argon,gemini-3.5-flash-lite,claude-opus-5-5,claude-sonnet-5-5,claude-haiku-5-5,gemini-embedding-001" "$MODEL_LOC_FILE"; then
+    echo -e "${GREEN}✓ model_locations.properties: Dynamic models catalog (Gemini 4, Gemini 3.5 Flash-Lite, Claude 5.5, and gemini-embedding-001) generated correctly.${NC}"
 else
     echo -e "${RED}✗ model_locations.properties missing or incomplete models.catalog!${NC}"
     exit 1
 fi
 
-if grep -q "tier.low=gemini-3.1-flash-lite" "$MODEL_LOC_FILE" && \
-   grep -q "tier.high=gemini-3.1-pro-preview" "$MODEL_LOC_FILE" && \
+if grep -q "tier.low=gemini-3.5-flash-lite" "$MODEL_LOC_FILE" && \
+   grep -q "tier.high=gemini-4-argon" "$MODEL_LOC_FILE" && \
+   grep -q "tier.max=claude-opus-5-5" "$MODEL_LOC_FILE" && \
+   grep -q "alias.gemini-3.5-flash=gemini-4-hydrogen" "$MODEL_LOC_FILE" && \
+   grep -q "alias.claude-sonnet-4-6=claude-sonnet-5-5" "$MODEL_LOC_FILE" && \
+   grep -q "alias.text-embedding-005=gemini-embedding-001" "$MODEL_LOC_FILE" && \
    grep -Fq 'alias.auto\:judge=' "$MODEL_LOC_FILE"; then
-    echo -e "${GREEN}✓ model_locations.properties: Smart Router tiers and escaped alias.auto\:judge mapped correctly.${NC}"
+    echo -e "${GREEN}✓ model_locations.properties: Smart Router tiers, backward-compatible aliases, and escaped alias.auto\:judge mapped correctly.${NC}"
 else
-    echo -e "${RED}✗ model_locations.properties Smart Router tier / alias.auto\:judge check failed!${NC}"
+    echo -e "${RED}✗ model_locations.properties Smart Router tier / alias check failed!${NC}"
     exit 1
 fi
 
-if grep -q "gemini-3.5-flash.input_rate_per_m=1.5" "$MONET_FILE" && \
-   grep -q "gemini-3.5-flash.cache_read_rate_per_m=0.15" "$MONET_FILE" && \
-   grep -q "claude-haiku-4-5.output_rate_per_m=5" "$MONET_FILE" && \
-   grep -q "claude-haiku-4-5.cache_read_rate_per_m=0.1" "$MONET_FILE" && \
-   grep -q "claude-haiku-4-5.cache_write_rate_per_m=1.25" "$MONET_FILE"; then
+if grep -q "gemini-4-hydrogen.input_rate_per_m=1.5" "$MONET_FILE" && \
+   grep -q "gemini-4-hydrogen.output_rate_per_m=7.5" "$MONET_FILE" && \
+   grep -q "gemini-4-hydrogen.cache_read_rate_per_m=0.15" "$MONET_FILE" && \
+   grep -q "claude-opus-5-5.output_rate_per_m=20" "$MONET_FILE" && \
+   grep -q "claude-haiku-5-5.output_rate_per_m=0.5" "$MONET_FILE" && \
+   grep -q "claude-haiku-5-5.cache_read_rate_per_m=0.01" "$MONET_FILE" && \
+   grep -q "claude-haiku-5-5.cache_write_rate_per_m=0.125" "$MONET_FILE"; then
     echo -e "${GREEN}✓ monetization_rates.properties: Invoice-accurate pricing matrix (input, output, cache_read, cache_write) generated correctly.${NC}"
 else
     echo -e "${RED}✗ monetization_rates.properties pricing generation failed!${NC}"
@@ -185,10 +191,10 @@ $APIGEE_GEN render apiproxy \
 
 if [ -d "$QUICK_OUT/apiproxy" ]; then
     QUICK_LOC="$QUICK_OUT/apiproxy/resources/properties/model_locations.properties"
-    if grep -q "tier.low=claude-haiku-4-5" "$QUICK_LOC" && \
-       grep -q "tier.medium=gemini-3.5-flash" "$QUICK_LOC" && \
-       grep -q "tier.high=gemini-3.5-flash" "$QUICK_LOC" && \
-       grep -q "tier.max=gemini-3.5-flash" "$QUICK_LOC"; then
+    if grep -q "tier.low=claude-haiku-5-5" "$QUICK_LOC" && \
+       grep -q "tier.medium=gemini-4-hydrogen" "$QUICK_LOC" && \
+       grep -q "tier.high=gemini-4-hydrogen" "$QUICK_LOC" && \
+       grep -q "tier.max=gemini-4-hydrogen" "$QUICK_LOC"; then
         echo -e "${GREEN}✓ Quickstart Template rendered cleanly with catalog-safe tier fallbacks.${NC}"
     else
         echo -e "${RED}✗ Quickstart Template emitted out-of-catalog tier defaults!${NC}"
@@ -321,8 +327,8 @@ else
 fi
 
 # Verify creative_writing and extraction tasks rendered in model_locations.properties
-if grep -q "task.creative_writing=claude-sonnet-4-6" "$MVP_OUT/apiproxy/resources/properties/model_locations.properties" && \
-   grep -q "task.extraction=gemini-3.1-flash-lite" "$MVP_OUT/apiproxy/resources/properties/model_locations.properties"; then
+if grep -q "task.creative_writing=claude-sonnet-5-5" "$MVP_OUT/apiproxy/resources/properties/model_locations.properties" && \
+   grep -q "task.extraction=gemini-3.5-flash-lite" "$MVP_OUT/apiproxy/resources/properties/model_locations.properties"; then
     echo -e "${GREEN}✓ routing.tasks.creative_writing and routing.tasks.extraction rendered properly.${NC}"
 else
     echo -e "${RED}✗ routing.tasks.creative_writing or routing.tasks.extraction missing in model_locations.properties!${NC}"

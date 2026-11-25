@@ -98,7 +98,7 @@ features:
 
   llm_judge:
     enabled: true
-    classifier_model: "gemini-3.1-flash-lite"
+    classifier_model: "gemini-3.5-flash-lite"
 
   circuit_breaker:
     enabled: true
@@ -108,143 +108,142 @@ features:
     window_unit: "minute"
 
 models:
-  # --- Gemini 3.x Series ---
-  - name: "gemini-3.7-flash"
-    displayName: "Gemini 3.7 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2026-06-01T00:00:00Z"
-    pricing:
-      input_rate: 1.500
-      output_rate: 9.000
-      cache_read_rate: 0.150
-
-  - name: "gemini-3.5-flash"
-    displayName: "Gemini 3.5 Flash"
+  # --- Google Gemini 4 & 3.5 Flash-Lite Series (Agent Platform) ---
+  - name: "gemini-4-hydrogen"
+    displayName: "Gemini 4 Hydrogen"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
     is_default: true
-    created_at: "2026-03-01T00:00:00Z"
+    created_at: "2026-11-12T00:00:00Z"
     pricing:
       input_rate: 1.500
-      output_rate: 9.000
+      output_rate: 7.500
       cache_read_rate: 0.150
 
-  - name: "gemini-3.1-pro-preview"
-    displayName: "Gemini 3.1 Pro Preview"
+  - name: "gemini-4-argon"
+    displayName: "Gemini 4 Argon"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2026-05-01T00:00:00Z"
+    created_at: "2026-10-13T00:00:00Z"
     pricing:
-      input_rate: 2.000
-      output_rate: 12.000
+      input_rate: 4.000
+      output_rate: 20.000
       cache_read_rate: 0.200
 
-  - name: "gemini-3.1-flash-lite"
-    displayName: "Gemini 3.1 Flash-Lite"
+  - name: "gemini-3.5-flash-lite"
+    displayName: "Gemini 3.5 Flash-Lite"
     publisher: "google"
     target: "gemini"
     format: "gemini"
     region: "global"
-    created_at: "2026-05-07T00:00:00Z"
-    pricing:
-      input_rate: 0.250
-      output_rate: 1.500
-      cache_read_rate: 0.025
-
-  # --- Gemini 2.5 Series ---
-  - name: "gemini-2.5-pro"
-    displayName: "Gemini 2.5 Pro"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2025-06-01T00:00:00Z"
-    pricing:
-      input_rate: 1.250
-      output_rate: 10.000
-      cache_read_rate: 0.125
-
-  - name: "gemini-2.5-flash"
-    displayName: "Gemini 2.5 Flash"
-    publisher: "google"
-    target: "gemini"
-    format: "gemini"
-    region: "global"
-    created_at: "2025-06-01T00:00:00Z"
+    created_at: "2026-07-21T00:00:00Z"
     pricing:
       input_rate: 0.300
       output_rate: 2.500
       cache_read_rate: 0.030
 
-  # --- Anthropic Claude Models ---
-  - name: "claude-haiku-4-5"
-    displayName: "Claude Haiku 4.5"
+  # --- Anthropic Claude 5.5 Models on Google Cloud (Agent Platform) ---
+  - name: "claude-opus-5-5"
+    displayName: "Claude Opus 5.5"
     publisher: "anthropic"
     target: "claude"
     format: "anthropic"
-    region: "us-east5"
-    created_at: "2025-10-01T00:00:00Z"
+    region: "global"
+    created_at: "2026-10-01T00:00:00Z"
     pricing:
-      input_rate: 1.000
-      output_rate: 5.000
-      cache_read_rate: 0.100
-      cache_write_rate: 1.250
+      input_rate: 4.000
+      output_rate: 20.000
+      cache_read_rate: 0.200
+      cache_write_rate: 5.000
 
-  # --- Vertex AI Text Embedding Models ---
-  - name: "text-embedding-005"
-    displayName: "Vertex Text Embedding 005"
+  - name: "claude-sonnet-5-5"
+    displayName: "Claude Sonnet 5.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"
+    created_at: "2026-10-01T00:00:00Z"
+    pricing:
+      input_rate: 2.000
+      output_rate: 10.000
+      cache_read_rate: 0.100
+      cache_write_rate: 2.500
+
+  - name: "claude-haiku-5-5"
+    displayName: "Claude Haiku 5.5"
+    publisher: "anthropic"
+    target: "claude"
+    format: "anthropic"
+    region: "global"
+    created_at: "2026-10-01T00:00:00Z"
+    pricing:
+      input_rate: 0.100
+      output_rate: 0.500
+      cache_read_rate: 0.010
+      cache_write_rate: 0.125
+
+  # --- Google Cloud Embedding Models (Agent Platform :predict) ---
+  - name: "gemini-embedding-001"
+    displayName: "Gemini Embedding 001"
     publisher: "google"
     target: "gemini-openai-compat"
-    format: "gemini"
+    format: "openai"
     region: "us-central1"
-    created_at: "2024-11-01T00:00:00Z"
+    created_at: "2025-07-14T00:00:00Z"
     pricing:
-      input_rate: 0.025
+      input_rate: 0.150
       output_rate: 0.000
 
 routing:
   tiers:
-    low: "gemini-3.1-flash-lite"
-    medium: "gemini-3.5-flash"
-    high: "gemini-2.5-pro"
-    max: "claude-haiku-4-5"
+    low: "gemini-3.5-flash-lite"
+    medium: "gemini-4-hydrogen"
+    high: "gemini-4-argon"
+    max: "claude-opus-5-5"
   tasks:
-    coding: "gemini-2.5-pro"
-    reasoning: "gemini-2.5-pro"
-    summarization: "gemini-3.1-flash-lite"
-    simple_chat: "gemini-3.5-flash"
-    classifier_model: "gemini-3.1-flash-lite"
+    coding: "gemini-4-argon"
+    reasoning: "gemini-4-argon"
+    creative_writing: "claude-sonnet-5-5"
+    summarization: "gemini-3.5-flash-lite"
+    extraction: "gemini-3.5-flash-lite"
+    simple_chat: "gemini-4-hydrogen"
+    classifier_model: "gemini-3.5-flash-lite"
   aliases:
-    "gemini-1.5-flash": "gemini-3.5-flash"
-    "gemini-1.5-flash-001": "gemini-3.5-flash"
-    "gemini-1.5-pro": "gemini-2.5-pro"
-    "gemini-1.5-pro-001": "gemini-2.5-pro"
-    "gemini-3.1-pro": "gemini-3.1-pro-preview"
-    "gemini-3.5-flash-lite": "gemini-3.1-flash-lite"
-    "claude-3-5-sonnet": "claude-haiku-4-5"
-    "claude-3-5-haiku": "claude-haiku-4-5"
-    "claude-sonnet-4-6": "claude-haiku-4-5"
-    "claude-sonnet-4-5": "claude-haiku-4-5"
-    "gpt-4o": "gemini-2.5-pro"
-    "gpt-4o-mini": "gemini-3.1-flash-lite"
-    "text-embedding-3-small": "text-embedding-005"
-    "text-embedding-3-large": "text-embedding-005"
-    "text-embedding-ada-002": "text-embedding-005"
-    "auto": "gemini-3.5-flash"
-    "gateway/auto": "gemini-3.5-flash"
-    "auto:judge": "gemini-3.5-flash"
-    "gateway/judge": "gemini-3.5-flash"
+    "gemini-1.5-flash": "gemini-4-hydrogen"
+    "gemini-1.5-flash-001": "gemini-4-hydrogen"
+    "gemini-2.5-flash": "gemini-4-hydrogen"
+    "gemini-2.5-flash-lite": "gemini-3.5-flash-lite"
+    "gemini-3.1-flash-lite": "gemini-3.5-flash-lite"
+    "gemini-3.5-flash": "gemini-4-hydrogen"
+    "gemini-3.8-flash": "gemini-4-hydrogen"
+    "gemini-1.5-pro": "gemini-4-argon"
+    "gemini-1.5-pro-001": "gemini-4-argon"
+    "gemini-2.5-pro": "gemini-4-argon"
+    "gemini-3.1-pro": "gemini-4-argon"
+    "gemini-3.1-pro-preview": "gemini-4-argon"
+    "claude-3-5-sonnet": "claude-sonnet-5-5"
+    "claude-sonnet-4-6": "claude-sonnet-5-5"
+    "claude-opus-4-6": "claude-opus-5-5"
+    "claude-3-5-haiku": "claude-haiku-5-5"
+    "claude-haiku-4-5": "claude-haiku-5-5"
+    "gpt-4o": "gemini-4-argon"
+    "gpt-4o-mini": "gemini-3.5-flash-lite"
+    "text-embedding-005": "gemini-embedding-001"
+    "text-embedding-3-small": "gemini-embedding-001"
+    "text-embedding-3-large": "gemini-embedding-001"
+    "text-embedding-ada-002": "gemini-embedding-001"
+    "auto": "gemini-4-hydrogen"
+    "gateway/auto": "gemini-4-hydrogen"
+    "auto:judge": "gemini-4-hydrogen"
+    "gateway/judge": "gemini-4-hydrogen"
 
 defaults:
-  model: "gemini-3.5-flash"
-  fallback: "gemini-3.1-flash-lite"
+  model: "gemini-4-hydrogen"
+  fallback: "gemini-3.5-flash-lite"
   target: "gemini"
   publisher: "google"
   format: "gemini"

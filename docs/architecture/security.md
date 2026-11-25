@@ -10,10 +10,10 @@ Instead of configuring settings for one user at a time, you define a small set o
 
 | AI Product Example | Target Persona / Tenant | Allowed Models | Default Guardrails |
 | :--- | :--- | :--- | :--- |
-| **`lead-ai-engineer`** | Principal Engineers & AI Researchers | All Frontier Models (`claude-opus-4-6`, `gemini-3.1-pro-preview`, `gpt-5.4`) | **2M tokens / 4h** per user |
-| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Codex`) | Coding & Reasoning Models (`claude-sonnet-4-6`, `gemini-3.1-pro-preview`) | **500k tokens / 4h** per user |
-| **`developer-default`** | Knowledge Workers & Internal Portals | Fast, Cost-Efficient Models (`gemini-3.5-flash`, `claude-haiku-4-5`) | **100k tokens / 4h** per user |
-| **`autonomous-agent`** | Cloud Run / Vertex AI Production Agents | Scoped Task Models (`gemini-3.1-flash-lite`, `text-embedding-005`) | **Dedicated service quota** & burst limit |
+| **`lead-ai-engineer`** | Principal Engineers & AI Researchers | All Frontier Models (`claude-opus-5-5`, `gemini-4-argon`, `gpt-6.2-sol`) | **2M tokens / 4h** per user |
+| **`power-developer`** | Software Engineering Teams (`Claude Code`, `Google Antigravity`) | Coding & Reasoning Models (`claude-sonnet-5-5`, `gemini-4-argon`) | **500k tokens / 4h** per user |
+| **`developer-default`** | Knowledge Workers & Internal Portals | Fast, Cost-Efficient Models (`gemini-4-hydrogen`, `claude-haiku-5-5`) | **100k tokens / 4h** per user |
+| **`autonomous-agent`** | Cloud Run / Gemini Enterprise Agent Platform (formerly Vertex AI) Production Agents | Scoped Task Models (`gemini-3.5-flash-lite`, `gemini-embedding-001`) | **Dedicated service quota** & burst limit |
 
 ### How AI Products Simplify Operations
 * **Define Once, Apply Everywhere:** Model access, token limits, and department budgets are configured once on the **AI Product**.
@@ -27,7 +27,7 @@ Instead of configuring settings for one user at a time, you define a small set o
 Every incoming request is authenticated at the gateway perimeter and resolved to an **AI Product**. Select your caller type below to see how it connects:
 
 === "Corporate SSO (Okta / Entra ID / Ping)"
-    **Best for:** Human engineers and employees using CLI tools (`Claude Code`, `Codex`) or internal web apps with their corporate login.
+    **Best for:** Human engineers and employees using auto-refreshing tools (`Claude Code`, `Microsoft Copilot Studio`) or internal web apps with their corporate login.
 
     The gateway verifies your corporate Identity Provider's **JWT** (via JWKS) or **Opaque Token** (via `/userinfo` introspection) and maps the user's IdP role/group claim directly to the corresponding **AI Product Persona** (`features.auth.personas.<name>`):
 
@@ -60,7 +60,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
               interval: 4
               time_unit: "hour"
               per_model:
-                claude-sonnet-4-6: 50000
+                claude-sonnet-5-5: 50000
             team_budget:
               limit: 25000000
               interval: 7
@@ -68,7 +68,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
           knowledge-worker:
             match_claims: ["knowledge-worker", "general", "business-*"]
             client_id: "CONSUMER_KEY_FOR_DEFAULT_AI_PRODUCT"
-            models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "claude-haiku-4-5"]
+            models: ["gemini-4-hydrogen", "gemini-3.5-flash-lite", "claude-haiku-5-5"]
             quota:
               limit: 100000
               interval: 4
@@ -96,11 +96,11 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     curl -X POST "https://$APIGEE_HOSTNAME/v1/messages" \
       -H "x-api-key: $API_KEY" \
       -H "Content-Type: application/json" \
-      -d '{"model": "gemini-3.5-flash", "max_tokens": 256, "messages": [{"role": "user", "content": "Hello"}]}'
+      -d '{"model": "gemini-4-hydrogen", "max_tokens": 256, "messages": [{"role": "user", "content": "Hello"}]}'
     ```
 
 === "Google Cloud Agent Identity (SPIFFE)"
-    **Best for:** Autonomous agents running on Vertex AI Agent Engine, Gemini Enterprise, or Cloud Run using **[Google Cloud Agent Identity](https://docs.cloud.google.com/iam/docs/agent-identity-overview)**.
+    **Best for:** Autonomous agents running on Agent Platform Agent Engine, Gemini Enterprise, or Cloud Run using **[Google Cloud Agent Identity](https://docs.cloud.google.com/iam/docs/agent-identity-overview)**.
 
     Unlike IAM Service Accounts, each deployed agent receives its own strongly attested **[SPIFFE identity](https://docs.cloud.google.com/iam/docs/agent-identity-overview#spiffe-identity)** (`spiffe://...` / `principal://...`) in the `.system.id.goog` trust domain. On the first request (`Authorization: Bearer ya29...`), the gateway verifies the token, resolves the agent's SPIFFE principal to an **AI Product** via `personas`, and caches the token in Apigee's OAuth store for `< 1ms` repeat lookups.
 
@@ -134,7 +134,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
               - "principalSet://agents.global.org-123456789012.system.id.goog/attribute.platformContainer/aiplatform/projects/9876543210"
               - "principal://*/projects/9876543210/*"
             client_id: "CONSUMER_KEY_FOR_PROJECT_AGENT_AI_PRODUCT"
-            models: ["gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6"]
+            models: ["gemini-4-hydrogen", "gemini-4-argon", "claude-sonnet-5-5"]
             quota:
               limit: 2000000
               interval: 1
@@ -146,7 +146,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
               - "principalSet://agents.global.org-123456789012.system.id.goog/*"
               - "agent"
             client_id: "CONSUMER_KEY_FOR_STANDARD_AGENT_AI_PRODUCT"
-            models: ["gemini-3.5-flash", "gemini-3.1-flash-lite", "text-embedding-005"]
+            models: ["gemini-4-hydrogen", "gemini-3.5-flash-lite", "gemini-embedding-001"]
             quota:
               limit: 500000
               interval: 1
@@ -167,7 +167,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     response = requests.post(
         f"https://{APIGEE_HOSTNAME}/v1/chat/completions",
         headers={"Authorization": f"Bearer {credentials.token}"},
-        json={"model": "gemini-3.5-flash", "messages": [{"role": "user", "content": "Summarize status."}]},
+        json={"model": "gemini-4-hydrogen", "messages": [{"role": "user", "content": "Summarize status."}]},
     )
     ```
 
@@ -213,7 +213,7 @@ Every incoming request is authenticated at the gateway perimeter and resolved to
     curl -X POST "https://$APIGEE_HOSTNAME/v1/chat/completions" \
       -H "Authorization: Bearer $(gcloud auth print-access-token)" \
       -H "Content-Type: application/json" \
-      -d '{"model": "gemini-3.5-flash", "messages": [{"role": "user", "content": "Summarize status."}]}'
+      -d '{"model": "gemini-4-hydrogen", "messages": [{"role": "user", "content": "Summarize status."}]}'
     ```
 
 === "Apigee OAuth 2.0"
@@ -279,13 +279,13 @@ When you first set up the gateway (Day 1), add a brand-new persona to `features.
          data-scientist:
            display_name: "Data Science & ML Research Tier"
            match_claims: ["data-science", "ml-*"]
-           models: ["gemini-3.5-flash", "gemini-3.1-pro-preview", "claude-sonnet-4-6", "text-embedding-005"]
+           models: ["gemini-4-hydrogen", "gemini-4-argon", "claude-sonnet-5-5", "gemini-embedding-001"]
            quota:
              limit: 500000
              interval: 4
              unit: "hour"
              per_model:
-               claude-sonnet-4-6: 100000
+               claude-sonnet-5-5: 100000
            team_budget:
              limit: 25000000
              interval: 7
